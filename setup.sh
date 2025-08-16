@@ -60,6 +60,7 @@ sudo snap refresh
 
 echo "Installing Snaps..."
 sudo snap install astral-uv --classic
+sudo snap install helix --classic
 
 if detect_wsl; then
   echo "Running on WSL, skipping some Snaps."
