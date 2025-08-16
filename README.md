@@ -25,5 +25,5 @@
 ## Step 6: Install Microsoft Edge
 
     wget -O microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
-    sudo apt-get install ./microsoft-edge.deb
+    sudo apt-get install -y ./microsoft-edge.deb
     rm microsoft-edge.deb
