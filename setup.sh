@@ -50,6 +50,8 @@ sudo apt install -y \
   python3-virtualenv \
   golang \
   rust-all \
+  nodejs \
+  npm \
   gnucobol \
   vim \
   cpufetch \
