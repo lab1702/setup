@@ -27,6 +27,10 @@
 
     curl -fsSL https://claude.ai/install.sh | bash
 
+And add it to path:
+
+    echo 'export PATH="~/.local/bin:$PATH"' >> ~/.bashrc
+
 ## Step 6: Install Playwright MCP
 
     claude mcp add playwright npx @playwright/mcp@latest
