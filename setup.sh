@@ -15,14 +15,17 @@ detect_wsl() {
 
     return 1  # Not WSL
 }
-
+echo "***************************"
 echo "Updating Ubuntu Packages..."
+echo "***************************"
 sudo apt update && \
   sudo apt upgrade -y && \
   sudo apt autoremove -y && \
   sudo apt autoclean -y
 
+echo "*****************************"
 echo "Installing Ubuntu Packages..."
+echo "*****************************"
 sudo apt install -y \
   build-essential \
   cmake \
@@ -49,28 +52,42 @@ sudo apt install -y \
   btop \
   nvtop
 
+echo "********************"
 echo "Installing DuckDB..."
+echo "********************"
 wget https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
 unzip duckdb_cli-linux-amd64.zip
 sudo mv duckdb /usr/local/bin/duckdb
 rm duckdb_cli-linux-amd64.zip
 
+echo "*****************"
 echo "Updating Snaps..."
+echo "*****************"
 sudo snap refresh
 
+echo "*******************"
 echo "Installing Snaps..."
+echo "*******************"
 sudo snap install astral-uv --classic
 sudo snap install helix --classic
 
 if detect_wsl; then
+  echo "************************************"
   echo "Running on WSL, skipping some Snaps."
+  echo "************************************"
 else
+  echo "***************************"
   echo "Installing non-WSL Snaps..."
+  echo "***************************"
   sudo snap install code --classic
   sudo snap install discord
 fi
 
+echo "*********************************"
 echo "Adding ${USER} to docker group..."
+echo "*********************************"
 sudo usermod -aG docker ${USER}
 
+echo "*****"
 echo "DONE!"
+echo "*****"
