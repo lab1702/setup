@@ -72,9 +72,11 @@ sudo snap install astral-uv --classic
 sudo snap install helix --classic
 
 if detect_wsl; then
-  echo "************************************"
-  echo "Running on WSL, skipping some Snaps."
-  echo "************************************"
+  echo "*************************************"
+  echo "Configuring Microsoft Edge for WSL..."
+  echo "*************************************"
+  sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' 200
+  sudo update-alternatives --config x-www-browser
 else
   echo "***************************"
   echo "Installing non-WSL Snaps..."
