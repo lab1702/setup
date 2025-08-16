@@ -21,3 +21,9 @@
 ## Step 5: Install NodeJS NVM
 
     curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/refs/heads/master/install.sh | bash
+
+## Step 6: Install Microsoft Edge
+
+    wget -O microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
+    sudo apt-get install ./microsoft-edge.deb
+    rm microsoft-edge.deb
