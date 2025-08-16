@@ -16,12 +16,6 @@ detect_wsl() {
     return 1  # Not WSL
 }
 
-if detect_wsl; then
-    echo "Running on WSL"
-else
-    echo "Running on regular Ubuntu/Linux"
-fi
-
 echo "Updating Ubuntu Packages..."
 sudo apt update && \
   sudo apt upgrade -y && \
@@ -66,13 +60,13 @@ sudo snap refresh
 
 echo "Installing Snaps..."
 sudo snap install astral-uv --classic
-sudo snap install ruff
 
 if detect_wsl; then
-  echo "Running on WSL, skipping some packages."
+  echo "Running on WSL, skipping some Snaps."
 else
-  echo "Installing non-WSL packages..."
+  echo "Installing non-WSL Snaps..."
   sudo snap install code --classic
+  sudo snap install discord
 fi
 
 echo "Adding ${USER} to docker group..."
