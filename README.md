@@ -14,6 +14,10 @@
 
     curl -fsSL https://claude.ai/install.sh | bash
 
+And for Playwright MCP:
+
+    claude mcp add playwright npx @playwright/mcp@latest
+
 ## Step 4: Install OpenCode
 
     curl -fsSL https://opencode.ai/install | bash
