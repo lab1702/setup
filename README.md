@@ -1,4 +1,4 @@
-# Ubuntu Setup
+# Ubuntu & Debian Setup
 
 ## Step 1: Install Git and GitHub CLI
 
