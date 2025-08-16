@@ -15,6 +15,7 @@ detect_wsl() {
 
     return 1  # Not WSL
 }
+
 echo "***************************"
 echo "Updating Ubuntu Packages..."
 echo "***************************"
@@ -22,6 +23,11 @@ sudo apt update && \
   sudo apt upgrade -y && \
   sudo apt autoremove -y && \
   sudo apt autoclean -y
+
+echo "*****************"
+echo "Updating Snaps..."
+echo "*****************"
+sudo snap refresh
 
 echo "*****************************"
 echo "Installing Ubuntu Packages..."
@@ -52,19 +58,6 @@ sudo apt install -y \
   btop \
   nvtop
 
-echo "********************"
-echo "Installing DuckDB..."
-echo "********************"
-wget https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
-unzip duckdb_cli-linux-amd64.zip
-sudo mv duckdb /usr/local/bin/duckdb
-rm duckdb_cli-linux-amd64.zip
-
-echo "*****************"
-echo "Updating Snaps..."
-echo "*****************"
-sudo snap refresh
-
 echo "*******************"
 echo "Installing Snaps..."
 echo "*******************"
@@ -89,6 +82,14 @@ echo "*********************************"
 echo "Adding ${USER} to docker group..."
 echo "*********************************"
 sudo usermod -aG docker ${USER}
+
+echo "************************"
+echo "Installing DuckDB CLI..."
+echo "************************"
+wget https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
+unzip duckdb_cli-linux-amd64.zip
+sudo mv duckdb /usr/local/bin/duckdb
+rm duckdb_cli-linux-amd64.zip
 
 echo "*****"
 echo "DONE!"
