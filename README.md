@@ -2,7 +2,7 @@
 
 ## Step 1: Install Git and GitHub CLI
 
-    sudo apt update && sudo apt upgrade -y && sudo apt install git gh
+    sudo apt update && sudo apt upgrade -y && sudo apt install -y git gh
 
 ## Step 2: Authenticate with Git
 
