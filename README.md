@@ -10,4 +10,5 @@
 
 ## Step 3: Run Setup Script
 
-    wget -O- url | bash
+    wget -O- https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
+
