@@ -1,4 +1,6 @@
-# Ubuntu
+# Ubuntu Setup
+
+My setup emphasizes simplicity and minimalism. There is nothing that affects themes and looks here.
 
 ## Step 1: Install Basics
 
