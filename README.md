@@ -1,6 +1,6 @@
-# Ubuntu & Debian Setup
+# Ubuntu
 
-## Step 1: Install Git and GitHub CLI
+## Step 1: Install Basics
 
     sudo apt update && sudo apt upgrade -y && sudo apt install -y curl git gh
 
