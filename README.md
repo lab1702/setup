@@ -1,4 +1,4 @@
-# Ubuntu Setup
+# Simple Ubuntu Workstation Setup
 
 *My setup emphasizes simplicity and minimalism. There is nothing that affects themes and looks here.*
 
@@ -10,24 +10,23 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
-## Step 3: Install Claude Code
-
-    curl -fsSL https://claude.ai/install.sh | bash
-
-And for Playwright MCP:
-
-    claude mcp add playwright npx @playwright/mcp@latest
-
-## Step 4: Install OpenCode
-
-    curl -fsSL https://opencode.ai/install | bash
-
-## Step 5: Install NodeJS NVM
-
-    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/refs/heads/master/install.sh | bash
-
-## Step 6: Install Microsoft Edge
+## Step 3: Install Microsoft Edge
 
     wget -O microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
     sudo apt-get install -y ./microsoft-edge.deb
     rm microsoft-edge.deb
+
+## Step 4: Configure Global NPM Directory
+
+    mkdir ~/.npm-global
+    npm config set prefix '~/.npm-global'
+    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+    export PATH=~/.npm-global/bin:$PATH
+
+## Step 5: Install Claude Code
+
+    curl -fsSL https://claude.ai/install.sh | bash
+
+## Step 6: Install OpenCode
+
+    curl -fsSL https://opencode.ai/install | bash
