@@ -63,7 +63,6 @@ echo "*******************"
 echo "Installing Snaps..."
 echo "*******************"
 sudo snap install astral-uv --classic
-sudo snap install helix --classic
 
 if detect_wsl; then
   echo "*************************************"
