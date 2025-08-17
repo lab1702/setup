@@ -52,7 +52,6 @@ sudo apt install -y \
   rust-all \
   nodejs \
   npm \
-  gnucobol \
   vim \
   cpufetch \
   figlet \
