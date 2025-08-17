@@ -32,6 +32,12 @@ And add it to path:
     echo 'export PATH="~/.local/bin:$PATH"' >> ~/.bashrc
     export PATH="~/.local/bin:$PATH"
 
-## Step 6: Install Playwright MCP
+## Step 6: Install MCPs
+
+### Playwright
 
     claude mcp add playwright npx @playwright/mcp@latest
+
+### Context7
+
+    claude mcp add --transport sse context7 https://mcp.context7.com/sse
