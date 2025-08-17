@@ -12,9 +12,9 @@
 
 ## Step 3: Install Microsoft Edge
 
-    wget -O microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
-    sudo apt-get install -y ./microsoft-edge.deb
-    rm microsoft-edge.deb
+    wget -O /tmp/microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
+    sudo apt-get install -y /tmp/microsoft-edge.deb
+    rm /tmp/microsoft-edge.deb
 
 ## Step 4: Configure Global NPM Directory
 
