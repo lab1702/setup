@@ -30,6 +30,7 @@
 And add it to path:
 
     echo 'export PATH="~/.local/bin:$PATH"' >> ~/.bashrc
+    export PATH="~/.local/bin:$PATH"
 
 ## Step 6: Install Playwright MCP
 
