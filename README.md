@@ -36,10 +36,10 @@ And add it to path:
 
 ## Step 6: Install MCPs
 
-### Playwright
-
-    claude mcp add playwright npx @playwright/mcp@latest
-
 ### Context7
 
     claude mcp add --transport sse context7 https://mcp.context7.com/sse
+
+### Playwright
+
+    claude mcp add playwright npx @playwright/mcp@latest
