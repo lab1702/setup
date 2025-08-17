@@ -8,11 +8,11 @@
 
     sudo apt update && sudo apt upgrade -y && sudo apt install -y curl wget git
 
-## Step 2: Run Setup Script
+## Step 2: Run Setup Script (This takes into account whether running under normal Ubuntu or WSL)
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
-## Step 3: Install Microsoft Edge (NOT FOR WSL)
+## Step 3: Install Microsoft Edge (Do not run this step on WSL)
 
     wget -O /tmp/microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
     sudo apt-get install -y /tmp/microsoft-edge.deb
