@@ -70,7 +70,7 @@ if detect_wsl; then
   echo "Configuring Microsoft Edge for WSL..."
   echo "*************************************"
   sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' 200
-  echo | sudo update-alternatives --config x-www-browser
+  sudo update-alternatives --auto x-www-browser
 else
   echo "***************************"
   echo "Installing non-WSL Snaps..."
