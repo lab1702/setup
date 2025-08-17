@@ -1,6 +1,6 @@
 # Simple Ubuntu Developer Workstation Setup
 
-**This is focused around C, C++, R, Python, NodeJS, Go and Rust using Claude Code AI Coding Agent.**
+**This is focused around C, C++, R, Python, DuckDB, NodeJS, Go and Rust using Claude Code AI Coding Agent.**
 
 *My setup emphasizes simplicity and minimalism. There is nothing that affects themes and looks here.*
 
