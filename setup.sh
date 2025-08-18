@@ -46,6 +46,34 @@ sudo apt install -y \
   docker-compose-v2 \
   r-base \
   r-base-dev \
+  libopenblas-dev \
+  pandoc \
+  libxml2-dev \
+  libcurl4-openssl-dev \
+  libssl-dev \
+  libx11-dev \
+  libglu1-mesa-dev \
+  libftgl-dev \
+  libfontconfig1-dev \
+  libcairo2-dev \
+  libgsl-dev \
+  libudunits2-dev \
+  libgdal-dev \
+  libmpfr-dev \
+  libgmp-dev \
+  libharfbuzz-dev \
+  libfribidi-dev \
+  libv8-dev \
+  libunwind-dev \
+  libarchive-dev \
+  libsodium-dev \
+  libsecret-1-dev \
+  libgit2-dev \
+  libmagick++-dev \
+  libpoppler-cpp-dev \
+  libavfilter-dev \
+  unixodbc-dev \
+  tdsodbc \
   python3-venv \
   python3-virtualenv \
   golang \
