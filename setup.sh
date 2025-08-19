@@ -7,11 +7,11 @@ detect_snapd() {
     return 1  # snapd not available
 }
 
-detect_debian() {
-    if grep -q "debian" /etc/os-release 2>/dev/null; then
-        return 0  # Debian
+detect_ubuntu() {
+    if grep -q "ubuntu" /etc/os-release 2>/dev/null; then
+        return 0  # Ubuntu
     fi
-    return 1  # Not Debian
+    return 1  # Not Ubuntu
 }
 
 detect_wsl() {
@@ -108,20 +108,20 @@ sudo apt install -y \
   btop \
   nvtop
 
-if detect_debian; then
-  echo "*****************************"
-  echo "Installing Debian Packages..."
-  echo "*****************************"
-  sudo apt install -y \
-    docker-compose \
-    libnode-dev
-else
+if detect_ubuntu; then
   echo "*****************************"
   echo "Installing Ubuntu Packages..."
   echo "*****************************"
   sudo apt install -y \
     docker-compose-v2 \
     libv8-dev
+else
+  echo "*****************************"
+  echo "Installing Debian Packages..."
+  echo "*****************************"
+  sudo apt install -y \
+    docker-compose \
+    libnode-dev
 fi
 
 echo "*******************"
