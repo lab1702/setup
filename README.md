@@ -6,7 +6,7 @@
 
 ## Step 1: Install Basics
 
-    sudo apt update && sudo apt upgrade -y && sudo apt install -y curl wget git
+    sudo apt update && sudo apt upgrade -y && sudo apt install -y curl wget
 
 ## Step 2: Run Setup Script
 
