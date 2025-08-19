@@ -1,5 +1,19 @@
 #!/bin/bash
 
+detect_snapd() {
+    if command -v snap >/dev/null 2>&1; then
+        return 0  # snapd is available
+    fi
+    return 1  # snapd not available
+}
+
+detect_debian() {
+    if grep -q "debian" /etc/os-release 2>/dev/null; then
+        return 0  # Debian
+    fi
+    return 1  # Not Debian
+}
+
 detect_wsl() {
     if [[ -f /proc/sys/fs/binfmt_misc/WSLInterop ]]; then
         return 0  # WSL2
@@ -16,22 +30,35 @@ detect_wsl() {
     return 1  # Not WSL
 }
 
-echo "***************************"
-echo "Updating Ubuntu Packages..."
-echo "***************************"
+echo "**************************"
+echo "Updating Linux Packages..."
+echo "**************************"
 sudo apt update && \
   sudo apt upgrade -y && \
   sudo apt autoremove -y && \
   sudo apt autoclean -y
+
+if ! detect_snapd; then
+    echo "*******************"
+    echo "Installing snapd..."
+    echo "*******************"
+    if detect_debian; then
+        sudo apt install -y snapd
+        # sudo systemctl enable --now snapd.socket
+        export PATH="$PATH:/snap/bin"
+    else
+        echo "Please install snapd manually for your distribution"
+    fi
+fi
 
 echo "*****************"
 echo "Updating Snaps..."
 echo "*****************"
 sudo snap refresh
 
-echo "*****************************"
-echo "Installing Ubuntu Packages..."
-echo "*****************************"
+echo "****************************"
+echo "Installing Linux Packages..."
+echo "****************************"
 sudo apt install -y \
   build-essential \
   cmake \
