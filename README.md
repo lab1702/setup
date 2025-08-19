@@ -38,7 +38,7 @@ And add it to path:
 
     curl -sSL https://raw.githubusercontent.com/buildermethods/agent-os/main/setup/base.sh | bash -s -- --claude-code
 
-## Step 6: Install MCPs
+## Step 7: Install MCPs
 
 ### Context7
 
