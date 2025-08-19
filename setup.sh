@@ -71,7 +71,6 @@ sudo apt install -y \
   tree \
   docker.io \
   docker-buildx \
-  docker-compose-v2 \
   r-base \
   r-base-dev \
   libopenblas-dev \
@@ -91,7 +90,6 @@ sudo apt install -y \
   libgmp-dev \
   libharfbuzz-dev \
   libfribidi-dev \
-  libv8-dev \
   libunwind-dev \
   libarchive-dev \
   libsodium-dev \
@@ -114,6 +112,22 @@ sudo apt install -y \
   dos2unix \
   btop \
   nvtop
+
+if detect_debian; then
+  echo "*****************************"
+  echo "Installing Debian Packages..."
+  echo "*****************************"
+  sudo apt install -y \
+    docker-compose \
+    libnode-dev
+else
+  echo "*****************************"
+  echo "Installing Ubuntu Packages..."
+  echo "*****************************"
+  sudo apt install -y \
+    docker-compose-v2 \
+    libv8-dev
+fi
 
 echo "*******************"
 echo "Installing Snaps..."
