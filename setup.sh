@@ -93,6 +93,7 @@ sudo apt install -y \
   libmagick++-dev \
   libpoppler-cpp-dev \
   libavfilter-dev \
+  libnode-dev \
   unixodbc-dev \
   tdsodbc \
   python3-venv \
@@ -113,15 +114,13 @@ if detect_ubuntu; then
   echo "Installing Ubuntu Packages..."
   echo "*****************************"
   sudo apt install -y \
-    docker-compose-v2 \
-    libv8-dev
+    docker-compose-v2
 else
   echo "*****************************"
   echo "Installing Debian Packages..."
   echo "*****************************"
   sudo apt install -y \
-    docker-compose \
-    libnode-dev
+    docker-compose
 fi
 
 echo "*******************"
