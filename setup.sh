@@ -55,10 +55,11 @@ echo "****************************"
 echo "Installing Linux Packages..."
 echo "****************************"
 sudo apt install -y \
-  unzip \
   build-essential \
+  git \
+  gh \
   cmake \
-  curl \
+  unzip \
   jq \
   ripgrep \
   fd-find \
