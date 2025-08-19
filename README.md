@@ -36,7 +36,7 @@ And add it to path:
 
 ## Step 6: Install Agent OS
 
-    curl -sSL https://raw.githubusercontent.com/buildermethods/agent-os/main/setup/base.sh | bash -s -- --claude-code
+Follow instructions at: [https://buildermethods.com/agent-os](https://buildermethods.com/agent-os).
 
 ## Step 7: Install MCPs
 
