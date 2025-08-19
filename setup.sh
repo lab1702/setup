@@ -42,13 +42,8 @@ if ! detect_snapd; then
     echo "*******************"
     echo "Installing snapd..."
     echo "*******************"
-    if detect_debian; then
-        sudo apt install -y snapd
-        # sudo systemctl enable --now snapd.socket
-        export PATH="$PATH:/snap/bin"
-    else
-        echo "Please install snapd manually for your distribution"
-    fi
+    sudo apt install -y snapd
+    export PATH="$PATH:/snap/bin"
 fi
 
 echo "*****************"
