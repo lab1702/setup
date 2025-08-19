@@ -34,6 +34,10 @@ And add it to path:
     echo 'export PATH="~/.local/bin:$PATH"' >> ~/.bashrc
     export PATH="~/.local/bin:$PATH"
 
+## Step 6: Install Agent OS
+
+    curl -sSL https://raw.githubusercontent.com/buildermethods/agent-os/main/setup/base.sh | bash -s -- --claude-code
+
 ## Step 6: Install MCPs
 
 ### Context7
