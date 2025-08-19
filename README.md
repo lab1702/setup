@@ -1,4 +1,4 @@
-# Simple Ubuntu Developer Workstation Setup
+# Simple Debian / Ubuntu Developer Workstation Setup
 
 **This is focused around C, C++, R, Python, DuckDB, NodeJS, Go and Rust using Claude Code AI Coding Agent.**
 
