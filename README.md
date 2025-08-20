@@ -33,7 +33,7 @@
 
     curl -fsSL https://astral.sh/uv/install.sh | sh
 
-Step 7: Add local bin to path
+## Step 7: Add local bin to path
 
     echo 'export PATH="~/.local/bin:$PATH"' >> ~/.bashrc
     export PATH="~/.local/bin:$PATH"
