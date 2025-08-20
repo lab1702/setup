@@ -29,16 +29,20 @@
 
     curl -fsSL https://claude.ai/install.sh | bash
 
-And add it to path:
+## Step 6: Install uv
+
+    curl -fsSL https://astral.sh/uv/install.sh | sh
+
+Step 7: Add local bin to path
 
     echo 'export PATH="~/.local/bin:$PATH"' >> ~/.bashrc
     export PATH="~/.local/bin:$PATH"
 
-## Step 6: Install Agent OS
+## Step 8: Install Agent OS
 
 Follow instructions at: [https://buildermethods.com/agent-os](https://buildermethods.com/agent-os).
 
-## Step 7: Install MCPs
+## Step 9: Install MCPs
 
 ### Context7
 
