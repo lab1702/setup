@@ -124,11 +124,6 @@ else
     docker-compose
 fi
 
-echo "*******************"
-echo "Installing Snaps..."
-echo "*******************"
-sudo snap install astral-uv --classic
-
 if detect_wsl; then
   echo "*************************************"
   echo "Configuring Microsoft Edge for WSL..."
@@ -136,9 +131,9 @@ if detect_wsl; then
   sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' 200
   sudo update-alternatives --auto x-www-browser
 else
-  echo "***************************"
-  echo "Installing non-WSL Snaps..."
-  echo "***************************"
+  echo "*******************"
+  echo "Installing Snaps..."
+  echo "*******************"
   sudo snap install code --classic
   sudo snap install discord
 fi
