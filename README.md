@@ -4,6 +4,12 @@
 
 *My setup emphasizes simplicity and minimalism. There is nothing that affects themes and looks here.*
 
+## Optional: Install Microsoft Edge ***(NOT FOR WSL)***
+
+    wget -O /tmp/microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
+    sudo apt-get install -y /tmp/microsoft-edge.deb
+    rm /tmp/microsoft-edge.deb
+
 ## Step 1: Install Basics
 
     sudo apt update && sudo apt upgrade -y && sudo apt install -y curl wget
@@ -12,13 +18,7 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
-## Step 3: Install Microsoft Edge ***(NOT FOR WSL)***
-
-    wget -O /tmp/microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
-    sudo apt-get install -y /tmp/microsoft-edge.deb
-    rm /tmp/microsoft-edge.deb
-
-## Step 4: Configure Global NPM Directory
+## Optionalk: Configure Global NPM Directory
 
     mkdir ~/.npm-global
     npm config set prefix '~/.npm-global'
