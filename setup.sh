@@ -156,6 +156,16 @@ unzip duckdb_cli-linux-amd64.zip
 sudo mv duckdb /usr/local/bin/duckdb
 rm duckdb_cli-linux-amd64.zip
 
+echo "****************"
+echo "Installing UV..."
+echo "****************"
+curl -fsSL https://astral.sh/uv/install.sh | sh
+
+echo "*************************"
+echo "Installing Claude Code..."
+echo "*************************"
+curl -fsSL https://claude.ai/install.sh | bash
+
 echo "*****"
 echo "DONE!"
 echo "*****"
