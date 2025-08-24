@@ -98,7 +98,6 @@ sudo apt install -y \
   unixodbc-dev \
   tdsodbc \
   sqlite3 \
-  sqlite3-doc \
   sqlite3-tools \
   python3-venv \
   python3-virtualenv \
@@ -124,9 +123,7 @@ else
   echo "Installing Debian Packages..."
   echo "*****************************"
   sudo apt install -y \
-    docker-compose \
-    gnome-shell-extension-appindicator
-  gnome-extensions enable ubuntu-appindicators@ubuntu.com
+    docker-compose
 fi
 
 if detect_wsl; then
