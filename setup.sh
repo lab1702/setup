@@ -121,7 +121,9 @@ else
   echo "Installing Debian Packages..."
   echo "*****************************"
   sudo apt install -y \
-    docker-compose
+    docker-compose \
+    gnome-shell-extension-appindicator
+  gnome-extensions enable ubuntu-appindicators@ubuntu.com
 fi
 
 if detect_wsl; then
