@@ -24,16 +24,3 @@
     npm config set prefix '~/.npm-global'
     echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
     export PATH=~/.npm-global/bin:$PATH
-
-## Step 5: Install Claude Code
-
-    curl -fsSL https://claude.ai/install.sh | bash
-
-## Step 6: Install uv
-
-    curl -fsSL https://astral.sh/uv/install.sh | sh
-
-## Step 7: Add local bin to path
-
-    echo 'export PATH="~/.local/bin:$PATH"' >> ~/.bashrc
-    export PATH="~/.local/bin:$PATH"
