@@ -37,17 +37,3 @@
 
     echo 'export PATH="~/.local/bin:$PATH"' >> ~/.bashrc
     export PATH="~/.local/bin:$PATH"
-
-## Step 8: Install Agent OS
-
-Follow instructions at: [https://buildermethods.com/agent-os](https://buildermethods.com/agent-os).
-
-## Step 9: Install MCPs
-
-### Context7
-
-    claude mcp add --transport sse context7 https://mcp.context7.com/sse
-
-### Playwright
-
-    claude mcp add playwright npx @playwright/mcp@latest
