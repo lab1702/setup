@@ -97,6 +97,9 @@ sudo apt install -y \
   libnode-dev \
   unixodbc-dev \
   tdsodbc \
+  sqlite3 \
+  sqlite3-doc \
+  sqlite3-tools \
   python3-venv \
   python3-virtualenv \
   golang \
