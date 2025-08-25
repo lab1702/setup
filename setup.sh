@@ -166,3 +166,6 @@ curl -fsSL https://claude.ai/install.sh | bash
 echo "*****"
 echo "DONE!"
 echo "*****"
+echo
+echo "Close the terminal and reopen it for updated path to take effect."
+echo
