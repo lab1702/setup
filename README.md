@@ -18,7 +18,7 @@
     sudo apt-get install -y /tmp/microsoft-edge.deb
     rm /tmp/microsoft-edge.deb
 
-## Optionalk: Configure Global NPM Directory
+## Optional: Configure Global NPM Directory
 
     mkdir ~/.npm-global
     npm config set prefix '~/.npm-global'
