@@ -24,3 +24,7 @@
     npm config set prefix '~/.npm-global'
     echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
     export PATH=~/.npm-global/bin:$PATH
+
+## Optional: Install Playwright MCP
+
+    claude mcp add playwright npx @playwright/mcp@latest
