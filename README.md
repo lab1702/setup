@@ -28,3 +28,8 @@
 ## Optional: Install Playwright MCP
 
     claude mcp add playwright npx @playwright/mcp@latest
+
+## Optional: Setup Git Authentication
+
+    gh auth login
+    gh auth setup-git
