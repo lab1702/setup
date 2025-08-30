@@ -133,12 +133,17 @@ if detect_wsl; then
   sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' 200
   sudo update-alternatives --auto x-www-browser
 else
-  echo "*******************"
-  echo "Installing Snaps..."
-  echo "*******************"
+  echo "***************************"
+  echo "Installing Non-WSL Snaps..."
+  echo "***************************"
   sudo snap install code --classic
   sudo snap install discord
 fi
+
+echo "*******************"
+echo "Installing Snaps..."
+echo "*******************"
+sudo snap install yazi --classic
 
 echo "*********************************"
 echo "Adding ${USER} to docker group..."
