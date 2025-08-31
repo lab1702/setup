@@ -110,7 +110,8 @@ sudo apt install -y \
   figlet \
   dos2unix \
   btop \
-  nvtop
+  nvtop \
+  jnettop
 
 if detect_ubuntu; then
   echo "*****************************"
