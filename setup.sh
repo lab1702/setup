@@ -94,6 +94,11 @@ sudo apt install -y \
   nvtop \
   jnettop
 
+echo "*********************************"
+echo "Adding ${USER} to docker group..."
+echo "*********************************"
+sudo usermod -aG docker ${USER}
+
 if detect_ubuntu; then
   echo "*****************************"
   echo "Installing Ubuntu Packages..."
@@ -114,12 +119,14 @@ if detect_wsl; then
   echo "*************************************"
   sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' 200
   sudo update-alternatives --auto x-www-browser
+else
+  echo "****************************"
+  echo "Installing Microsoft Edge..."
+  echo "****************************"
+  wget -O /tmp/microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
+  sudo apt-get install -y /tmp/microsoft-edge.deb
+  rm /tmp/microsoft-edge.deb
 fi
-
-echo "*********************************"
-echo "Adding ${USER} to docker group..."
-echo "*********************************"
-sudo usermod -aG docker ${USER}
 
 echo "************************"
 echo "Installing DuckDB CLI..."
