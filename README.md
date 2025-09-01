@@ -12,12 +12,6 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
-## Optional: Install Microsoft Edge ***(NOT FOR WSL)***
-
-    wget -O /tmp/microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
-    sudo apt-get install -y /tmp/microsoft-edge.deb
-    rm /tmp/microsoft-edge.deb
-
 ## Optional: Configure Global NPM Directory
 
     mkdir ~/.npm-global
@@ -32,4 +26,9 @@
 ## Optional: Setup Git Authentication
 
     gh auth login
+
     gh auth setup-git
+
+    git config --global user.name "name"
+
+    git config --global user.email "email"
