@@ -37,5 +37,6 @@ Step C:
 
     git config --global user.name "name"
 
-Ste D:
+Step D:
+
     git config --global user.email "email"
