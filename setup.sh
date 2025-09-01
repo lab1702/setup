@@ -89,6 +89,7 @@ sudo apt install -y \
   cpufetch \
   figlet \
   dos2unix \
+  htop \
   btop \
   nvtop \
   jnettop
