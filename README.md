@@ -25,10 +25,14 @@
 
 ## Optional: Setup Git Authentication
 
+Step A:
     gh auth login
 
+Step B:
     gh auth setup-git
 
+Step C:
     git config --global user.name "name"
 
+Ste D:
     git config --global user.email "email"
