@@ -1,12 +1,5 @@
 #!/bin/bash
 
-detect_snapd() {
-    if command -v snap >/dev/null 2>&1; then
-        return 0  # snapd is available
-    fi
-    return 1  # snapd not available
-}
-
 detect_ubuntu() {
     if grep -q "ubuntu" /etc/os-release 2>/dev/null; then
         return 0  # Ubuntu
@@ -37,19 +30,6 @@ sudo apt update && \
   sudo apt upgrade -y && \
   sudo apt autoremove -y && \
   sudo apt autoclean -y
-
-if ! detect_snapd; then
-    echo "*******************"
-    echo "Installing snapd..."
-    echo "*******************"
-    sudo apt install -y snapd
-    export PATH="$PATH:/snap/bin"
-fi
-
-echo "*****************"
-echo "Updating Snaps..."
-echo "*****************"
-sudo snap refresh
 
 echo "****************************"
 echo "Installing Linux Packages..."
@@ -133,18 +113,7 @@ if detect_wsl; then
   echo "*************************************"
   sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' 200
   sudo update-alternatives --auto x-www-browser
-else
-  echo "***************************"
-  echo "Installing Non-WSL Snaps..."
-  echo "***************************"
-  sudo snap install code --classic
-  sudo snap install discord
 fi
-
-echo "*******************"
-echo "Installing Snaps..."
-echo "*******************"
-sudo snap install yazi --classic
 
 echo "*********************************"
 echo "Adding ${USER} to docker group..."
