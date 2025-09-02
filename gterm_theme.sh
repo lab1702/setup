@@ -41,21 +41,6 @@ gsettings set $PROFILE_PATH highlight-foreground-color 'rgb(255,255,255)'
 gsettings set $PROFILE_PATH bold-color 'rgb(255,255,255)'
 gsettings set $PROFILE_PATH bold-color-same-as-fg false
 
-# Configure terminal behavior
-echo "Configuring terminal behavior..."
-gsettings set $PROFILE_PATH audible-bell false
-gsettings set $PROFILE_PATH visible-bell false
-gsettings set $PROFILE_PATH scrollback-unlimited false
-gsettings set $PROFILE_PATH scrollback-lines 10000
-
-# Set window title
-gsettings set $PROFILE_PATH dynamic-title true
-gsettings set $PROFILE_PATH title 'Terminal'
-
-# Optional: Set transparency (uncomment if desired)
-# gsettings set $PROFILE_PATH use-transparent-background true
-# gsettings set $PROFILE_PATH background-transparency-percent 10
-
 echo "Configuration complete! Please restart gnome-terminal or open a new tab to see changes."
 echo ""
 echo "Profile configured: $PROFILE"
