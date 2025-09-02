@@ -141,6 +141,11 @@ echo "Installing UV..."
 echo "****************"
 curl -fsSL https://astral.sh/uv/install.sh | sh
 
+echo "**********************"
+echo "Installing OpenCode..."
+echo "**********************"
+curl -fsSL https://opencode.ai/install | bash
+
 echo "*************************"
 echo "Installing Claude Code..."
 echo "*************************"
