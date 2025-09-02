@@ -2,8 +2,6 @@
 
 **This is focused around C, C++, R, Python, DuckDB, NodeJS, Go and Rust using Claude Code AI Coding Agent.**
 
-*My setup emphasizes simplicity and minimalism. There is nothing that affects themes and looks here.*
-
 ## Step 1: Install Basics
 
     sudo apt update && sudo apt upgrade -y && sudo apt install -y curl wget
@@ -40,3 +38,8 @@ Step C:
 Step D:
 
     git config --global user.email "email"
+
+## Optional: Set Gnome Terminal Dark Theme
+
+    curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/gterm_theme.sh | bash
+
