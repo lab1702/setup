@@ -36,6 +36,7 @@ echo "Installing Linux Packages..."
 echo "****************************"
 sudo apt install -y \
   build-essential \
+  gpg \
   git \
   gh \
   cmake \
