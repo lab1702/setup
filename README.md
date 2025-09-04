@@ -10,6 +10,10 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
+## Optional: Install Claude Code
+
+    curl -fsSL https://claude.ai/install.sh | bash
+
 ## Optional: Configure Global NPM Directory
 
     mkdir ~/.npm-global
