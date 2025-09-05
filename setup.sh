@@ -124,7 +124,13 @@ else
   echo "******************************"
   echo "Installing Non-WSL packages..."
   echo "******************************"
-  sudo apt install gnome-shell-extension-manager
+  sudo apt install -y \
+    fonts-3270 \
+    fonts-cascadia-code \
+    fonts-hack \
+    fonts-jetbrains-mono \
+    fonts-recommended \
+    gnome-shell-extension-manager
 
   echo "****************************"
   echo "Installing Microsoft Edge..."
