@@ -121,6 +121,11 @@ if detect_wsl; then
   sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' 200
   sudo update-alternatives --auto x-www-browser
 else
+  echo "******************************"
+  echo "Installing Non-WSL packages..."
+  echo "******************************"
+  sudo apt install gnome-shell-extension-manager
+
   echo "****************************"
   echo "Installing Microsoft Edge..."
   echo "****************************"
