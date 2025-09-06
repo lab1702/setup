@@ -10,31 +10,20 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
-## Optional: Configure Global NPM Directory
-
-    mkdir ~/.npm-global
-    npm config set prefix '~/.npm-global'
-    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
-    export PATH=~/.npm-global/bin:$PATH
-
 ## Optional: Setup Git Authentication
 
 Step A:
 
-    gh auth login
+    git config --global user.name "name"
 
 Step B:
 
-    gh auth setup-git
+    git config --global user.email "email"
 
 Step C:
 
-    git config --global user.name "name"
+    gh auth login
 
 Step D:
 
-    git config --global user.email "email"
-
-## Optional: Set Gnome Terminal Dark Theme
-
-    curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/gterm_theme.sh | bash
+    gh auth setup-git
