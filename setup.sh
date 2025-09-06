@@ -132,13 +132,6 @@ else
     fonts-recommended \
     gnome-shell-extension-manager
 
-  echo "****************************"
-  echo "Installing Microsoft Edge..."
-  echo "****************************"
-  wget -O /tmp/microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
-  sudo apt-get install -y /tmp/microsoft-edge.deb
-  rm /tmp/microsoft-edge.deb
-
   echo "**********************"
   echo "Installing Warp.Dev..."
   echo "**********************"
