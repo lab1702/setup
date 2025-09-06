@@ -10,20 +10,12 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
-## Optional: Install Claude Code
-
-    curl -fsSL https://claude.ai/install.sh | bash
-
 ## Optional: Configure Global NPM Directory
 
     mkdir ~/.npm-global
     npm config set prefix '~/.npm-global'
     echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
     export PATH=~/.npm-global/bin:$PATH
-
-## Optional: Install Playwright MCP
-
-    claude mcp add playwright npx @playwright/mcp@latest
 
 ## Optional: Setup Git Authentication
 
@@ -46,4 +38,3 @@ Step D:
 ## Optional: Set Gnome Terminal Dark Theme
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/gterm_theme.sh | bash
-
