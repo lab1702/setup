@@ -10,6 +10,11 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
+## Step 3: Run Update Script
+This will install updates and refresh the DuckDB CLI binary.
+
+    curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/update.sh | bash
+
 ## Optional: Setup Git Authentication
 
 Step A:
@@ -27,3 +32,6 @@ Step C:
 Step D:
 
     gh auth setup-git
+
+## Using Ubuntu autoinstall.yml
+Use this URL for the script: [https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/autoinstall.yml](https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/autoinstall.yml)
