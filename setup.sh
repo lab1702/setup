@@ -121,17 +121,6 @@ if detect_wsl; then
   sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' 200
   sudo update-alternatives --auto x-www-browser
 else
-  echo "******************************"
-  echo "Installing Non-WSL packages..."
-  echo "******************************"
-  sudo apt install -y \
-    fonts-3270 \
-    fonts-cascadia-code \
-    fonts-hack \
-    fonts-jetbrains-mono \
-    fonts-recommended \
-    gnome-shell-extension-manager
-
   echo "**********************"
   echo "Installing Warp.Dev..."
   echo "**********************"
@@ -149,11 +138,6 @@ wget https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-
 unzip duckdb_cli-linux-amd64.zip
 sudo mv duckdb /usr/local/bin/duckdb
 rm duckdb_cli-linux-amd64.zip
-
-echo "****************"
-echo "Installing UV..."
-echo "****************"
-curl -fsSL https://astral.sh/uv/install.sh | sh
 
 echo "*****"
 echo "DONE!"
