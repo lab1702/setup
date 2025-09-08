@@ -3,7 +3,7 @@ autoinstall:
   interactive-sections:
     - identity
   identity:
-    realname: lab
+    realname: 'lab'
     username: lab
   packages:
     - build-essential
