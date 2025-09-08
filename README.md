@@ -32,6 +32,3 @@ Step C:
 Step D:
 
     gh auth setup-git
-
-## Using Ubuntu autoinstall.yml
-Use this URL for the script: [lab1702.com/autoinstall.yml](https://www.lab1702.com/autoinstall.yml)
