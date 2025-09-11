@@ -1,6 +1,6 @@
 # Simple Debian / Ubuntu Developer Workstation Setup
 
-**This is focused around C, C++, R, Python, DuckDB, NodeJS, Go, Rust and Zig.**
+**This is focused around C, C++, R, Python, DuckDB, NodeJS, Go, and Rust.**
 
 ## Step 1: Install Basics
 
