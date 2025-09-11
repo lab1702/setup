@@ -17,6 +17,14 @@
     echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
     export PATH=~/.npm-global/bin:$PATH
 
+## Optional: Install Claude Code
+
+    curl -fsSL https://claude.ai/install.sh | bash
+
+## Optional: Install Gemini CLI
+
+    npm install -g @google/gemini-cli
+
 ## Optional: Install Codex CLI
 
     npm install -g @openai/codex
