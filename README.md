@@ -10,9 +10,16 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
-## Optional: Install Claude Code
+## Step 3: Configure NPM directory
 
-    curl -fsSL https://claude.ai/install.sh | bash
+    mkdir ~/.npm-global
+    npm config set prefix '~/.npm-global'
+    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+    export PATH=~/.npm-global/bin:$PATH
+
+## Optional: Install Codex CLI
+
+    npm install -g @openai/codex
 
 ## Optional: Setup Git Authentication
 
