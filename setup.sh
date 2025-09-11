@@ -120,15 +120,6 @@ if detect_wsl; then
   echo "*************************************"
   sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' 200
   sudo update-alternatives --auto x-www-browser
-else
-  echo "**********************"
-  echo "Installing Warp.Dev..."
-  echo "**********************"
-  wget -qO- https://releases.warp.dev/linux/keys/warp.asc | gpg --dearmor > /tmp/warpdotdev.gpg
-  sudo install -D -o root -g root -m 644 /tmp/warpdotdev.gpg /etc/apt/keyrings/warpdotdev.gpg
-  sudo sh -c 'echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/warpdotdev.gpg] https://releases.warp.dev/linux/deb stable main" > /etc/apt/sources.list.d/warpdotdev.list'
-  rm /tmp/warpdotdev.gpg
-  sudo apt update && sudo apt install warp-terminal
 fi
 
 echo "************************"
