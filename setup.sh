@@ -71,6 +71,7 @@ sudo apt install -y \
   libarchive-dev \
   libsodium-dev \
   libsecret-1-dev \
+  libabsl-dev \
   libgit2-dev \
   libmagick++-dev \
   libpoppler-cpp-dev \
