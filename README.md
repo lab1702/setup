@@ -17,6 +17,10 @@
     echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
     export PATH=~/.npm-global/bin:$PATH
 
+## Optional: Install Copilot CLI
+
+    npm install -g @github/copilot
+
 ## Optional: Install Claude Code
 
     curl -fsSL https://claude.ai/install.sh | bash
