@@ -21,32 +21,20 @@
 
     npm install -g @github/copilot
 
-## Optional: Install Claude Code
-
-    curl -fsSL https://claude.ai/install.sh | bash
-
-## Optional: Install Gemini CLI
-
-    npm install -g @google/gemini-cli
-
-## Optional: Install Codex CLI
-
-    npm install -g @openai/codex
-
 ## Optional: Setup Git Authentication
 
 Step A:
 
-    git config --global user.name "name"
+    git config --global user.name "abc"
 
 Step B:
 
-    git config --global user.email "email"
+    git config --global user.email "abc@gmail.com"
 
 Step C:
 
     gh auth login
 
-Step D:
+Optional Step D:
 
     gh auth setup-git
