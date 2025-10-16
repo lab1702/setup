@@ -128,15 +128,6 @@ else
   wget -O /tmp/microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
   sudo apt-get install -y /tmp/microsoft-edge.deb
   rm /tmp/microsoft-edge.deb
-
-  echo "**********************"
-  echo "Installing Warp.Dev..."
-  echo "**********************"
-  wget -qO- https://releases.warp.dev/linux/keys/warp.asc | gpg --dearmor > /tmp/warpdotdev.gpg
-  sudo install -D -o root -g root -m 644 /tmp/warpdotdev.gpg /etc/apt/keyrings/warpdotdev.gpg
-  sudo sh -c 'echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/warpdotdev.gpg] https://releases.warp.dev/linux/deb stable main" > /etc/apt/sources.list.d/warpdotdev.list'
-  rm /tmp/warpdotdev.gpg
-  sudo apt update && sudo apt install warp-terminal
 fi
 
 echo "************************"
