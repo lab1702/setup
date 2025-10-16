@@ -17,7 +17,7 @@
     echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
     export PATH=~/.npm-global/bin:$PATH
 
-## Optional: Install Copilot CLI
+## Step 4: Install Copilot CLI
 
     npm install -g @github/copilot
 
