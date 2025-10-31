@@ -17,10 +17,6 @@
     echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
     export PATH=~/.npm-global/bin:$PATH
 
-## Step 4: Install Copilot CLI
-
-    npm install -g @github/copilot
-
 ## Optional: Setup Git Authentication
 
 Step A:
@@ -34,7 +30,3 @@ Step B:
 Step C:
 
     gh auth login
-
-Optional Step D:
-
-    gh auth setup-git
