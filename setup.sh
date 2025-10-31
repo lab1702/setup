@@ -130,11 +130,6 @@ else
   rm /tmp/microsoft-edge.deb
 fi
 
-echo "*************************"
-echo "Installing Claude Code..."
-echo "*************************"
-curl -fsSL https://claude.ai/install.sh | bash
-
 echo "************************"
 echo "Installing DuckDB CLI..."
 echo "************************"
