@@ -116,11 +116,11 @@ else
 fi
 
 if detect_wsl; then
-  echo "*************************************"
-  echo "Configuring Microsoft Edge for WSL..."
-  echo "*************************************"
-  sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser '/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' 200
-  sudo update-alternatives --auto x-www-browser
+  echo "*****************************"
+  echo "WSL Specific items go here..."
+  echo "*****************************"
+  sudo apt install -y \
+    wslu
 else
   echo "****************************"
   echo "Installing Microsoft Edge..."
