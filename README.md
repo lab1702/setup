@@ -10,7 +10,7 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
-## Step 3: Configure NPM directory
+## Optional: Configure NPM directory
 
     mkdir ~/.npm-global
     npm config set prefix '~/.npm-global'
