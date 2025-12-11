@@ -51,6 +51,7 @@ sudo apt install -y \
   r-base \
   r-base-dev \
   libopenblas-dev \
+  tidy \
   pandoc \
   texlive-full \
   libxml2-dev \
