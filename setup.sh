@@ -48,6 +48,7 @@ sudo apt install -y \
   tree \
   docker.io \
   docker-buildx \
+  octave \
   r-base \
   r-base-dev \
   libopenblas-dev \
