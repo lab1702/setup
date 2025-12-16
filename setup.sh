@@ -125,12 +125,15 @@ if detect_wsl; then
   sudo apt install -y \
     wslu
 else
-  echo "****************************"
-  echo "Installing Microsoft Edge..."
-  echo "****************************"
+  echo "*********************************"
+  echo "Non-WSL Specific items go here..."
+  echo "*********************************"
   wget -O /tmp/microsoft-edge.deb https://go.microsoft.com/fwlink?linkid=2149051
   sudo apt-get install -y /tmp/microsoft-edge.deb
   rm /tmp/microsoft-edge.deb
+
+  sudo apt install -y \
+    fonts-firacode
 fi
 
 echo "************************"
