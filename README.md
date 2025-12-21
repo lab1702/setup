@@ -1,7 +1,5 @@
 # Simple Debian / Ubuntu Developer Workstation Setup
 
-**This is focused around C, C++, R, Python, DuckDB, NodeJS, Go, and Rust.**
-
 ## Step 1: Install Basics
 
     sudo apt update && sudo apt upgrade -y && sudo apt install -y curl wget
@@ -14,20 +12,9 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/download-quarto.sh | bash
 
-## Optional: Configure NPM directory
-
-    mkdir ~/.npm-global
-    npm config set prefix '~/.npm-global'
-    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
-    export PATH=~/.npm-global/bin:$PATH
-
 ## Optional: Setup Claude Code
 
     curl -fsSL https://claude.ai/install.sh | bash
-
-## Optional: Setup OpenCode
-
-    curl -fsSL https://opencode.ai/install | bash
 
 ## Optional: Setup Git Authentication
 
