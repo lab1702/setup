@@ -8,6 +8,10 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
 
+## Optional: Configure GNOME
+
+    curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/ubuntu-gnome-setup.sh | bash
+
 ## Optional: Download Quarto
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/download-quarto.sh | bash
