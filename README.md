@@ -34,6 +34,10 @@ Step C:
 
     gh auth login
 
+Step D:
+
+    gh auth setup-git
+
 ## Optional: Setup VHS
 
     go install github.com/charmbracelet/vhs@latest
