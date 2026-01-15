@@ -87,7 +87,7 @@ sudo apt install -y \
   python3-venv \
   python3-virtualenv \
   golang \
-  rust-all \
+  rustup \
   nodejs \
   npm \
   vim \
