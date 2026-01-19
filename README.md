@@ -20,6 +20,10 @@
 
     curl -fsSL https://claude.ai/install.sh | bash
 
+## Optional: Setup OpenCode
+
+    curl -fsSL https://opencode.ai/install | bash
+
 ## Optional: Setup Git Authentication
 
 Step A:
