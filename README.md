@@ -12,6 +12,12 @@
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/ubuntu-gnome-setup.sh | bash
 
+## Optional: Install Niri
+
+    sudo add-apt-repository ppa:avengemedia/danklinux
+    sudo add-apt-repository ppa:avengemedia/dms
+    sudo apt install niri dms
+
 ## Optional: Download Quarto
 
     curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/download-quarto.sh | bash
