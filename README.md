@@ -26,6 +26,10 @@
 
     curl -fsSL https://claude.ai/install.sh | bash
 
+### Add AgentOS for Claude
+
+    git clone https://github.com/buildermethods/agent-os.git && rm -rf ~/agent-os/.git
+
 ## Optional: Setup OpenCode
 
     curl -fsSL https://opencode.ai/install | bash
