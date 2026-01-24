@@ -136,6 +136,7 @@ else
 
   sudo apt install -y \
     fonts-firacode \
+    xdotool \
     ydotool
 fi
 
