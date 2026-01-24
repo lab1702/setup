@@ -28,7 +28,7 @@
 
 ### Add AgentOS for Claude
 
-    git clone https://github.com/buildermethods/agent-os.git && rm -rf ~/agent-os/.git
+    cd ~ && git clone https://github.com/buildermethods/agent-os.git && rm -rf ~/agent-os/.git
 
 ## Optional: Setup OpenCode
 
