@@ -99,8 +99,7 @@ sudo apt install -y \
   nvtop \
   jnettop \
   ffmpeg \
-  ttyd \
-  ydotool
+  ttyd
 
 echo "*********************************"
 echo "Adding ${USER} to docker group..."
@@ -136,7 +135,8 @@ else
   rm /tmp/microsoft-edge.deb
 
   sudo apt install -y \
-    fonts-firacode
+    fonts-firacode \
+    ydotool
 fi
 
 echo "************************"
