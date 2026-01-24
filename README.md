@@ -52,6 +52,10 @@ Step D:
 
     gh auth setup-git
 
+## Optional: Find battle.net launcher install paths
+
+    BPN=$(find ~/ -name "Battle.net Launcher.exe" 2>/dev/null | head -n 1); printf "\nTARGET:\n\"%s\"\n\nSTART IN:\n\"%s\"\n\n" "$BPN" "$(dirname "$BPN")"
+
 ## Optional: Setup VHS
 
     go install github.com/charmbracelet/vhs@latest
