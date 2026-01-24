@@ -99,7 +99,8 @@ sudo apt install -y \
   nvtop \
   jnettop \
   ffmpeg \
-  ttyd
+  ttyd \
+  ydotool
 
 echo "*********************************"
 echo "Adding ${USER} to docker group..."
