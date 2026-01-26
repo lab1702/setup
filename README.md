@@ -8,10 +8,6 @@
 
     sudo ansible-pull -U https://github.com/lab1702/setup.git
 
-Or with verbose output:
-
-    sudo ansible-pull -U https://github.com/lab1702/setup.git -v
-
 ---
 
 ## Optional: Setup Claude Code
