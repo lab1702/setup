@@ -1,0 +1,107 @@
+---
+# Base development packages
+
+- name: Install build tools and utilities
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - gpg
+      - git
+      - gh
+      - cmake
+      - unzip
+      - jq
+      - ripgrep
+      - fd-find
+      - fzf
+      - tree
+    state: present
+
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-buildx
+    state: present
+
+- name: Install scientific computing packages
+  ansible.builtin.apt:
+    name:
+      - octave
+      - r-base
+      - r-base-dev
+      - libopenblas-dev
+    state: present
+
+- name: Install document processing tools
+  ansible.builtin.apt:
+    name:
+      - tidy
+      - pandoc
+      - texlive-full
+    state: present
+
+- name: Install development libraries
+  ansible.builtin.apt:
+    name:
+      - libxml2-dev
+      - libcurl4-openssl-dev
+      - libssl-dev
+      - libx11-dev
+      - libglu1-mesa-dev
+      - libftgl-dev
+      - libfontconfig1-dev
+      - libcairo2-dev
+      - libgsl-dev
+      - libudunits2-dev
+      - libgdal-dev
+      - libmpfr-dev
+      - libgmp-dev
+      - libharfbuzz-dev
+      - libfribidi-dev
+      - libunwind-dev
+      - libarchive-dev
+      - libsodium-dev
+      - libsecret-1-dev
+      - libabsl-dev
+      - libgit2-dev
+      - libmagick++-dev
+      - libpoppler-cpp-dev
+      - libavfilter-dev
+      - libnode-dev
+    state: present
+
+- name: Install database tools
+  ansible.builtin.apt:
+    name:
+      - unixodbc-dev
+      - tdsodbc
+      - sqlite3
+      - sqlite3-tools
+    state: present
+
+- name: Install programming languages and runtimes
+  ansible.builtin.apt:
+    name:
+      - python3-venv
+      - python3-virtualenv
+      - golang
+      - rustup
+      - nodejs
+      - npm
+    state: present
+
+- name: Install system utilities
+  ansible.builtin.apt:
+    name:
+      - vim
+      - cpufetch
+      - figlet
+      - dos2unix
+      - htop
+      - btop
+      - nvtop
+      - jnettop
+      - ffmpeg
+      - ttyd
+    state: present

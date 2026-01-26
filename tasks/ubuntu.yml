@@ -1,0 +1,7 @@
+---
+# Ubuntu-specific packages
+
+- name: Install docker-compose-v2 (Ubuntu)
+  ansible.builtin.apt:
+    name: docker-compose-v2
+    state: present

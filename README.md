@@ -1,16 +1,18 @@
-# Simple Debian / Ubuntu Developer Workstation Setup
+# Simple Ubuntu Developer Workstation Setup
 
-## Step 1: Install Basics
+## Step 1: Install Ansible
 
-    sudo apt update && sudo apt upgrade -y && sudo apt install -y curl wget
+    sudo apt update && sudo apt install -y ansible
 
-## Step 2: Run Setup Script
+## Step 2: Run ansible-pull
 
-    curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/setup.sh | bash
+    sudo ansible-pull -U https://github.com/lab1702/setup.git
 
-## Optional: Download Quarto
+Or with verbose output:
 
-    curl -fsSL https://raw.githubusercontent.com/lab1702/setup/refs/heads/main/download-quarto.sh | bash
+    sudo ansible-pull -U https://github.com/lab1702/setup.git -v
+
+---
 
 ## Optional: Setup Claude Code
 

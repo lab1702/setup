@@ -1,0 +1,60 @@
+---
+# Main playbook for ansible-pull
+# Usage: sudo ansible-pull -U https://github.com/lab1702/setup.git
+
+- name: Setup Ubuntu Developer Workstation
+  hosts: localhost
+  connection: local
+  become: true
+
+  vars:
+    user_name: "{{ ansible_env.SUDO_USER | default(ansible_user_id) }}"
+    is_wsl: "{{ ansible_facts['kernel'] is regex('(Microsoft|WSL)', ignorecase=True) or wsl_interop.stat.exists }}"
+
+  pre_tasks:
+    - name: Check for WSL interop file
+      ansible.builtin.stat:
+        path: /proc/sys/fs/binfmt_misc/WSLInterop
+      register: wsl_interop
+
+  tasks:
+    - name: Include system update tasks
+      ansible.builtin.include_tasks: tasks/update.yml
+
+    - name: Include base packages installation
+      ansible.builtin.include_tasks: tasks/packages.yml
+
+    - name: Include docker setup
+      ansible.builtin.include_tasks: tasks/docker.yml
+
+    - name: Include Ubuntu-specific packages
+      ansible.builtin.include_tasks: tasks/ubuntu.yml
+
+    - name: Include WSL-specific setup
+      ansible.builtin.include_tasks: tasks/wsl.yml
+      when: is_wsl
+
+    - name: Include non-WSL setup (desktop)
+      ansible.builtin.include_tasks: tasks/desktop.yml
+      when: not is_wsl
+
+    - name: Include DuckDB installation
+      ansible.builtin.include_tasks: tasks/duckdb.yml
+
+    - name: Get latest Quarto version
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/quarto-dev/quarto-cli/releases/latest
+        return_content: true
+      register: quarto_release
+      check_mode: false
+
+    - name: Install Quarto
+      ansible.builtin.apt:
+        deb: "https://github.com/quarto-dev/quarto-cli/releases/download/{{ quarto_release.json.tag_name }}/quarto-{{ quarto_release.json.tag_name | regex_replace('^v', '') }}-linux-amd64.deb"
+
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "***** DONE! *****"
+          - "Close the terminal and reopen it for updated path to take effect."

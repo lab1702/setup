@@ -1,0 +1,14 @@
+---
+# Desktop (non-WSL) specific packages
+
+- name: Install desktop fonts and tools
+  ansible.builtin.apt:
+    name:
+      - fonts-firacode
+      - xdotool
+      - ydotool
+    state: present
+
+- name: Install Microsoft Edge
+  ansible.builtin.apt:
+    deb: https://go.microsoft.com/fwlink?linkid=2149051
