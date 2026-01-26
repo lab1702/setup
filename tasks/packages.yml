@@ -106,3 +106,7 @@
       - ffmpeg
       - ttyd
     state: present
+
+- name: Install Typst
+  community.general.snap:
+    name: typst

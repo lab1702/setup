@@ -12,3 +12,12 @@
 - name: Install Microsoft Edge
   ansible.builtin.apt:
     deb: https://go.microsoft.com/fwlink?linkid=2149051
+
+- name: Install VS Code
+  community.general.snap:
+    name: code
+    classic: true
+
+- name: Install Discord
+  community.general.snap:
+    name: discord
