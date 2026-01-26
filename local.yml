@@ -27,9 +27,6 @@
     - name: Include docker setup
       ansible.builtin.include_tasks: tasks/docker.yml
 
-    - name: Include Ubuntu-specific packages
-      ansible.builtin.include_tasks: tasks/ubuntu.yml
-
     - name: Include WSL-specific setup
       ansible.builtin.include_tasks: tasks/wsl.yml
       when: is_wsl
