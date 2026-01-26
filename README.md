@@ -1,4 +1,4 @@
-# Simple Ubuntu Developer Workstation Setup
+# Ubuntu Developer Workstation Setup
 
 ## Step 1: Install Ansible
 
