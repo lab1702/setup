@@ -6,6 +6,7 @@
     name:
       - fonts-firacode
       - ydotool
+      - ydotoold
     state: present
 
 - name: Install Microsoft Edge
