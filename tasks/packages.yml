@@ -9,6 +9,8 @@
       - git
       - gh
       - cmake
+      - curl
+      - wget
       - unzip
       - jq
       - ripgrep
