@@ -2,7 +2,7 @@
 
 ## Step 1: Install Ansible
 
-    sudo apt update && sudo apt install -y ansible
+    sudo apt update && sudo apt install -y git ansible
 
 ## Step 2: Run ansible-pull
 
