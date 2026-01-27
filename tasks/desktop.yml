@@ -21,3 +21,21 @@
 - name: Install Discord
   community.general.snap:
     name: discord
+
+- name: Get latest RStudio release version from GitHub
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/rstudio/rstudio/releases/latest
+    return_content: true
+  register: rstudio_release
+
+- name: Set RStudio version fact
+  ansible.builtin.set_fact:
+    rstudio_version: "{{ rstudio_release.json.tag_name | regex_replace('^v', '') }}"
+
+- name: Determine Ubuntu codename for RStudio download
+  ansible.builtin.set_fact:
+    rstudio_ubuntu_codename: "{{ 'noble' if ansible_distribution_release == 'noble' else 'jammy' }}"
+
+- name: Install RStudio
+  ansible.builtin.apt:
+    deb: "https://download1.rstudio.org/electron/{{ rstudio_ubuntu_codename }}/amd64/rstudio-{{ rstudio_version }}-amd64.deb"
