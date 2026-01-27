@@ -57,6 +57,10 @@
   ansible.builtin.set_fact:
     rstudio_ubuntu_codename: "{{ (rstudio_check.results | selectattr('status', 'defined') | selectattr('status', 'eq', 200) | first).item }}"
 
+- name: Show selected RStudio package
+  ansible.builtin.debug:
+    msg: "Installing RStudio {{ rstudio_version }} ({{ rstudio_ubuntu_codename }} build)"
+
 - name: Install RStudio
   ansible.builtin.apt:
     deb: "https://download1.rstudio.org/electron/{{ rstudio_ubuntu_codename }}/amd64/rstudio-{{ rstudio_version }}-amd64.deb"
