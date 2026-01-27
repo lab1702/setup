@@ -32,11 +32,11 @@
   ansible.builtin.set_fact:
     rstudio_version: "{{ rstudio_tags.json[0].name | regex_replace('^v', '') | regex_replace('\\+', '-') }}"
 
-# Ubuntu codenames ordered newest to oldest - update this list as new releases come out
-- name: Define Ubuntu codenames in order
+# Ubuntu LTS codenames ordered newest to oldest
+- name: Define Ubuntu LTS codenames in order
   ansible.builtin.set_fact:
     ubuntu_codenames_ordered:
-      - { name: 'oracular', version: '24.10' }
+      - { name: 'resolute', version: '26.04' }
       - { name: 'noble', version: '24.04' }
       - { name: 'jammy', version: '22.04' }
       - { name: 'focal', version: '20.04' }
