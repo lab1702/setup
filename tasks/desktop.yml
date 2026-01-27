@@ -22,19 +22,40 @@
   community.general.snap:
     name: discord
 
-- name: Get latest RStudio release version from GitHub
+- name: Get latest RStudio version from GitHub tags
   ansible.builtin.uri:
-    url: https://api.github.com/repos/rstudio/rstudio/releases/latest
+    url: https://api.github.com/repos/rstudio/rstudio/tags?per_page=1
     return_content: true
-  register: rstudio_release
+  register: rstudio_tags
 
 - name: Set RStudio version fact
   ansible.builtin.set_fact:
-    rstudio_version: "{{ rstudio_release.json.tag_name | regex_replace('^v', '') }}"
+    rstudio_version: "{{ rstudio_tags.json[0].name | regex_replace('^v', '') | regex_replace('\\+', '-') }}"
 
-- name: Determine Ubuntu codename for RStudio download
+# Ubuntu codenames ordered newest to oldest - update this list as new releases come out
+- name: Define Ubuntu codenames in order
   ansible.builtin.set_fact:
-    rstudio_ubuntu_codename: "{{ 'noble' if ansible_distribution_release == 'noble' else 'jammy' }}"
+    ubuntu_codenames_ordered:
+      - { name: 'oracular', version: '24.10' }
+      - { name: 'noble', version: '24.04' }
+      - { name: 'jammy', version: '22.04' }
+      - { name: 'focal', version: '20.04' }
+
+- name: Filter codenames to those not newer than current system
+  ansible.builtin.set_fact:
+    compatible_codenames: "{{ ubuntu_codenames_ordered | selectattr('version', 'version', ansible_distribution_version, '<=') | map(attribute='name') | list }}"
+
+- name: Check RStudio availability for each compatible codename
+  ansible.builtin.uri:
+    url: "https://download1.rstudio.org/electron/{{ item }}/amd64/rstudio-{{ rstudio_version }}-amd64.deb"
+    method: HEAD
+  register: rstudio_check
+  loop: "{{ compatible_codenames }}"
+  ignore_errors: true
+
+- name: Select best available codename
+  ansible.builtin.set_fact:
+    rstudio_ubuntu_codename: "{{ (rstudio_check.results | selectattr('status', 'defined') | selectattr('status', 'eq', 200) | first).item }}"
 
 - name: Install RStudio
   ansible.builtin.apt:
