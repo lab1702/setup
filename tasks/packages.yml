@@ -17,6 +17,7 @@
       - fd-find
       - fzf
       - tree
+      - eza
     state: present
 
 - name: Install Docker packages
