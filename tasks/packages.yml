@@ -113,3 +113,8 @@
 - name: Install Typst
   community.general.snap:
     name: typst
+
+- name: Install Helix editor
+  community.general.snap:
+    name: helix
+    classic: true
