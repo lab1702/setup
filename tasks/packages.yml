@@ -118,3 +118,14 @@
   community.general.snap:
     name: helix
     classic: true
+
+- name: Install astral-uv
+  community.general.snap:
+    name: astral-uv
+    classic: true
+
+- name: Install Python tools from Astral
+  community.general.snap:
+    name:
+      - astral-ty
+      - ruff
