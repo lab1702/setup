@@ -126,4 +126,6 @@
 
 - name: Install Python tools from Astral
   community.general.snap:
-    name: ruff
+    name:
+      - ruff
+      - astral-ty
