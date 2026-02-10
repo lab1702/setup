@@ -22,10 +22,6 @@ Do this for bash:
 
     echo 'eval "$(starship init bash)"' >> $HOME/.bashrc
 
-## Optional: Setup Zed
-
-    curl -f https://zed.dev/install.sh | sh
-
 ## Optional: Setup Git Authentication
 
 Step A:
