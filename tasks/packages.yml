@@ -124,8 +124,10 @@
     name: astral-uv
     classic: true
 
-- name: Install Python tools from Astral
+- name: Install ruff
   community.general.snap:
-    name:
-      - ruff
-      - astral-ty
+    name: ruff
+
+- name: Install astral-ty
+  community.general.snap:
+    name: astral-ty
