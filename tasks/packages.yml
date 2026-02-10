@@ -127,7 +127,3 @@
 - name: Install ruff
   community.general.snap:
     name: ruff
-
-- name: Install astral-ty
-  community.general.snap:
-    name: astral-ty
