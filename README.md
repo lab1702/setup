@@ -14,14 +14,6 @@
 
     curl -fsSL https://claude.ai/install.sh | bash
 
-## Optional: Setup Starship Prompt
-
-    curl -sS https://starship.rs/install.sh | sh
-
-Do this for bash:
-
-    echo 'eval "$(starship init bash)"' >> $HOME/.bashrc
-
 ## Optional: Setup Git Authentication
 
 Step A:
