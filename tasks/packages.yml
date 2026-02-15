@@ -28,15 +28,6 @@
       - docker-compose-v2
     state: present
 
-- name: Install scientific computing packages
-  ansible.builtin.apt:
-    name:
-      - octave
-      - r-base
-      - r-base-dev
-      - libopenblas-dev
-    state: present
-
 - name: Install document processing tools
   ansible.builtin.apt:
     name:
@@ -87,6 +78,9 @@
 - name: Install programming languages and runtimes
   ansible.builtin.apt:
     name:
+      - libopenblas-dev
+      - r-base
+      - r-base-dev
       - python3-venv
       - python3-virtualenv
       - golang
