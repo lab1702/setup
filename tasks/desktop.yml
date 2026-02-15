@@ -10,10 +10,6 @@
       - openssh-server
     state: present
 
-- name: Install Chromium
-  community.general.snap:
-    name: chromium
-
 - name: Install VS Code
   community.general.snap:
     name: code
