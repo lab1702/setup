@@ -10,6 +10,12 @@
 
 ---
 
+## Optional: Setup NPM
+
+    mkdir -p ~/.npm-global
+    npm config set prefix '~/.npm-global'
+    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
+
 ## Optional: Setup Claude Code
 
     curl -fsSL https://claude.ai/install.sh | bash
