@@ -91,6 +91,7 @@
       - python3-seaborn
       - python3-plotly
       - python3-altair
+      - python3-reportlab
       - jupyter
       - golang
       - rustup
