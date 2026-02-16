@@ -91,6 +91,7 @@
       - jupyter
       - golang
       - rustup
+      - octave
       - nodejs
       - npm
     state: present
