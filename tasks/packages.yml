@@ -85,9 +85,12 @@
       - python3-venv
       - python3-virtualenv
       - python3-pandas
+      - python3-openpyxl
+      - python3-xlsxwriter
       - python3-statsmodels
       - python3-seaborn
       - python3-plotly
+      - python3-altair
       - jupyter
       - golang
       - rustup
