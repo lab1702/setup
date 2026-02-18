@@ -6,7 +6,6 @@
     name:
       - fonts-firacode
       - ydotool
-      - ydotoold
       - openssh-server
     state: present
 
