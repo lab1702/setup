@@ -18,6 +18,7 @@
       - fzf
       - tree
       - eza
+      - bat
     state: present
 
 - name: Install Docker packages
@@ -109,6 +110,7 @@
       - dos2unix
       - htop
       - btop
+      - glances
       - nvtop
       - jnettop
       - ffmpeg
