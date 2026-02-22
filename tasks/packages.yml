@@ -35,6 +35,9 @@
       - tidy
       - pandoc
       - texlive-full
+      - poppler-utils
+      - tesseract-ocr
+      - ocrmypdf
     state: present
 
 - name: Install development libraries
