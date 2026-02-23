@@ -22,6 +22,8 @@
 
 ## Optional: Setup grepai
 
+    curl -fsSL https://ollama.com/install.sh | sh
+
     curl -sSL https://raw.githubusercontent.com/yoanbernabeu/grepai/main/install.sh | sh
 
 ## Optional: Setup Git Authentication
