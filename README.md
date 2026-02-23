@@ -21,8 +21,11 @@
     curl -fsSL https://claude.ai/install.sh | bash
 
 ## Optional: Setup grepai
+Ollama:
 
     curl -fsSL https://ollama.com/install.sh | sh
+
+grepai:
 
     curl -sSL https://raw.githubusercontent.com/yoanbernabeu/grepai/main/install.sh | sh
 
