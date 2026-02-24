@@ -20,14 +20,9 @@
 
     curl -fsSL https://claude.ai/install.sh | bash
 
-## Optional: Setup grepai
-Ollama:
+## Optional: Setup Zed
 
-    curl -fsSL https://ollama.com/install.sh | sh
-
-grepai:
-
-    curl -sSL https://raw.githubusercontent.com/yoanbernabeu/grepai/main/install.sh | sh
+    curl -f https://zed.dev/install.sh | sh
 
 ## Optional: Setup Git Authentication
 
