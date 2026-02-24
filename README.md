@@ -1,5 +1,10 @@
 # Ubuntu Developer Workstation Setup
 
+## Step 0: Setup up fingerprint Authentication
+_If applicable do this after enrolling your fingerprint_
+
+    sudo pam-auth-update
+
 ## Step 1: Install Ansible
 
     sudo apt update && sudo apt install -y git ansible
