@@ -102,6 +102,7 @@
       - octave
       - nodejs
       - npm
+      - gnucobol
     state: present
 
 - name: Install system utilities
