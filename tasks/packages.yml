@@ -125,6 +125,11 @@
   community.general.snap:
     name: typst
 
+- name: Install Neovim editor
+  community.general.snap:
+    name: nvim
+    classic: true
+
 - name: Install Helix editor
   community.general.snap:
     name: helix
