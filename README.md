@@ -25,6 +25,8 @@ _If applicable do this after enrolling your fingerprint_
 
     curl -fsSL https://claude.ai/install.sh | bash
 
+Plugins: [financial-services-plugins](https://github.com/anthropics/financial-services-plugins)
+
 ## Optional: Setup Zed
 
     curl -f https://zed.dev/install.sh | sh
