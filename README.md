@@ -27,10 +27,6 @@ _If applicable do this after enrolling your fingerprint_
 
 Plugins: [financial-services-plugins](https://github.com/anthropics/financial-services-plugins)
 
-## Optional: Setup Zed
-
-    curl -f https://zed.dev/install.sh | sh
-
 ## Optional: Setup Git Authentication
 
 Step A:
