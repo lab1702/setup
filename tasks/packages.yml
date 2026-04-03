@@ -99,7 +99,6 @@
       - jupyter
       - golang
       - rustup
-      - octave
       - nodejs
       - npm
       - gnucobol
