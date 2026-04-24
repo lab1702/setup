@@ -10,11 +10,11 @@ _If applicable do this after enrolling your fingerprint_
     echo 'APT::Architecture-Variants "amd64v3";' | sudo tee /etc/apt/apt.conf.d/99enable-amd64v3
     sudo apt update && sudo apt upgrade
 
-## Step 1: Install Ansible
+## Step 2: Install Ansible
 
     sudo apt update && sudo apt upgrade -y &&  sudo apt install -y git ansible
 
-## Step 2: Run ansible-pull
+## Step 3: Run ansible-pull
 
     sudo ansible-pull -U https://github.com/lab1702/setup.git
 
