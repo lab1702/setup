@@ -108,6 +108,7 @@
   ansible.builtin.apt:
     name:
       - vim
+      - fastfetch
       - cpufetch
       - figlet
       - dos2unix
