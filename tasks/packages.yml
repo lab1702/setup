@@ -68,6 +68,7 @@
       - libpoppler-cpp-dev
       - libavfilter-dev
       - libnode-dev
+      - libpcap-dev
     state: present
 
 - name: Install database tools
