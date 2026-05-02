@@ -4,9 +4,11 @@
 - name: Install desktop fonts and tools
   ansible.builtin.apt:
     name:
-      - fonts-firacode
-      - ydotool
       - openssh-server
+      - fonts-firacode
+      - foot
+      - foot-themes
+      - ydotool
     state: present
 
 - name: Install VS Code
