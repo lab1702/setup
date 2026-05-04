@@ -38,6 +38,7 @@
       - poppler-utils
       - tesseract-ocr
       - ocrmypdf
+      - qpdf
     state: present
 
 - name: Install development libraries
