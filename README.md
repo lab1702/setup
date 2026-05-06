@@ -30,7 +30,9 @@ _If applicable do this after enrolling your fingerprint_
 
     curl -fsSL https://claude.ai/install.sh | bash
 
-Plugins: [financial-services-plugins](https://github.com/anthropics/financial-services-plugins)
+## Optional: Setup Codex CLI
+
+    npm i -g @openai/codex
 
 ## Optional: Setup Git Authentication
 
