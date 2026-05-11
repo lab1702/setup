@@ -19,6 +19,7 @@
       - tree
       - eza
       - bat
+      - socat
     state: present
 
 - name: Install Docker packages
