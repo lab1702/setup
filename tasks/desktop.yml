@@ -8,6 +8,14 @@
       - fonts-firacode
     state: present
 
+- name: Install SUMO traffic simulator
+  ansible.builtin.apt:
+    name:
+      - sumo
+      - sumo-doc
+      - sumo-tools
+    state: present
+
 - name: Install VS Code
   community.general.snap:
     name: code
