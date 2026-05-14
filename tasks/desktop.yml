@@ -6,9 +6,6 @@
     name:
       - openssh-server
       - fonts-firacode
-      - foot
-      - foot-themes
-      - ydotool
     state: present
 
 - name: Install VS Code
