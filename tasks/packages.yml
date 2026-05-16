@@ -75,6 +75,7 @@
       - libxcursor-dev
       - libxinerama-dev
       - libxi-dev
+      - libxxf86vm-dev
     state: present
 
 - name: Install database tools
