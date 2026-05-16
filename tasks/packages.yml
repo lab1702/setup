@@ -73,6 +73,7 @@
       - libpcap-dev
       - libxrandr-dev
       - libxcursor-dev
+      - libxinerama-dev
     state: present
 
 - name: Install database tools
