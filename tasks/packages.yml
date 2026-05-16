@@ -71,6 +71,7 @@
       - libavfilter-dev
       - libnode-dev
       - libpcap-dev
+      - libxrandr-dev
     state: present
 
 - name: Install database tools
