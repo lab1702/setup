@@ -8,27 +8,15 @@
       - fonts-firacode
     state: present
 
-- name: Install SUMO traffic simulator
-  ansible.builtin.apt:
-    name:
-      - sumo
-      - sumo-doc
-      - sumo-tools
-    state: present
-
-- name: Install VS Code
+- name: Install Classic Snaps
   community.general.snap:
-    name: code
+    name:
+      - code
     classic: true
 
-- name: Install Discord
+- name: Install Snaps
   community.general.snap:
-    name: discord
-
-- name: Install Steam
-  community.general.snap:
-    name: steam
-
-- name: Install Zoom
-  community.general.snap:
-    name: zoom-client
+    name:
+      - discord
+      - steam
+      - zoom-client
