@@ -54,4 +54,3 @@
       ansible.builtin.debug:
         msg:
           - "***** DONE! *****"
-          - "Close the terminal and reopen it for updated path to take effect."
