@@ -129,25 +129,16 @@
       - ttyd
     state: present
 
-- name: Install Typst
+- name: Install Classic Snaps
   community.general.snap:
-    name: typst
-
-- name: Install Neovim editor
-  community.general.snap:
-    name: nvim
+    name:
+      - nvim
+      - helix
+      - astral-uv
     classic: true
 
-- name: Install Helix editor
+- name: Install Snaps
   community.general.snap:
-    name: helix
-    classic: true
-
-- name: Install astral-uv
-  community.general.snap:
-    name: astral-uv
-    classic: true
-
-- name: Install ruff
-  community.general.snap:
-    name: ruff
+    name:
+      - typst
+      - ruff
