@@ -105,7 +105,9 @@
       - python3-virtualenv
       - python3-pandas
       - python3-openpyxl
+      - python3-pyarrow
       - python3-xlsxwriter
+      - python3-sqlalchemy
       - python3-statsmodels
       - python3-seaborn
       - python3-plotly
