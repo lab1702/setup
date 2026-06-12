@@ -95,6 +95,11 @@
       - libopenblas-dev
       - r-base
       - r-base-dev
+      - r-cran-devtools
+      - r-cran-tidyverse
+      - r-cran-plotly
+      - r-cran-shiny
+      - r-cran-rmarkdown
       - python-is-python3
       - python3-venv
       - python3-virtualenv
