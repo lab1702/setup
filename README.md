@@ -51,3 +51,4 @@ Step C:
 Step D:
 
     gh auth setup-git
+    git config --global init.defaultBranch main
