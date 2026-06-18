@@ -17,6 +17,7 @@
 - name: Install Snaps
   community.general.snap:
     name:
+      - chromium
       - discord
       - steam
       - zoom-client
