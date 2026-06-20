@@ -1,11 +1,12 @@
 ---
 # Desktop (non-WSL) specific packages
 
-- name: Install desktop fonts and tools
+- name: Install Desktop Packages
   ansible.builtin.apt:
     name:
       - openssh-server
       - fonts-firacode
+      - libreoffice
     state: present
 
 - name: Install Classic Snaps
