@@ -30,10 +30,6 @@ _If applicable do this after enrolling your fingerprint_
 
     curl -fsSL https://claude.ai/install.sh | bash
 
-## Optional: Setup Codex CLI
-
-    npm i -g @openai/codex
-
 ## Optional: Setup Git Authentication
 
 Step A:
