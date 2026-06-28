@@ -150,7 +150,7 @@
         append: true
 
     - name: Include desktop setup
-      ansible.builtin.include_tasks: tasks/desktop.yml
+      ansible.builtin.include_tasks: desktop.yml
       when: gnome_shell.stat.exists
 
     - name: Download and install DuckDB CLI
