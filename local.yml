@@ -23,15 +23,22 @@
     - name: Include base packages installation
       ansible.builtin.include_tasks: tasks/packages.yml
 
-    - name: Include docker setup
-      ansible.builtin.include_tasks: tasks/docker.yml
+    - name: Add user to docker group
+      ansible.builtin.user:
+        name: "{{ user_name }}"
+        groups: docker
+        append: true
 
     - name: Include desktop setup
       ansible.builtin.include_tasks: tasks/desktop.yml
       when: gnome_shell.stat.exists
 
-    - name: Include DuckDB installation
-      ansible.builtin.include_tasks: tasks/duckdb.yml
+    - name: Download and install DuckDB CLI
+      ansible.builtin.unarchive:
+        src: https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
+        dest: /usr/local/bin
+        remote_src: true
+        mode: '0755'
 
     - name: Get latest Quarto version
       ansible.builtin.uri:
@@ -46,9 +53,3 @@
         quarto_ver: "{{ quarto_tag | regex_replace('^v', '') }}"
       ansible.builtin.apt:
         deb: "https://github.com/quarto-dev/quarto-cli/releases/download/{{ quarto_tag }}/quarto-{{ quarto_ver }}-linux-amd64.deb"
-
-  post_tasks:
-    - name: Display completion message
-      ansible.builtin.debug:
-        msg:
-          - "***** DONE! *****"
