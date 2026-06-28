@@ -9,13 +9,12 @@
 
   vars:
     user_name: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
-    is_wsl: "{{ ansible_facts['kernel'] is regex('(Microsoft|WSL)', ignorecase=True) or wsl_interop.stat.exists }}"
 
   pre_tasks:
-    - name: Check for WSL interop file
+    - name: Check for Ubuntu Desktop
       ansible.builtin.stat:
-        path: /proc/sys/fs/binfmt_misc/WSLInterop
-      register: wsl_interop
+        path: /usr/bin/gnome-shell
+      register: gnome_shell
 
   tasks:
     - name: Include system update tasks
@@ -27,13 +26,9 @@
     - name: Include docker setup
       ansible.builtin.include_tasks: tasks/docker.yml
 
-    - name: Include WSL-specific setup
-      ansible.builtin.include_tasks: tasks/wsl.yml
-      when: is_wsl
-
-    - name: Include non-WSL setup (desktop)
+    - name: Include desktop setup
       ansible.builtin.include_tasks: tasks/desktop.yml
-      when: not is_wsl
+      when: gnome_shell.stat.exists
 
     - name: Include DuckDB installation
       ansible.builtin.include_tasks: tasks/duckdb.yml

@@ -1,7 +1,0 @@
----
-# WSL-specific packages
-
-- name: Install WSL utilities
-  ansible.builtin.apt:
-    name: wslu
-    state: present

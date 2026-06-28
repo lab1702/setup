@@ -1,5 +1,5 @@
 ---
-# Desktop (non-WSL) specific packages
+# Desktop-specific packages
 
 - name: Install Desktop Packages
   ansible.builtin.apt:
