@@ -17,18 +17,9 @@
       register: gnome_shell
 
   tasks:
-    - name: Upgrade all packages
-      ansible.builtin.apt:
-        upgrade: dist
-        update_cache: true
-
-    - name: Remove unused packages
-      ansible.builtin.apt:
-        autoremove: true
-        autoclean: true
-
     - name: Install base packages
       ansible.builtin.apt:
+        update_cache: true
         name:
           # Build tools and utilities
           - build-essential
