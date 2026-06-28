@@ -140,17 +140,3 @@
       - ffmpeg
       - ttyd
     state: present
-
-- name: Install Classic Snaps
-  community.general.snap:
-    name:
-      - nvim
-      - helix
-      - astral-uv
-    classic: true
-
-- name: Install Snaps
-  community.general.snap:
-    name:
-      - typst
-      - ruff
