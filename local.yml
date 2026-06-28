@@ -168,6 +168,7 @@
       check_mode: false
 
     - name: Install Quarto
+      # ponytail: vars split out to keep the deb line under ansible-lint's length limit
       vars:
         quarto_tag: "{{ quarto_release.json.tag_name }}"
         quarto_ver: "{{ quarto_tag | regex_replace('^v', '') }}"
