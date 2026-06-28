@@ -1,9 +1,10 @@
 ---
 # Base development packages
 
-- name: Install build tools and utilities
+- name: Install base packages
   ansible.builtin.apt:
     name:
+      # Build tools and utilities
       - build-essential
       - gpg
       - git
@@ -20,19 +21,11 @@
       - eza
       - bat
       - socat
-    state: present
-
-- name: Install Docker packages
-  ansible.builtin.apt:
-    name:
+      # Docker
       - docker.io
       - docker-buildx
       - docker-compose-v2
-    state: present
-
-- name: Install document processing tools
-  ansible.builtin.apt:
-    name:
+      # Document processing tools
       - tidy
       - pandoc
       - texlive-full
@@ -40,11 +33,7 @@
       - tesseract-ocr
       - ocrmypdf
       - qpdf
-    state: present
-
-- name: Install development libraries
-  ansible.builtin.apt:
-    name:
+      # Development libraries
       - libxml2-dev
       - libcurl4-openssl-dev
       - libssl-dev
@@ -78,20 +67,12 @@
       - libxi-dev
       - libxxf86vm-dev
       - libzmq3-dev
-    state: present
-
-- name: Install database tools
-  ansible.builtin.apt:
-    name:
+      # Database tools
       - unixodbc-dev
       - tdsodbc
       - sqlite3
       - sqlite3-tools
-    state: present
-
-- name: Install programming languages and runtimes
-  ansible.builtin.apt:
-    name:
+      # Programming languages and runtimes
       - libopenblas-dev
       - r-base
       - r-base-dev
@@ -122,11 +103,7 @@
       - nodejs
       - npm
       - gnucobol
-    state: present
-
-- name: Install system utilities
-  ansible.builtin.apt:
-    name:
+      # System utilities
       - vim
       - fastfetch
       - cpufetch
