@@ -41,8 +41,11 @@
       check_mode: false
 
     - name: Install Quarto
+      vars:
+        quarto_tag: "{{ quarto_release.json.tag_name }}"
+        quarto_ver: "{{ quarto_tag | regex_replace('^v', '') }}"
       ansible.builtin.apt:
-        deb: "https://github.com/quarto-dev/quarto-cli/releases/download/{{ quarto_release.json.tag_name }}/quarto-{{ quarto_release.json.tag_name | regex_replace('^v', '') }}-linux-amd64.deb"
+        deb: "https://github.com/quarto-dev/quarto-cli/releases/download/{{ quarto_tag }}/quarto-{{ quarto_ver }}-linux-amd64.deb"
 
   post_tasks:
     - name: Display completion message
