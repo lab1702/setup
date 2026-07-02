@@ -7,16 +7,3 @@
       - openssh-server
       - libreoffice
     state: present
-
-- name: Install Classic Snaps
-  community.general.snap:
-    name:
-      - code
-    classic: true
-
-- name: Install Snaps
-  community.general.snap:
-    name:
-      - chromium
-      - discord
-      - zoom-client
