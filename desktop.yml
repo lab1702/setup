@@ -1,6 +1,12 @@
 ---
 # Desktop-specific packages
 
+- name: Add user to kvm group
+  ansible.builtin.user:
+    name: "{{ user_name }}"
+    groups: kvm
+    append: true
+
 - name: Add Claude Desktop signing key
   ansible.builtin.get_url:
     url: https://downloads.claude.ai/claude-desktop/key.asc
