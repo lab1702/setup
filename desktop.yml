@@ -1,9 +1,30 @@
 ---
 # Desktop-specific packages
 
+- name: Add Claude Desktop signing key
+  ansible.builtin.get_url:
+    url: https://downloads.claude.ai/claude-desktop/key.asc
+    dest: /usr/share/keyrings/claude-desktop-archive-keyring.asc
+    mode: "0644"
+
+- name: Verify Claude Desktop signing key fingerprint
+  ansible.builtin.command:
+    cmd: gpg --show-keys --with-colons /usr/share/keyrings/claude-desktop-archive-keyring.asc
+  register: claude_key
+  changed_when: false
+  failed_when: "'31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE' not in claude_key.stdout"
+
+- name: Add Claude Desktop apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/claude-desktop-archive-keyring.asc] https://downloads.claude.ai/claude-desktop/apt/stable stable main"
+    filename: claude-desktop
+    state: present
+
 - name: Install Desktop Packages
   ansible.builtin.apt:
     name:
       - openssh-server
       - libreoffice
+      - claude-desktop
     state: present
+    update_cache: true
