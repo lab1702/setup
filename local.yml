@@ -116,6 +116,7 @@
           - gnucobol
           # System utilities
           - vim
+          - hx
           - fastfetch
           - cpufetch
           - figlet
