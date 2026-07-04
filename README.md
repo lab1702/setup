@@ -38,6 +38,10 @@ _If applicable do this after enrolling your fingerprint_
     claude plugin marketplace add DietrichGebert/ponytail
     claude plugin install ponytail@ponytail
 
+#### Optional: Update All Plugins
+
+    claude plugin marketplace update && claude plugin list --json | jq -r '.[].id' | xargs -n1 claude plugin update
+
 ## Optional: Setup Git Authentication
 
 Step A:
