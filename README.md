@@ -33,7 +33,6 @@ _If applicable do this after enrolling your fingerprint_
 ### Optional: Install Claude Code Plugins
 
     claude plugin install superpowers@claude-plugins-official
-    claude plugin install frontend-design@claude-plugins-official
     claude plugin install security-guidance@claude-plugins-official
     claude plugin marketplace add DietrichGebert/ponytail
     claude plugin install ponytail@ponytail
