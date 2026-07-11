@@ -36,8 +36,6 @@ _If applicable do this after enrolling your fingerprint_
     claude plugin install pyright-lsp@claude-plugins-official
     claude plugin install superpowers@claude-plugins-official
     claude plugin install security-guidance@claude-plugins-official
-    claude plugin marketplace add DietrichGebert/ponytail
-    claude plugin install ponytail@ponytail
 
 #### Optional: Update All Plugins
 
