@@ -30,22 +30,6 @@ _If applicable do this after enrolling your fingerprint_
 
     curl -fsSL https://claude.ai/install.sh | bash
 
-### Optional: Install Claude Code Plugins
-
-    claude plugin install gopls-lsp@claude-plugins-official
-    claude plugin install pyright-lsp@claude-plugins-official
-
-#### Optional: Update All Plugins
-
-    claude plugin marketplace update && claude plugin list --json | jq -r '.[].id' | xargs -n1 claude plugin update
-
-## Optional: Install Go Language Server & Supporting Tools
-
-    go install golang.org/x/tools/gopls@latest
-    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-    go install github.com/nametake/golangci-lint-langserver@latest
-    go install github.com/go-delve/delve/cmd/dlv@latest
-
 ## Optional: Setup Git Authentication
 
 Step A:
