@@ -20,5 +20,5 @@
     name:
       - openssh-server
       - libreoffice
-    state: present
+    state: latest
     update_cache: true
