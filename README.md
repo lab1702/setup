@@ -5,7 +5,10 @@ _If applicable do this after enrolling your fingerprint_
 
     sudo pam-auth-update
 
-## Step 1: Enable AMD64v3 CPU Optimizations
+## Step 1: Enable AMD64v3 CPU Optimizations (AMD64 only)
+
+Skip this step on ARM64 workstations. On AMD64, confirm that the CPU supports
+the x86-64-v3 feature level before enabling this setting.
 
     echo 'APT::Architecture-Variants "amd64v3";' | sudo tee /etc/apt/apt.conf.d/99enable-amd64v3
     sudo apt update && sudo apt upgrade

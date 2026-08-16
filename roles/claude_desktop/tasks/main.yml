@@ -8,23 +8,68 @@
     update_cache: true
     cache_valid_time: 3600
 
-- name: Add Claude Desktop signing key
-  ansible.builtin.get_url:
-    url: "{{ claude_desktop_key_url }}"
-    dest: "{{ claude_desktop_keyring_path }}"
-    mode: "0644"
-
-- name: Verify Claude Desktop signing key fingerprint
-  ansible.builtin.command:
-    argv:
-      - gpg
-      - --show-keys
-      - --with-colons
-      - "{{ claude_desktop_keyring_path }}"
-  register: claude_desktop_key
+- name: Create temporary file for Claude Desktop signing key
+  ansible.builtin.tempfile:
+    state: file
+    suffix: .asc
+  register: claude_desktop_key_tempfile
   changed_when: false
-  failed_when: >-
-    claude_desktop_key_fingerprint not in claude_desktop_key.stdout
+
+- name: Download, verify, and install Claude Desktop signing key
+  block:
+    - name: Download Claude Desktop signing key
+      ansible.builtin.get_url:
+        url: "{{ claude_desktop_key_url }}"
+        dest: "{{ claude_desktop_key_tempfile.path }}"
+        mode: "0600"
+      changed_when: false
+
+    - name: Inspect Claude Desktop signing key
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --batch
+          - --show-keys
+          - --with-colons
+          - "{{ claude_desktop_key_tempfile.path }}"
+      register: claude_desktop_key
+      changed_when: false
+
+    - name: Verify Claude Desktop signing key fingerprint
+      vars:
+        claude_desktop_public_key_records: >-
+          {{ claude_desktop_key.stdout_lines
+          | select('match', '^pub:') | list }}
+        claude_desktop_fingerprint_records: >-
+          {{ claude_desktop_key.stdout_lines
+          | select('match', '^fpr:') | list }}
+        claude_desktop_expected_fingerprint_record: >-
+          fpr:::::::::{{ claude_desktop_key_fingerprint }}:
+      ansible.builtin.assert:
+        that:
+          - claude_desktop_public_key_records | length == 1
+          - >-
+            (claude_desktop_fingerprint_records | first | default('')) ==
+            claude_desktop_expected_fingerprint_record
+        fail_msg: >-
+          The downloaded Claude Desktop signing key does not contain exactly
+          one primary key with fingerprint
+          {{ claude_desktop_key_fingerprint }}.
+
+    - name: Install verified Claude Desktop signing key
+      ansible.builtin.copy:
+        src: "{{ claude_desktop_key_tempfile.path }}"
+        dest: "{{ claude_desktop_keyring_path }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+  always:
+    - name: Remove temporary Claude Desktop signing key
+      ansible.builtin.file:
+        path: "{{ claude_desktop_key_tempfile.path }}"
+        state: absent
+      changed_when: false
 
 - name: Add Claude Desktop apt repository
   ansible.builtin.apt_repository:
