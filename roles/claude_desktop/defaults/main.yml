@@ -1,0 +1,15 @@
+---
+claude_desktop_package_name: claude-desktop
+claude_desktop_package_state: present
+
+claude_desktop_key_url: https://downloads.claude.ai/claude-desktop/key.asc
+claude_desktop_keyring_path: /usr/share/keyrings/claude-desktop-archive-keyring.asc
+claude_desktop_key_fingerprint: 31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
+
+claude_desktop_repository_url: https://downloads.claude.ai/claude-desktop/apt/stable
+claude_desktop_repository_suite: stable
+claude_desktop_repository_component: main
+claude_desktop_repository_filename: claude-desktop
+claude_desktop_repository_architectures:
+  - amd64
+  - arm64

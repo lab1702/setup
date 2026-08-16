@@ -1,0 +1,47 @@
+---
+- name: Install Claude Desktop repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gpg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Add Claude Desktop signing key
+  ansible.builtin.get_url:
+    url: "{{ claude_desktop_key_url }}"
+    dest: "{{ claude_desktop_keyring_path }}"
+    mode: "0644"
+
+- name: Verify Claude Desktop signing key fingerprint
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --show-keys
+      - --with-colons
+      - "{{ claude_desktop_keyring_path }}"
+  register: claude_desktop_key
+  changed_when: false
+  failed_when: >-
+    claude_desktop_key_fingerprint not in claude_desktop_key.stdout
+
+- name: Add Claude Desktop apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ claude_desktop_repository_architectures | join(',') }}
+      signed-by={{ claude_desktop_keyring_path }}]
+      {{ claude_desktop_repository_url }}
+      {{ claude_desktop_repository_suite }}
+      {{ claude_desktop_repository_component }}
+    filename: "{{ claude_desktop_repository_filename }}"
+    state: present
+    update_cache: true
+
+- name: Install Claude Desktop package
+  ansible.builtin.apt:
+    name: "{{ claude_desktop_package_name }}"
+    state: "{{ claude_desktop_package_state }}"
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 120
