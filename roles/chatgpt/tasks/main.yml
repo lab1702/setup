@@ -1,0 +1,42 @@
+---
+- name: Validate ChatGPT Desktop platform support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - ansible_facts["distribution_version"] in chatgpt_supported_ubuntu_versions
+      - ansible_facts["architecture"] in chatgpt_architecture_map
+    fail_msg: >-
+      ChatGPT Desktop supports Ubuntu 24.04 and 26.04 on x86_64 or ARM64.
+      Detected {{ ansible_facts["distribution"] }}
+      {{ ansible_facts["distribution_version"] }} on
+      {{ ansible_facts["architecture"] }}.
+
+- name: Install ChatGPT bootstrap prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - xz-utils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Gather installed package facts for ChatGPT
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: Bootstrap ChatGPT and the OpenAI apt repository
+  ansible.builtin.apt:
+    deb: >-
+      {{ chatgpt_deb_base_url }}/chatgpt_{{
+      chatgpt_architecture_map[ansible_facts["architecture"]]
+      }}.deb
+    state: present
+    lock_timeout: 120
+  when: chatgpt_package_name not in ansible_facts.packages
+
+- name: Ensure ChatGPT is installed and current
+  ansible.builtin.apt:
+    name: "{{ chatgpt_package_name }}"
+    state: "{{ chatgpt_package_state }}"
+    update_cache: true
+    lock_timeout: 120

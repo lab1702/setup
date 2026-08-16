@@ -7,6 +7,10 @@
     groups: kvm
     append: true
 
+- name: Install ChatGPT Desktop
+  ansible.builtin.include_role:
+    name: chatgpt
+
 - name: Add Claude Desktop signing key
   ansible.builtin.get_url:
     url: https://downloads.claude.ai/claude-desktop/key.asc

@@ -1,0 +1,14 @@
+---
+chatgpt_package_name: chatgpt
+chatgpt_package_state: latest
+chatgpt_deb_base_url: https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest
+
+chatgpt_supported_ubuntu_versions:
+  - "24.04"
+  - "26.04"
+
+chatgpt_architecture_map:
+  x86_64: amd64
+  amd64: amd64
+  aarch64: arm64
+  arm64: arm64
