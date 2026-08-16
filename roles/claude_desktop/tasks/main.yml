@@ -8,11 +8,11 @@
     update_cache: true
     cache_valid_time: 3600
 
-- name: Create temporary file for Claude Desktop signing key
+- name: Create temporary directory for Claude Desktop signing key
   ansible.builtin.tempfile:
-    state: file
-    suffix: .asc
-  register: claude_desktop_key_tempfile
+    state: directory
+    suffix: .claude-desktop
+  register: claude_desktop_key_tempdir
   changed_when: false
 
 - name: Download, verify, and install Claude Desktop signing key
@@ -20,7 +20,7 @@
     - name: Download Claude Desktop signing key
       ansible.builtin.get_url:
         url: "{{ claude_desktop_key_url }}"
-        dest: "{{ claude_desktop_key_tempfile.path }}"
+        dest: "{{ claude_desktop_key_tempdir.path }}/key.asc"
         mode: "0600"
       changed_when: false
 
@@ -31,7 +31,7 @@
           - --batch
           - --show-keys
           - --with-colons
-          - "{{ claude_desktop_key_tempfile.path }}"
+          - "{{ claude_desktop_key_tempdir.path }}/key.asc"
       register: claude_desktop_key
       changed_when: false
 
@@ -58,16 +58,16 @@
 
     - name: Install verified Claude Desktop signing key
       ansible.builtin.copy:
-        src: "{{ claude_desktop_key_tempfile.path }}"
+        src: "{{ claude_desktop_key_tempdir.path }}/key.asc"
         dest: "{{ claude_desktop_keyring_path }}"
         remote_src: true
         owner: root
         group: root
         mode: "0644"
   always:
-    - name: Remove temporary Claude Desktop signing key
+    - name: Remove temporary Claude Desktop signing key directory
       ansible.builtin.file:
-        path: "{{ claude_desktop_key_tempfile.path }}"
+        path: "{{ claude_desktop_key_tempdir.path }}"
         state: absent
       changed_when: false
 
