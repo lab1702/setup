@@ -11,7 +11,7 @@ Skip this step on ARM64 workstations. On AMD64, confirm that the CPU supports
 the x86-64-v3 feature level before enabling this setting.
 
     echo 'APT::Architecture-Variants "amd64v3";' | sudo tee /etc/apt/apt.conf.d/99enable-amd64v3
-    sudo apt update && sudo apt upgrade
+    sudo apt update && sudo apt upgrade -y
 
 ## Step 2: Install Ansible
 
@@ -22,6 +22,10 @@ the x86-64-v3 feature level before enabling this setting.
     sudo ansible-pull -U https://github.com/lab1702/setup.git
 
 ---
+
+## Optional: Setup pip
+
+    echo 'export PIP_REQUIRE_VIRTUALENV=1' >> ~/.bashrc
 
 ## Optional: Setup NPM
 
