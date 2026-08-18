@@ -29,15 +29,15 @@
     update_cache: true
 
 - name: Install Standard Snaps
-  snap:
+  community.general.snap:
     name:
       - ruff
       - discord
       - zoom-client
 
 - name: Install Classic Snaps
-  snap:
+  community.general.snap:
     name:
       - code
       - astral-uv
-    classic: yes
+    classic: true
