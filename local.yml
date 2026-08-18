@@ -163,21 +163,6 @@
         remote_src: true
         mode: '0755'
 
-    - name: Get latest Quarto version
-      ansible.builtin.uri:
-        url: https://api.github.com/repos/quarto-dev/quarto-cli/releases/latest
-        return_content: true
-      register: quarto_release
-      check_mode: false
-
-    - name: Install Quarto
-      # ponytail: vars split out to keep the deb line under ansible-lint's length limit
-      vars:
-        quarto_tag: "{{ quarto_release.json.tag_name }}"
-        quarto_ver: "{{ quarto_tag | regex_replace('^v', '') }}"
-        quarto_arch: >-
-          {{ linux_release_architecture_map[ansible_facts["architecture"]] }}
-      ansible.builtin.apt:
-        deb: >-
-          https://github.com/quarto-dev/quarto-cli/releases/download/{{
-          quarto_tag }}/quarto-{{ quarto_ver }}-linux-{{ quarto_arch }}.deb
+    - name: Install Quarto CLI
+      ansible.builtin.include_role:
+        name: quarto

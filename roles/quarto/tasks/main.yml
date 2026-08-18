@@ -1,0 +1,77 @@
+---
+- name: Validate Quarto CLI architecture support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["architecture"] in quarto_architecture_map
+    fail_msg: >-
+      Quarto CLI supports AMD64 and ARM64. Detected
+      {{ ansible_facts["architecture"] }}.
+
+- name: Get latest Quarto CLI release
+  ansible.builtin.uri:
+    url: "{{ quarto_release_api_url }}"
+    return_content: true
+  register: quarto_release
+  changed_when: false
+  check_mode: false
+
+- name: Select Quarto CLI package asset
+  vars:
+    quarto_release_tag: "{{ quarto_release.json.tag_name }}"
+    quarto_release_version: >-
+      {{ quarto_release_tag | regex_replace('^v', '') }}
+    quarto_release_architecture: >-
+      {{ quarto_architecture_map[ansible_facts["architecture"]] }}
+    quarto_package_filename: >-
+      quarto-{{ quarto_release_version }}-linux-{{
+      quarto_release_architecture }}.deb
+  ansible.builtin.set_fact:
+    quarto_release_asset: >-
+      {{ quarto_release.json.assets
+      | selectattr('name', 'equalto', quarto_package_filename)
+      | first | default({}) }}
+
+- name: Validate Quarto CLI package asset
+  ansible.builtin.assert:
+    that:
+      - quarto_release_asset | length > 0
+      - quarto_release_asset.state | default('') == 'uploaded'
+      - >-
+        (quarto_release_asset.browser_download_url | default('')).startswith(
+        quarto_release_base_url ~ '/')
+      - >-
+        (quarto_release_asset.digest | default(''))
+        is match('^sha256:[0-9a-f]{64}$')
+    fail_msg: >-
+      The latest Quarto CLI release did not contain the expected uploaded
+      package with a trusted GitHub download URL and SHA-256 digest.
+
+- name: Create temporary directory for Quarto CLI package
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: .quarto
+  register: quarto_package_tempdir
+  changed_when: false
+
+- name: Download, verify, and install Quarto CLI package
+  block:
+    - name: Download verified Quarto CLI package
+      ansible.builtin.get_url:
+        url: "{{ quarto_release_asset.browser_download_url }}"
+        dest: >-
+          {{ quarto_package_tempdir.path }}/{{ quarto_release_asset.name }}
+        checksum: "{{ quarto_release_asset.digest }}"
+        mode: "0600"
+
+    - name: Install verified Quarto CLI package
+      ansible.builtin.apt:
+        deb: >-
+          {{ quarto_package_tempdir.path }}/{{ quarto_release_asset.name }}
+        state: present
+        lock_timeout: 120
+  always:
+    - name: Remove temporary Quarto CLI package directory
+      ansible.builtin.file:
+        path: "{{ quarto_package_tempdir.path }}"
+        state: absent
+      changed_when: false
