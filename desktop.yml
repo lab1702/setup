@@ -15,6 +15,10 @@
   ansible.builtin.include_role:
     name: claude_desktop
 
+- name: Install Posit RStudio Desktop
+  ansible.builtin.include_role:
+    name: rstudio
+
 - name: Install Desktop Packages
   ansible.builtin.apt:
     name:

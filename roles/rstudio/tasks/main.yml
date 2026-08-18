@@ -1,0 +1,91 @@
+---
+- name: Validate Posit RStudio Desktop platform support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - >-
+        ansible_facts["distribution_version"]
+        in rstudio_supported_ubuntu_versions
+      - ansible_facts["architecture"] in rstudio_supported_architectures
+    fail_msg: >-
+      Posit's stable RStudio Desktop installer metadata supports Ubuntu
+      22.04, 24.04, and 26.04 on AMD64. Detected
+      {{ ansible_facts["distribution"] }}
+      {{ ansible_facts["distribution_version"] }} on
+      {{ ansible_facts["architecture"] }}.
+
+- name: Get latest stable Posit RStudio Desktop release metadata
+  ansible.builtin.uri:
+    url: "{{ rstudio_downloads_metadata_url }}"
+    return_content: true
+  register: rstudio_downloads_metadata
+  changed_when: false
+  check_mode: false
+
+- name: Select Posit RStudio Desktop package metadata
+  vars:
+    rstudio_platform: >-
+      {{ rstudio_platform_map[ansible_facts["distribution_version"]] }}
+  ansible.builtin.set_fact:
+    rstudio_release: >-
+      {{ rstudio_downloads_metadata.json.rstudio.open_source.stable
+      .desktop.installer[rstudio_platform] | default({}) }}
+
+- name: Validate Posit RStudio Desktop package metadata
+  ansible.builtin.assert:
+    that:
+      - >-
+        (rstudio_release.url | default(''))
+        is match('^https://download1[.]rstudio[.]org/')
+      - >-
+        (rstudio_release.basename | default(''))
+        is match('^rstudio-[0-9A-Za-z.+_~-]+-amd64[.]deb$')
+      - rstudio_release.version | default('') | length > 0
+      - >-
+        (rstudio_release.sha256 | default(''))
+        is match('^[0-9a-f]{64}$')
+    fail_msg: >-
+      Posit's download metadata did not contain a valid stable RStudio
+      Desktop package URL, filename, version, and SHA-256 checksum.
+
+- name: Gather installed package facts for Posit RStudio Desktop
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: Install latest stable Posit RStudio Desktop release
+  vars:
+    rstudio_installed_packages: >-
+      {{ ansible_facts.packages[rstudio_package_name] | default([]) }}
+    rstudio_installed_version: >-
+      {{ (rstudio_installed_packages | first | default({})).version
+      | default('') }}
+  when: rstudio_installed_version != rstudio_release.version
+  block:
+    - name: Create temporary directory for Posit RStudio Desktop package
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .rstudio
+      register: rstudio_package_tempdir
+      changed_when: false
+
+    - name: Download, verify, and install Posit RStudio Desktop package
+      block:
+        - name: Download Posit RStudio Desktop package
+          ansible.builtin.get_url:
+            url: "{{ rstudio_release.url }}"
+            dest: "{{ rstudio_package_tempdir.path }}/{{ rstudio_release.basename }}"
+            checksum: "sha256:{{ rstudio_release.sha256 }}"
+            mode: "0600"
+
+        - name: Install Posit RStudio Desktop package
+          ansible.builtin.apt:
+            deb: >-
+              {{ rstudio_package_tempdir.path }}/{{ rstudio_release.basename }}
+            state: present
+            lock_timeout: 120
+      always:
+        - name: Remove temporary Posit RStudio Desktop package directory
+          ansible.builtin.file:
+            path: "{{ rstudio_package_tempdir.path }}"
+            state: absent
+          changed_when: false

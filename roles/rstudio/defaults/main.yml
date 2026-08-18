@@ -1,0 +1,17 @@
+---
+rstudio_package_name: rstudio
+rstudio_downloads_metadata_url: https://cdn.posit.co/downloads.json
+
+rstudio_supported_ubuntu_versions:
+  - "22.04"
+  - "24.04"
+  - "26.04"
+
+rstudio_platform_map:
+  "22.04": jammy
+  "24.04": noble
+  "26.04": resolute
+
+rstudio_supported_architectures:
+  - x86_64
+  - amd64
