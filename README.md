@@ -50,12 +50,6 @@ npm config set prefix '~/.npm-global'
 echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
 ```
 
-## Optional: Setup Claude Code CLI
-
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
-```
-
 ## Optional: Setup Git Authentication
 
 Step A:
