@@ -27,3 +27,17 @@
       - libreoffice
     state: present
     update_cache: true
+
+- name: Install Standard Snaps
+  snap:
+    name:
+      - ruff
+      - discord
+      - zoom-client
+
+- name: Install Classic Snaps
+  snap:
+    name:
+      - code
+      - astral-uv
+    classic: yes
