@@ -153,15 +153,9 @@
       ansible.builtin.include_tasks: desktop.yml
       when: gnome_shell.stat.exists
 
-    - name: Download and install DuckDB CLI
-      ansible.builtin.unarchive:
-        src: >-
-          https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-{{
-          linux_release_architecture_map[ansible_facts["architecture"]]
-          }}.zip
-        dest: /usr/local/bin
-        remote_src: true
-        mode: '0755'
+    - name: Install DuckDB CLI
+      ansible.builtin.include_role:
+        name: duckdb
 
     - name: Install Quarto CLI
       ansible.builtin.include_role:
