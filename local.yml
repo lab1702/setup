@@ -36,6 +36,7 @@
         name:
           # Build tools and utilities
           - build-essential
+          - ansible-lint
           - gpg
           - git
           - gh
