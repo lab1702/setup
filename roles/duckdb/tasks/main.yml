@@ -63,6 +63,14 @@
     duckdb_install_required: >-
       {{ duckdb_installed_version != duckdb_release_version }}
 
+- name: Report pending DuckDB CLI installation in check mode
+  ansible.builtin.debug:
+    msg: >-
+      DuckDB CLI {{ duckdb_release.json.tag_name }} would be installed in
+      {{ duckdb_install_directory }}.
+  changed_when: duckdb_install_required
+  when: ansible_check_mode
+
 - name: Download, verify, and install required DuckDB CLI release
   when:
     - duckdb_install_required

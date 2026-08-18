@@ -50,15 +50,27 @@
   ansible.builtin.package_facts:
     manager: auto
 
-- name: Install latest stable Posit RStudio Desktop release
+- name: Determine whether Posit RStudio Desktop installation is required
   vars:
     rstudio_installed_packages: >-
       {{ ansible_facts.packages[rstudio_package_name] | default([]) }}
     rstudio_installed_version: >-
       {{ (rstudio_installed_packages | first | default({})).version
       | default('') }}
+  ansible.builtin.set_fact:
+    rstudio_install_required: >-
+      {{ rstudio_installed_version != rstudio_release.version }}
+
+- name: Report pending Posit RStudio Desktop installation in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Posit RStudio Desktop {{ rstudio_release.version }} would be installed.
+  changed_when: rstudio_install_required
+  when: ansible_check_mode
+
+- name: Install latest stable Posit RStudio Desktop release
   when:
-    - rstudio_installed_version != rstudio_release.version
+    - rstudio_install_required
     - not ansible_check_mode
   block:
     - name: Create temporary directory for Posit RStudio Desktop package

@@ -18,6 +18,7 @@
 - name: Install Posit RStudio Desktop
   ansible.builtin.include_role:
     name: rstudio
+  when: linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
 
 - name: Install Desktop Packages
   ansible.builtin.apt:

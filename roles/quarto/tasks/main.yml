@@ -63,6 +63,13 @@
     quarto_install_required: >-
       {{ quarto_installed_version != quarto_release_version }}
 
+- name: Report pending Quarto CLI installation in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Quarto CLI {{ quarto_release.json.tag_name }} would be installed.
+  changed_when: quarto_install_required
+  when: ansible_check_mode
+
 - name: Download, verify, and install required Quarto CLI release
   when:
     - quarto_install_required

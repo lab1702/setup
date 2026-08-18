@@ -21,6 +21,37 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: Inspect existing ChatGPT repository keyring
+  ansible.builtin.stat:
+    path: "{{ chatgpt_repository_keyring_path }}"
+  register: chatgpt_repository_keyring_status
+
+- name: Inspect existing ChatGPT repository definition
+  ansible.builtin.stat:
+    path: "{{ chatgpt_repository_sources_path }}"
+  register: chatgpt_repository_sources_status
+
+- name: Report pending ChatGPT repository configuration in check mode
+  ansible.builtin.debug:
+    msg: The signed OpenAI repository would be configured.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - >-
+      not chatgpt_repository_keyring_status.stat.exists
+      or not chatgpt_repository_sources_status.stat.exists
+
+- name: Check pending ChatGPT package changes
+  ansible.builtin.apt:
+    name: "{{ chatgpt_package_name }}"
+    state: "{{ chatgpt_package_state }}"
+    update_cache: true
+    lock_timeout: 120
+  when:
+    - ansible_check_mode
+    - chatgpt_repository_keyring_status.stat.exists
+    - chatgpt_repository_sources_status.stat.exists
+
 - name: Configure signed OpenAI repository and install ChatGPT
   vars:
     chatgpt_repository_architecture: >-

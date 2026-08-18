@@ -9,6 +9,12 @@
 
   vars:
     user_name: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
+    supported_ubuntu_versions:
+      - "24.04"
+      - "26.04"
+    desktop_session_directories:
+      - /usr/share/xsessions
+      - /usr/share/wayland-sessions
     linux_release_architecture_map:
       x86_64: amd64
       amd64: amd64
@@ -16,18 +22,38 @@
       arm64: arm64
 
   pre_tasks:
-    - name: Validate release architecture support
+    - name: Validate Ubuntu release and architecture support
       ansible.builtin.assert:
         that:
+          - ansible_facts["distribution"] == "Ubuntu"
+          - ansible_facts["distribution_version"] in supported_ubuntu_versions
           - ansible_facts["architecture"] in linux_release_architecture_map
         fail_msg: >-
-          Unsupported architecture {{ ansible_facts["architecture"] }}.
-          Supported architectures are AMD64 and ARM64.
+          This playbook supports Ubuntu 24.04 and 26.04 on AMD64 and ARM64.
+          Detected {{ ansible_facts["distribution"] }}
+          {{ ansible_facts["distribution_version"] }} on
+          {{ ansible_facts["architecture"] }}.
 
-    - name: Check for Ubuntu Desktop
+    - name: Inspect graphical desktop session directories
       ansible.builtin.stat:
-        path: /usr/bin/gnome-shell
-      register: gnome_shell
+        path: "{{ item }}"
+      loop: "{{ desktop_session_directories }}"
+      register: desktop_session_directory_status
+
+    - name: Discover installed graphical desktop sessions
+      vars:
+        existing_desktop_session_directories: >-
+          {{ desktop_session_directory_status.results
+          | selectattr('stat.isdir', 'defined')
+          | selectattr('stat.isdir')
+          | map(attribute='item') | list }}
+      ansible.builtin.find:
+        paths: "{{ existing_desktop_session_directories }}"
+        patterns: "*.desktop"
+        file_type: file
+        recurse: false
+      register: graphical_desktop_sessions
+      when: existing_desktop_session_directories | length > 0
 
   tasks:
     - name: Install base packages
@@ -152,7 +178,7 @@
 
     - name: Include desktop setup
       ansible.builtin.include_tasks: desktop.yml
-      when: gnome_shell.stat.exists
+      when: graphical_desktop_sessions.matched | default(0) | int > 0
 
     - name: Install DuckDB CLI
       ansible.builtin.include_role:
