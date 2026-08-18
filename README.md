@@ -6,7 +6,8 @@ available. Posit RStudio Desktop is installed only on AMD64 systems because
 no ARM64 package is available.
 
 ## Step 0: Setup up fingerprint Authentication
-_If applicable do this after enrolling your fingerprint_
+
+### If applicable do this after enrolling your fingerprint
 
 ```bash
 sudo pam-auth-update
