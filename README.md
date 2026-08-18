@@ -1,6 +1,6 @@
 # Ubuntu Developer Workstation Setup
 
-This playbook supports Ubuntu 24.04 and 26.04 on AMD64 and ARM64 systems.
+This playbook supports Ubuntu 26.04 on AMD64 and ARM64 systems.
 Desktop packages are installed when an X11 or Wayland desktop session is
 available. Posit RStudio Desktop is installed only on AMD64 systems because
 no ARM64 package is available.

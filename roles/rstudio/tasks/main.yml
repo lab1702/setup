@@ -9,7 +9,7 @@
       - ansible_facts["architecture"] in rstudio_supported_architectures
     fail_msg: >-
       Posit's stable RStudio Desktop installer metadata supports Ubuntu
-      22.04, 24.04, and 26.04 on AMD64. Detected
+      22.04 and 26.04 on AMD64. Detected
       {{ ansible_facts["distribution"] }}
       {{ ansible_facts["distribution_version"] }} on
       {{ ansible_facts["architecture"] }}.
@@ -65,8 +65,10 @@
   ansible.builtin.debug:
     msg: >-
       Posit RStudio Desktop {{ rstudio_release.version }} would be installed.
-  changed_when: rstudio_install_required
-  when: ansible_check_mode
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - rstudio_install_required
 
 - name: Install latest stable Posit RStudio Desktop release
   when:

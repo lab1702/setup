@@ -67,8 +67,10 @@
   ansible.builtin.debug:
     msg: >-
       Quarto CLI {{ quarto_release.json.tag_name }} would be installed.
-  changed_when: quarto_install_required
-  when: ansible_check_mode
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - quarto_install_required
 
 - name: Download, verify, and install required Quarto CLI release
   when:

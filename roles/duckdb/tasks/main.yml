@@ -68,8 +68,10 @@
     msg: >-
       DuckDB CLI {{ duckdb_release.json.tag_name }} would be installed in
       {{ duckdb_install_directory }}.
-  changed_when: duckdb_install_required
-  when: ansible_check_mode
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - duckdb_install_required
 
 - name: Download, verify, and install required DuckDB CLI release
   when:

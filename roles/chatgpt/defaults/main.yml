@@ -10,7 +10,6 @@ chatgpt_repository_keyring_path: /usr/share/keyrings/chatgpt-archive-keyring.asc
 chatgpt_repository_key_fingerprint: 3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4
 
 chatgpt_supported_ubuntu_versions:
-  - "24.04"
   - "26.04"
 
 chatgpt_architecture_map:

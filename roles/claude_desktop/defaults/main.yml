@@ -10,8 +10,6 @@ claude_desktop_repository_url: https://downloads.claude.ai/claude-desktop/apt/st
 claude_desktop_repository_suite: stable
 claude_desktop_repository_component: main
 claude_desktop_repository_filename: claude-desktop
-claude_desktop_repository_path: >-
-  /etc/apt/sources.list.d/{{ claude_desktop_repository_filename }}.list
 claude_desktop_repository_architectures:
   - amd64
   - arm64
