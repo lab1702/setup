@@ -141,7 +141,7 @@
           - jnettop
           - ffmpeg
           - ttyd
-        state: latest
+        state: present
 
     - name: Add user to docker group
       ansible.builtin.user:

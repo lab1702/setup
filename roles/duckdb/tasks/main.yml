@@ -42,33 +42,59 @@
       The latest DuckDB release did not contain the expected uploaded CLI
       archive with a trusted GitHub download URL and SHA-256 digest.
 
-- name: Create temporary directory for DuckDB CLI archive
-  ansible.builtin.tempfile:
-    state: directory
-    suffix: .duckdb
-  register: duckdb_archive_tempdir
+- name: Inspect installed DuckDB CLI version
+  ansible.builtin.command:
+    argv:
+      - "{{ duckdb_install_directory }}/duckdb"
+      - --version
+  register: duckdb_installed_release
   changed_when: false
+  failed_when: false
+  check_mode: false
 
-- name: Download, verify, and install DuckDB CLI archive
+- name: Determine whether DuckDB CLI installation is required
+  vars:
+    duckdb_release_version: >-
+      {{ duckdb_release.json.tag_name | regex_replace('^v', '') }}
+    duckdb_installed_version: >-
+      {{ (duckdb_installed_release.stdout | default('')).split()
+      | first | default('') | regex_replace('^v', '') }}
+  ansible.builtin.set_fact:
+    duckdb_install_required: >-
+      {{ duckdb_installed_version != duckdb_release_version }}
+
+- name: Download, verify, and install required DuckDB CLI release
+  when:
+    - duckdb_install_required
+    - not ansible_check_mode
   block:
-    - name: Download verified DuckDB CLI archive
-      ansible.builtin.get_url:
-        url: "{{ duckdb_release_asset.browser_download_url }}"
-        dest: >-
-          {{ duckdb_archive_tempdir.path }}/{{ duckdb_release_asset.name }}
-        checksum: "{{ duckdb_release_asset.digest }}"
-        mode: "0600"
-
-    - name: Install verified DuckDB CLI archive
-      ansible.builtin.unarchive:
-        src: >-
-          {{ duckdb_archive_tempdir.path }}/{{ duckdb_release_asset.name }}
-        dest: "{{ duckdb_install_directory }}"
-        remote_src: true
-        mode: "0755"
-  always:
-    - name: Remove temporary DuckDB CLI archive directory
-      ansible.builtin.file:
-        path: "{{ duckdb_archive_tempdir.path }}"
-        state: absent
+    - name: Create temporary directory for DuckDB CLI archive
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .duckdb
+      register: duckdb_archive_tempdir
       changed_when: false
+
+    - name: Download and install verified DuckDB CLI archive
+      block:
+        - name: Download verified DuckDB CLI archive
+          ansible.builtin.get_url:
+            url: "{{ duckdb_release_asset.browser_download_url }}"
+            dest: >-
+              {{ duckdb_archive_tempdir.path }}/{{ duckdb_release_asset.name }}
+            checksum: "{{ duckdb_release_asset.digest }}"
+            mode: "0600"
+
+        - name: Install verified DuckDB CLI archive
+          ansible.builtin.unarchive:
+            src: >-
+              {{ duckdb_archive_tempdir.path }}/{{ duckdb_release_asset.name }}
+            dest: "{{ duckdb_install_directory }}"
+            remote_src: true
+            mode: "0755"
+      always:
+        - name: Remove temporary DuckDB CLI archive directory
+          ansible.builtin.file:
+            path: "{{ duckdb_archive_tempdir.path }}"
+            state: absent
+          changed_when: false

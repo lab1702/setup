@@ -27,9 +27,7 @@
     rstudio_platform: >-
       {{ rstudio_platform_map[ansible_facts["distribution_version"]] }}
   ansible.builtin.set_fact:
-    rstudio_release: >-
-      {{ rstudio_downloads_metadata.json.rstudio.open_source.stable
-      .desktop.installer[rstudio_platform] | default({}) }}
+    rstudio_release: "{{ rstudio_downloads_metadata.json.rstudio.open_source.stable.desktop.installer[rstudio_platform] | default({}) }}"
 
 - name: Validate Posit RStudio Desktop package metadata
   ansible.builtin.assert:
@@ -59,7 +57,9 @@
     rstudio_installed_version: >-
       {{ (rstudio_installed_packages | first | default({})).version
       | default('') }}
-  when: rstudio_installed_version != rstudio_release.version
+  when:
+    - rstudio_installed_version != rstudio_release.version
+    - not ansible_check_mode
   block:
     - name: Create temporary directory for Posit RStudio Desktop package
       ansible.builtin.tempfile:

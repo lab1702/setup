@@ -1,6 +1,7 @@
 ---
 quarto_release_api_url: https://api.github.com/repos/quarto-dev/quarto-cli/releases/latest
 quarto_release_base_url: https://github.com/quarto-dev/quarto-cli/releases/download
+quarto_package_name: quarto
 
 quarto_architecture_map:
   x86_64: amd64
