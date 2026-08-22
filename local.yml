@@ -186,3 +186,9 @@
     - name: Install Quarto CLI
       ansible.builtin.include_role:
         name: quarto
+
+    - name: Upgrade all installed APT packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        lock_timeout: 120
