@@ -1,0 +1,166 @@
+---
+- name: Validate MEGA Desktop platform support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - >-
+        ansible_facts["distribution_version"]
+        in megasync_supported_ubuntu_versions
+      - ansible_facts["architecture"] in megasync_architecture_map
+    fail_msg: >-
+      MEGA Desktop supports Ubuntu 26.04 on AMD64 and ARM64. Detected
+      {{ ansible_facts["distribution"] }}
+      {{ ansible_facts["distribution_version"] }} on
+      {{ ansible_facts["architecture"] }}.
+
+- name: Preflight MEGA apt repository
+  ansible.builtin.import_tasks: repository_preflight.yml
+
+- name: Install MEGA repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gpg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  register: megasync_repository_prerequisite_installation
+
+- name: Create MEGA repository keyring directory
+  ansible.builtin.file:
+    path: "{{ megasync_repository_keyring_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  register: megasync_repository_keyring_directory_creation
+
+- name: Configure signed MEGA repository and install MEGA Desktop
+  when: >-
+    not ansible_check_mode or
+    (not megasync_repository_prerequisite_installation.changed and
+    not megasync_repository_keyring_directory_creation.changed)
+  block:
+    - name: Create temporary directory for MEGA signing key
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .megasync
+      register: megasync_repository_key_tempdir
+      changed_when: false
+      check_mode: false
+
+    - name: Install MEGA Desktop from its verified repository
+      block:
+        - name: Download MEGA signing key
+          ansible.builtin.get_url:
+            url: "{{ megasync_repository_key_url }}"
+            dest: "{{ megasync_repository_key_tempdir.path }}/key.asc"
+            mode: "0600"
+          changed_when: false
+          check_mode: false
+
+        - name: Inspect MEGA signing key
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --show-keys
+              - --with-colons
+              - "{{ megasync_repository_key_tempdir.path }}/key.asc"
+          register: megasync_repository_key
+          changed_when: false
+          check_mode: false
+
+        - name: Verify MEGA signing key fingerprint
+          vars:
+            megasync_repository_public_key_records: >-
+              {{ megasync_repository_key.stdout_lines
+              | select('match', '^pub:') | list }}
+            megasync_repository_fingerprint_records: >-
+              {{ megasync_repository_key.stdout_lines
+              | select('match', '^fpr:') | list }}
+            megasync_repository_expected_fingerprint_record: >-
+              fpr:::::::::{{ megasync_repository_key_fingerprint }}:
+          ansible.builtin.assert:
+            that:
+              - megasync_repository_public_key_records | length == 1
+              - >-
+                (megasync_repository_fingerprint_records
+                | first | default('')) ==
+                megasync_repository_expected_fingerprint_record
+            fail_msg: >-
+              The downloaded MEGA signing key does not contain exactly one
+              primary key with fingerprint
+              {{ megasync_repository_key_fingerprint }}.
+
+        - name: Convert verified MEGA signing key to binary keyring
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --yes
+              - --dearmor
+              - --output
+              - "{{ megasync_repository_key_tempdir.path }}/key.gpg"
+              - "{{ megasync_repository_key_tempdir.path }}/key.asc"
+          changed_when: false
+          check_mode: false
+
+        - name: Install verified MEGA signing key
+          ansible.builtin.copy:
+            src: "{{ megasync_repository_key_tempdir.path }}/key.gpg"
+            dest: "{{ megasync_repository_keyring_path }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0644"
+          register: megasync_repository_keyring_installation
+
+        - name: Configure MEGA apt repository
+          ansible.builtin.copy:
+            dest: "{{ megasync_repository_sources_path }}"
+            content: "{{ megasync_repository_source_content }}"
+            owner: root
+            group: root
+            mode: "0644"
+          register: megasync_repository_configuration
+
+        - name: Install package while preserving verified MEGA repository
+          block:
+            - name: Install MEGA Desktop package
+              ansible.builtin.apt:
+                name: "{{ megasync_package_name }}"
+                state: "{{ megasync_package_state }}"
+                update_cache: true
+                cache_valid_time: 0
+                lock_timeout: 120
+              when: >-
+                not ansible_check_mode or
+                (not megasync_repository_keyring_installation.changed and
+                not megasync_repository_configuration.changed)
+          always:
+            - name: Reassert verified MEGA signing key after package operation
+              ansible.builtin.copy:
+                src: "{{ megasync_repository_key_tempdir.path }}/key.gpg"
+                dest: "{{ megasync_repository_keyring_path }}"
+                remote_src: true
+                owner: root
+                group: root
+                mode: "0644"
+              when: not ansible_check_mode
+
+            - name: Reassert managed MEGA repository after package operation
+              ansible.builtin.copy:
+                dest: "{{ megasync_repository_sources_path }}"
+                content: "{{ megasync_repository_source_content }}"
+                owner: root
+                group: root
+                mode: "0644"
+              when: not ansible_check_mode
+      always:
+        - name: Remove temporary MEGA signing key directory
+          ansible.builtin.file:
+            path: "{{ megasync_repository_key_tempdir.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false

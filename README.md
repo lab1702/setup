@@ -9,8 +9,10 @@ ARM64; their release archives are verified with the SHA-256 digests published
 by GitHub before installation. Discord tracks the latest official stable AMD64
 DEB and validates its HTTPS download location and package metadata before
 installation. Visual Studio Code tracks the latest stable package from
-Microsoft's signed APT repository on AMD64 and ARM64. Zoom Workplace tracks the
-latest package from Zoom's signed, AMD64-only APT repository.
+Microsoft's signed APT repository on AMD64 and ARM64. MEGA Desktop tracks the
+latest package from MEGA's signed APT repository on AMD64 and ARM64. Zoom
+Workplace tracks the latest package from Zoom's signed, AMD64-only APT
+repository.
 
 ## Accepted Security Tradeoffs
 

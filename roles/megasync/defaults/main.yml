@@ -1,0 +1,30 @@
+---
+megasync_package_name: megasync
+megasync_package_state: latest
+
+megasync_supported_ubuntu_versions:
+  - "26.04"
+megasync_architecture_map:
+  x86_64: amd64
+  amd64: amd64
+  aarch64: arm64
+  arm64: arm64
+
+megasync_repository_distribution: >-
+  xUbuntu_{{ ansible_facts["distribution_version"] }}
+megasync_repository_url: >-
+  https://mega.nz/linux/repo/{{ megasync_repository_distribution }}/
+megasync_repository_key_url: >-
+  {{ megasync_repository_url }}Release.key
+megasync_repository_keyring_directory: /etc/apt/keyrings
+megasync_repository_keyring_path: >-
+  {{ megasync_repository_keyring_directory }}/meganz-archive-keyring.gpg
+megasync_repository_key_fingerprint: B01C811880480C854C73EC7E1A664B787094A482
+megasync_repository_sources_path: /etc/apt/sources.list.d/megaio.sources
+megasync_repository_legacy_sources_path: >-
+  /etc/apt/sources.list.d/megasync.list
+megasync_repository_source_content: |
+  Types: deb
+  URIs: {{ megasync_repository_url }}
+  Suites: ./
+  Signed-By: {{ megasync_repository_keyring_path }}

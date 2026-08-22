@@ -19,6 +19,10 @@
   ansible.builtin.include_role:
     name: vscode
 
+- name: Install MEGA Desktop App
+  ansible.builtin.include_role:
+    name: megasync
+
 - name: Install Discord
   ansible.builtin.include_role:
     name: discord

@@ -43,6 +43,11 @@
         name: claude_desktop
         tasks_from: repository_preflight
 
+    - name: Preflight MEGA apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: megasync
+        tasks_from: repository_preflight
+
     - name: Preflight Zoom apt repository before package refreshes
       ansible.builtin.include_role:
         name: zoom
