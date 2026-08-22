@@ -1,0 +1,30 @@
+---
+vscode_package_name: code
+vscode_package_state: latest
+
+vscode_supported_ubuntu_versions:
+  - "26.04"
+vscode_supported_architectures:
+  - x86_64
+  - amd64
+  - aarch64
+  - arm64
+
+vscode_repository_key_url: https://packages.microsoft.com/keys/microsoft.asc
+vscode_repository_keyring_path: /usr/share/keyrings/microsoft-vscode.gpg
+vscode_repository_key_fingerprint: BC528686B50D79E339D3721CEB3E94ADBE1229CF
+
+vscode_repository_url: https://packages.microsoft.com/repos/code
+vscode_repository_suite: stable
+vscode_repository_component: main
+vscode_repository_sources_path: /etc/apt/sources.list.d/vscode.sources
+vscode_repository_architectures:
+  - amd64
+  - arm64
+vscode_repository_source_content: |
+  Types: deb
+  URIs: {{ vscode_repository_url }}
+  Suites: {{ vscode_repository_suite }}
+  Components: {{ vscode_repository_component }}
+  Architectures: {{ vscode_repository_architectures | join(' ') }}
+  Signed-By: {{ vscode_repository_keyring_path }}

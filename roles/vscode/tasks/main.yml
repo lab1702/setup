@@ -1,0 +1,135 @@
+---
+- name: Validate Visual Studio Code platform support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - >-
+        ansible_facts["distribution_version"]
+        in vscode_supported_ubuntu_versions
+      - ansible_facts["architecture"] in vscode_supported_architectures
+    fail_msg: >-
+      Visual Studio Code supports Ubuntu 26.04 on AMD64 and ARM64. Detected
+      {{ ansible_facts["distribution"] }}
+      {{ ansible_facts["distribution_version"] }} on
+      {{ ansible_facts["architecture"] }}.
+
+- name: Preflight Visual Studio Code apt repository
+  ansible.builtin.import_tasks: repository_preflight.yml
+
+- name: Install Visual Studio Code repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gpg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  register: vscode_repository_prerequisite_installation
+
+- name: Configure signed Visual Studio Code repository and install package
+  when: >-
+    not ansible_check_mode or
+    not vscode_repository_prerequisite_installation.changed
+  block:
+    - name: Create temporary directory for Microsoft signing key
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .vscode
+      register: vscode_repository_key_tempdir
+      changed_when: false
+      check_mode: false
+
+    - name: Download, verify, and install Microsoft signing key
+      block:
+        - name: Download Microsoft signing key
+          ansible.builtin.get_url:
+            url: "{{ vscode_repository_key_url }}"
+            dest: "{{ vscode_repository_key_tempdir.path }}/key.asc"
+            mode: "0600"
+          changed_when: false
+          check_mode: false
+
+        - name: Inspect Microsoft signing key
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --show-keys
+              - --with-colons
+              - "{{ vscode_repository_key_tempdir.path }}/key.asc"
+          register: vscode_repository_key
+          changed_when: false
+          check_mode: false
+
+        - name: Verify Microsoft signing key fingerprint
+          vars:
+            vscode_repository_public_key_records: >-
+              {{ vscode_repository_key.stdout_lines
+              | select('match', '^pub:') | list }}
+            vscode_repository_fingerprint_records: >-
+              {{ vscode_repository_key.stdout_lines
+              | select('match', '^fpr:') | list }}
+            vscode_repository_expected_fingerprint_record: >-
+              fpr:::::::::{{ vscode_repository_key_fingerprint }}:
+          ansible.builtin.assert:
+            that:
+              - vscode_repository_public_key_records | length == 1
+              - >-
+                (vscode_repository_fingerprint_records
+                | first | default('')) ==
+                vscode_repository_expected_fingerprint_record
+            fail_msg: >-
+              The downloaded Microsoft signing key does not contain exactly
+              one primary key with fingerprint
+              {{ vscode_repository_key_fingerprint }}.
+
+        - name: Convert verified Microsoft signing key to binary keyring
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --yes
+              - --dearmor
+              - --output
+              - "{{ vscode_repository_key_tempdir.path }}/key.gpg"
+              - "{{ vscode_repository_key_tempdir.path }}/key.asc"
+          changed_when: false
+          check_mode: false
+
+        - name: Install verified Microsoft signing key
+          ansible.builtin.copy:
+            src: "{{ vscode_repository_key_tempdir.path }}/key.gpg"
+            dest: "{{ vscode_repository_keyring_path }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0644"
+          register: vscode_repository_keyring_installation
+      always:
+        - name: Remove temporary Microsoft signing key directory
+          ansible.builtin.file:
+            path: "{{ vscode_repository_key_tempdir.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false
+
+    - name: Configure Visual Studio Code apt repository
+      ansible.builtin.copy:
+        dest: "{{ vscode_repository_sources_path }}"
+        content: "{{ vscode_repository_source_content }}"
+        owner: root
+        group: root
+        mode: "0644"
+      register: vscode_repository_configuration
+
+    - name: Install Visual Studio Code package
+      ansible.builtin.apt:
+        name: "{{ vscode_package_name }}"
+        state: "{{ vscode_package_state }}"
+        update_cache: true
+        cache_valid_time: 3600
+        lock_timeout: 120
+      when: >-
+        not ansible_check_mode or
+        (not vscode_repository_keyring_installation.changed and
+        not vscode_repository_configuration.changed)
