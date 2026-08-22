@@ -7,6 +7,14 @@
       Quarto CLI supports AMD64 and ARM64. Detected
       {{ ansible_facts["architecture"] }}.
 
+- name: Install Quarto CLI package prerequisites
+  ansible.builtin.apt:
+    name: xz-utils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 120
+
 - name: Get latest Quarto CLI release
   ansible.builtin.uri:
     url: "{{ quarto_release_api_url }}"

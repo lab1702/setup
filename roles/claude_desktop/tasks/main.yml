@@ -1,4 +1,7 @@
 ---
+- name: Preflight Claude Desktop apt repository
+  ansible.builtin.import_tasks: repository_preflight.yml
+
 - name: Install Claude Desktop repository prerequisites
   ansible.builtin.apt:
     name:
@@ -78,13 +81,9 @@
 
 - name: Add Claude Desktop apt repository
   ansible.builtin.apt_repository:
-    repo: >-
-      deb [arch={{ claude_desktop_repository_architectures | join(',') }}
-      signed-by={{ claude_desktop_keyring_path }}]
-      {{ claude_desktop_repository_url }}
-      {{ claude_desktop_repository_suite }}
-      {{ claude_desktop_repository_component }}
+    repo: "{{ claude_desktop_repository_definition }}"
     filename: "{{ claude_desktop_repository_filename }}"
+    mode: "0644"
     state: present
     update_cache: "{{ not ansible_check_mode }}"
   register: claude_desktop_repository_configuration

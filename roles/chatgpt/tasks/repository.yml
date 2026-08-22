@@ -9,22 +9,10 @@
   register: chatgpt_repository_keyring_installation
 
 - name: Configure signed OpenAI apt repository
-  vars:
-    chatgpt_repository_architecture: >-
-      {{ chatgpt_architecture_map[ansible_facts["architecture"]] }}
   ansible.builtin.copy:
     dest: "{{ chatgpt_repository_sources_path }}"
     owner: root
     group: root
     mode: "0644"
-    content: |
-      ### THIS FILE IS AUTOMATICALLY CONFIGURED ###
-      # Remove it to opt out of automatic package updates.
-      X-Repolib-Name: ChatGPT
-      Types: deb
-      URIs: {{ chatgpt_repository_url }}
-      Suites: {{ chatgpt_repository_suite }}
-      Components: {{ chatgpt_repository_component }}
-      Architectures: {{ chatgpt_repository_architecture }}
-      Signed-By: {{ chatgpt_repository_keyring_path }}
+    content: "{{ chatgpt_repository_source_content }}"
   register: chatgpt_repository_configuration

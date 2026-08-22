@@ -19,3 +19,14 @@ chatgpt_architecture_map:
   amd64: amd64
   aarch64: arm64
   arm64: arm64
+
+chatgpt_repository_source_content: |
+  ### THIS FILE IS AUTOMATICALLY CONFIGURED ###
+  # Remove it to opt out of automatic package updates.
+  X-Repolib-Name: ChatGPT
+  Types: deb
+  URIs: {{ chatgpt_repository_url }}
+  Suites: {{ chatgpt_repository_suite }}
+  Components: {{ chatgpt_repository_component }}
+  Architectures: {{ chatgpt_architecture_map[ansible_facts["architecture"]] }}
+  Signed-By: {{ chatgpt_repository_keyring_path }}

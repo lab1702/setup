@@ -28,26 +28,62 @@
     state: present
     update_cache: true
 
-- name: Install Standard Snaps on all supported architectures
-  community.general.snap:
-    name: ruff
+- name: Install Snap package manager
+  ansible.builtin.apt:
+    name: snapd
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 120
+  register: snapd_package_installation
 
-- name: Install AMD64-only Standard Snaps
-  community.general.snap:
-    name:
-      - discord
-      - zoom-client
-  when: >-
-    linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
+- name: Prepare Snap package management
+  when: not ansible_check_mode or not snapd_package_installation.changed
+  block:
+    - name: Ensure snapd socket is enabled and started
+      ansible.builtin.systemd_service:
+        name: snapd.socket
+        enabled: true
+        state: started
+      register: snapd_socket_configuration
 
-- name: Install Classic Snaps on all supported architectures
-  community.general.snap:
-    name: astral-uv
-    classic: true
+    - name: Ensure snapd has completed initial seeding
+      ansible.builtin.systemd_service:
+        name: snapd.seeded.service
+        state: started
+      register: snapd_seed_readiness
+      when: >-
+        not ansible_check_mode or
+        not snapd_socket_configuration.changed
 
-- name: Install AMD64-only Classic Snaps
-  community.general.snap:
-    name: code
-    classic: true
-  when: >-
-    linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
+    - name: Install configured desktop snaps
+      when: >-
+        not ansible_check_mode or
+        (not snapd_socket_configuration.changed and
+        not (snapd_seed_readiness.changed | default(true)))
+      block:
+        - name: Install Standard Snaps on all supported architectures
+          community.general.snap:
+            name: ruff
+
+        - name: Install AMD64-only Standard Snaps
+          community.general.snap:
+            name:
+              - discord
+              - zoom-client
+          when: >-
+            linux_release_architecture_map[ansible_facts["architecture"]]
+            == "amd64"
+
+        - name: Install Classic Snaps on all supported architectures
+          community.general.snap:
+            name: astral-uv
+            classic: true
+
+        - name: Install AMD64-only Classic Snaps
+          community.general.snap:
+            name: code
+            classic: true
+          when: >-
+            linux_release_architecture_map[ansible_facts["architecture"]]
+            == "amd64"

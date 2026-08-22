@@ -11,6 +11,9 @@
       {{ ansible_facts["distribution_version"] }} on
       {{ ansible_facts["architecture"] }}.
 
+- name: Preflight OpenAI apt repository
+  ansible.builtin.import_tasks: repository_preflight.yml
+
 - name: Install ChatGPT repository prerequisites
   ansible.builtin.apt:
     name:

@@ -33,6 +33,16 @@
           {{ ansible_facts["distribution_version"] }} on
           {{ ansible_facts["architecture"] }}.
 
+    - name: Preflight OpenAI apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: chatgpt
+        tasks_from: repository_preflight
+
+    - name: Preflight Claude Desktop apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: claude_desktop
+        tasks_from: repository_preflight
+
     - name: Inspect graphical desktop session directories
       ansible.builtin.stat:
         path: "{{ item }}"

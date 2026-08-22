@@ -1,0 +1,91 @@
+---
+- name: Inspect managed Claude Desktop apt repository source
+  ansible.builtin.stat:
+    path: "{{ claude_desktop_repository_sources_path }}"
+  register: claude_desktop_repository_source_status
+
+- name: Validate managed Claude Desktop apt repository source path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not claude_desktop_repository_source_status.stat.exists or
+        claude_desktop_repository_source_status.stat.isreg | default(false) or
+        claude_desktop_repository_source_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to quarantine {{ claude_desktop_repository_sources_path }}
+      because it is neither a regular file nor a symbolic link.
+
+- name: Read managed Claude Desktop apt repository source
+  ansible.builtin.slurp:
+    src: "{{ claude_desktop_repository_sources_path }}"
+  register: claude_desktop_repository_source
+  failed_when: false
+  when:
+    - claude_desktop_repository_source_status.stat.exists
+    - claude_desktop_repository_source_status.stat.isreg | default(false)
+
+- name: Inspect installed Claude Desktop repository signing key file
+  ansible.builtin.stat:
+    path: "{{ claude_desktop_keyring_path }}"
+  register: claude_desktop_installed_repository_key_status
+  when: claude_desktop_repository_source_status.stat.exists
+
+- name: Read installed Claude Desktop repository signing key
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --batch
+      - --show-keys
+      - --with-colons
+      - "{{ claude_desktop_keyring_path }}"
+  register: claude_desktop_installed_repository_key
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - claude_desktop_repository_source_status.stat.exists
+    - >-
+      claude_desktop_installed_repository_key_status.stat.isreg
+      | default(false)
+
+- name: Remove unusable managed Claude Desktop apt repository source
+  vars:
+    claude_desktop_repository_source_is_usable: >-
+      {{ claude_desktop_repository_source_status.stat.isreg | default(false)
+      and claude_desktop_repository_source_status.stat.uid | default(-1) == 0
+      and claude_desktop_repository_source_status.stat.gid | default(-1) == 0
+      and claude_desktop_repository_source_status.stat.mode
+      | default('') == '0644'
+      and not claude_desktop_repository_source.failed | default(true)
+      and (claude_desktop_repository_source.content | default('') | b64decode)
+      == claude_desktop_repository_source_content }}
+    claude_desktop_installed_public_key_records: >-
+      {{ claude_desktop_installed_repository_key.stdout_lines | default([])
+      | select('match', '^pub:') | list }}
+    claude_desktop_installed_fingerprint_records: >-
+      {{ claude_desktop_installed_repository_key.stdout_lines | default([])
+      | select('match', '^fpr:') | list }}
+    claude_desktop_expected_fingerprint_record: >-
+      fpr:::::::::{{ claude_desktop_key_fingerprint }}:
+    claude_desktop_installed_repository_key_is_usable: >-
+      {{ claude_desktop_installed_repository_key_status.stat.isreg
+      | default(false)
+      and claude_desktop_installed_repository_key_status.stat.uid
+      | default(-1) == 0
+      and claude_desktop_installed_repository_key_status.stat.gid
+      | default(-1) == 0
+      and claude_desktop_installed_repository_key_status.stat.mode
+      | default('') == '0644'
+      and claude_desktop_installed_repository_key.rc | default(1) == 0
+      and claude_desktop_installed_public_key_records | length == 1
+      and (claude_desktop_installed_fingerprint_records
+      | first | default('')) ==
+      claude_desktop_expected_fingerprint_record }}
+  ansible.builtin.file:
+    path: "{{ claude_desktop_repository_sources_path }}"
+    state: absent
+  when:
+    - claude_desktop_repository_source_status.stat.exists
+    - >-
+      not claude_desktop_repository_source_is_usable | bool or
+      not claude_desktop_installed_repository_key_is_usable | bool
