@@ -182,6 +182,7 @@
           - npm
           - gnucobol
           # System utilities
+          - openssh-server
           - vim
           - hx
           - fastfetch
@@ -206,6 +207,18 @@
     - name: Include desktop setup
       ansible.builtin.include_tasks: desktop.yml
       when: graphical_desktop_sessions.matched | default(0) | int > 0
+
+    - name: Install latest Ruff release from GitHub
+      ansible.builtin.include_role:
+        name: ruff
+
+    - name: Install latest ty release from GitHub
+      ansible.builtin.include_role:
+        name: ty
+
+    - name: Install latest uv release from GitHub
+      ansible.builtin.include_role:
+        name: uv
 
     - name: Install DuckDB CLI
       ansible.builtin.include_role:

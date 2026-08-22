@@ -38,22 +38,8 @@
     name: zoom
   when: linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
 
-- name: Install latest Ruff release from GitHub
-  ansible.builtin.include_role:
-    name: ruff
-
-- name: Install latest ty release from GitHub
-  ansible.builtin.include_role:
-    name: ty
-
-- name: Install latest uv release from GitHub
-  ansible.builtin.include_role:
-    name: uv
-
-- name: Install Desktop Packages
+- name: Install LibreOffice
   ansible.builtin.apt:
-    name:
-      - openssh-server
-      - libreoffice
+    name: libreoffice
     state: present
     update_cache: true
