@@ -127,7 +127,7 @@
         name: "{{ vscode_package_name }}"
         state: "{{ vscode_package_state }}"
         update_cache: true
-        cache_valid_time: 3600
+        cache_valid_time: 0
         lock_timeout: 120
       when: >-
         not ansible_check_mode or
