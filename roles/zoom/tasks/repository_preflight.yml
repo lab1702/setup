@@ -1,0 +1,84 @@
+---
+- name: Inspect managed Zoom apt repository source
+  ansible.builtin.stat:
+    path: "{{ zoom_repository_sources_path }}"
+  register: zoom_repository_source_status
+
+- name: Validate managed Zoom apt repository source path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not zoom_repository_source_status.stat.exists or
+        zoom_repository_source_status.stat.isreg | default(false) or
+        zoom_repository_source_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to quarantine {{ zoom_repository_sources_path }} because it is
+      neither a regular file nor a symbolic link.
+
+- name: Read managed Zoom apt repository source
+  ansible.builtin.slurp:
+    src: "{{ zoom_repository_sources_path }}"
+  register: zoom_repository_source
+  failed_when: false
+  when:
+    - zoom_repository_source_status.stat.exists
+    - zoom_repository_source_status.stat.isreg | default(false)
+
+- name: Inspect installed Zoom repository signing key file
+  ansible.builtin.stat:
+    path: "{{ zoom_repository_keyring_path }}"
+  register: zoom_installed_repository_key_status
+  when: zoom_repository_source_status.stat.exists
+
+- name: Read installed Zoom repository signing key
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --batch
+      - --show-keys
+      - --with-colons
+      - "{{ zoom_repository_keyring_path }}"
+  register: zoom_installed_repository_key
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - zoom_repository_source_status.stat.exists
+    - zoom_installed_repository_key_status.stat.isreg | default(false)
+
+- name: Remove unusable managed Zoom apt repository source
+  vars:
+    zoom_repository_source_is_usable: >-
+      {{ zoom_repository_source_status.stat.isreg | default(false)
+      and zoom_repository_source_status.stat.uid | default(-1) == 0
+      and zoom_repository_source_status.stat.gid | default(-1) == 0
+      and zoom_repository_source_status.stat.mode | default('') == '0644'
+      and not zoom_repository_source.failed | default(true)
+      and (zoom_repository_source.content | default('') | b64decode)
+      == zoom_repository_source_content }}
+    zoom_installed_public_key_records: >-
+      {{ zoom_installed_repository_key.stdout_lines | default([])
+      | select('match', '^pub:') | list }}
+    zoom_installed_fingerprint_records: >-
+      {{ zoom_installed_repository_key.stdout_lines | default([])
+      | select('match', '^fpr:') | list }}
+    zoom_expected_fingerprint_record: >-
+      fpr:::::::::{{ zoom_repository_key_fingerprint }}:
+    zoom_installed_repository_key_is_usable: >-
+      {{ zoom_installed_repository_key_status.stat.isreg | default(false)
+      and zoom_installed_repository_key_status.stat.uid | default(-1) == 0
+      and zoom_installed_repository_key_status.stat.gid | default(-1) == 0
+      and zoom_installed_repository_key_status.stat.mode
+      | default('') == '0644'
+      and zoom_installed_repository_key.rc | default(1) == 0
+      and zoom_installed_public_key_records | length == 1
+      and (zoom_installed_fingerprint_records | first | default('')) ==
+      zoom_expected_fingerprint_record }}
+  ansible.builtin.file:
+    path: "{{ zoom_repository_sources_path }}"
+    state: absent
+  when:
+    - zoom_repository_source_status.stat.exists
+    - >-
+      not zoom_repository_source_is_usable | bool or
+      not zoom_installed_repository_key_is_usable | bool

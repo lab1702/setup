@@ -20,6 +20,11 @@
     name: rstudio
   when: linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
 
+- name: Install Zoom Workplace
+  ansible.builtin.include_role:
+    name: zoom
+  when: linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
+
 - name: Install latest Ruff release from GitHub
   ansible.builtin.include_role:
     name: ruff
@@ -81,11 +86,17 @@
               - astral-uv
             state: absent
 
+        - name: Remove superseded Zoom snap
+          community.general.snap:
+            name: zoom-client
+            state: absent
+          when: >-
+            linux_release_architecture_map[ansible_facts["architecture"]]
+            == "amd64"
+
         - name: Install AMD64-only Standard Snaps
           community.general.snap:
-            name:
-              - discord
-              - zoom-client
+            name: discord
           when: >-
             linux_release_architecture_map[ansible_facts["architecture"]]
             == "amd64"

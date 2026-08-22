@@ -1,0 +1,122 @@
+---
+- name: Validate Zoom Workplace platform support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - >-
+        ansible_facts["distribution_version"]
+        in zoom_supported_ubuntu_versions
+      - ansible_facts["architecture"] in zoom_supported_architectures
+    fail_msg: >-
+      Zoom Workplace supports Ubuntu 26.04 on AMD64. Detected
+      {{ ansible_facts["distribution"] }}
+      {{ ansible_facts["distribution_version"] }} on
+      {{ ansible_facts["architecture"] }}.
+
+- name: Preflight Zoom apt repository
+  ansible.builtin.import_tasks: repository_preflight.yml
+
+- name: Install Zoom repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gpg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  register: zoom_repository_prerequisite_installation
+
+- name: Configure signed Zoom repository and install Zoom Workplace
+  when: >-
+    not ansible_check_mode or
+    not zoom_repository_prerequisite_installation.changed
+  block:
+    - name: Create temporary directory for Zoom signing key
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .zoom
+      register: zoom_repository_key_tempdir
+      changed_when: false
+      check_mode: false
+
+    - name: Download, verify, and install Zoom signing key
+      block:
+        - name: Download Zoom signing key
+          ansible.builtin.get_url:
+            url: "{{ zoom_repository_key_url }}"
+            dest: "{{ zoom_repository_key_tempdir.path }}/key.asc"
+            mode: "0600"
+          changed_when: false
+          check_mode: false
+
+        - name: Inspect Zoom signing key
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --show-keys
+              - --with-colons
+              - "{{ zoom_repository_key_tempdir.path }}/key.asc"
+          register: zoom_repository_key
+          changed_when: false
+          check_mode: false
+
+        - name: Verify Zoom signing key fingerprint
+          vars:
+            zoom_repository_public_key_records: >-
+              {{ zoom_repository_key.stdout_lines
+              | select('match', '^pub:') | list }}
+            zoom_repository_fingerprint_records: >-
+              {{ zoom_repository_key.stdout_lines
+              | select('match', '^fpr:') | list }}
+            zoom_repository_expected_fingerprint_record: >-
+              fpr:::::::::{{ zoom_repository_key_fingerprint }}:
+          ansible.builtin.assert:
+            that:
+              - zoom_repository_public_key_records | length == 1
+              - >-
+                (zoom_repository_fingerprint_records
+                | first | default('')) ==
+                zoom_repository_expected_fingerprint_record
+            fail_msg: >-
+              The downloaded Zoom signing key does not contain exactly one
+              primary key with fingerprint
+              {{ zoom_repository_key_fingerprint }}.
+
+        - name: Install verified Zoom signing key
+          ansible.builtin.copy:
+            src: "{{ zoom_repository_key_tempdir.path }}/key.asc"
+            dest: "{{ zoom_repository_keyring_path }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0644"
+          register: zoom_repository_keyring_installation
+      always:
+        - name: Remove temporary Zoom signing key directory
+          ansible.builtin.file:
+            path: "{{ zoom_repository_key_tempdir.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false
+
+    - name: Add Zoom apt repository
+      ansible.builtin.apt_repository:
+        repo: "{{ zoom_repository_definition }}"
+        filename: "{{ zoom_repository_filename }}"
+        mode: "0644"
+        state: present
+        update_cache: "{{ not ansible_check_mode }}"
+      register: zoom_repository_configuration
+
+    - name: Install Zoom Workplace package
+      ansible.builtin.apt:
+        name: "{{ zoom_package_name }}"
+        state: "{{ zoom_package_state }}"
+        update_cache: true
+        cache_valid_time: 3600
+        lock_timeout: 120
+      when: >-
+        not ansible_check_mode or
+        (not zoom_repository_keyring_installation.changed and
+        not zoom_repository_configuration.changed)

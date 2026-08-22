@@ -6,7 +6,8 @@ available. Posit RStudio Desktop, Discord, Zoom, and Visual Studio Code are
 installed only on AMD64 systems because their configured distribution channels
 do not publish ARM64 packages. Ruff, ty, uv, and uvx track the latest GitHub
 releases for AMD64 and ARM64; their release archives are verified with the
-SHA-256 digests published by GitHub before installation.
+SHA-256 digests published by GitHub before installation. Zoom Workplace tracks
+the latest package from Zoom's signed, AMD64-only APT repository.
 
 ## Accepted Security Tradeoffs
 

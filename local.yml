@@ -43,6 +43,14 @@
         name: claude_desktop
         tasks_from: repository_preflight
 
+    - name: Preflight Zoom apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: zoom
+        tasks_from: repository_preflight
+      when: >-
+        linux_release_architecture_map[ansible_facts["architecture"]]
+        == "amd64"
+
     - name: Inspect graphical desktop session directories
       ansible.builtin.stat:
         path: "{{ item }}"
