@@ -75,15 +75,6 @@ sudo apt update && sudo apt upgrade -y
 sudo apt update && sudo apt upgrade -y &&  sudo apt install -y git ansible
 ```
 
-The Ubuntu `ansible` package includes the required `community.general`
-collection. When using `ansible-core` from a repository checkout instead,
-install the declared collection dependency for the same account that will run
-the playbook:
-
-```bash
-sudo ansible-galaxy collection install -r collections/requirements.yml
-```
-
 ## Step 3: Run ansible-pull
 
 ```bash
