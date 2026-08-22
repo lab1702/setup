@@ -6,7 +6,9 @@ chatgpt_repository_url: https://persistent.oaistatic.com/codex-app-prod/linux/de
 chatgpt_repository_suite: stable
 chatgpt_repository_component: main
 chatgpt_repository_sources_path: /etc/apt/sources.list.d/chatgpt.sources
-chatgpt_repository_keyring_path: /usr/share/keyrings/chatgpt-archive-keyring.asc
+chatgpt_repository_keyring_path: /usr/share/keyrings/chatgpt-archive-keyring.gpg
+chatgpt_repository_legacy_keyring_path: >-
+  /usr/share/keyrings/chatgpt-archive-keyring.asc
 chatgpt_repository_key_fingerprint: 3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4
 
 chatgpt_supported_ubuntu_versions:
