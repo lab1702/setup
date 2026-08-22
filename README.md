@@ -2,8 +2,9 @@
 
 This playbook supports Ubuntu 26.04 on AMD64 and ARM64 systems.
 Desktop packages are installed when an X11 or Wayland desktop session is
-available. Posit RStudio Desktop is installed only on AMD64 systems because
-no ARM64 package is available.
+available. Posit RStudio Desktop, Discord, Zoom, and Visual Studio Code are
+installed only on AMD64 systems because their configured distribution channels
+do not publish ARM64 packages.
 
 ## Step 0: Setup up fingerprint Authentication
 

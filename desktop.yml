@@ -28,16 +28,26 @@
     state: present
     update_cache: true
 
-- name: Install Standard Snaps
+- name: Install Standard Snaps on all supported architectures
+  community.general.snap:
+    name: ruff
+
+- name: Install AMD64-only Standard Snaps
   community.general.snap:
     name:
-      - ruff
       - discord
       - zoom-client
+  when: >-
+    linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
 
-- name: Install Classic Snaps
+- name: Install Classic Snaps on all supported architectures
   community.general.snap:
-    name:
-      - code
-      - astral-uv
+    name: astral-uv
     classic: true
+
+- name: Install AMD64-only Classic Snaps
+  community.general.snap:
+    name: code
+    classic: true
+  when: >-
+    linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
