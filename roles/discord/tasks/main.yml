@@ -1,0 +1,170 @@
+---
+- name: Validate Discord platform support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - >-
+        ansible_facts["distribution_version"]
+        in discord_supported_ubuntu_versions
+      - ansible_facts["architecture"] in discord_supported_architectures
+    fail_msg: >-
+      Discord supports Ubuntu 26.04 on AMD64. Detected
+      {{ ansible_facts["distribution"] }}
+      {{ ansible_facts["distribution_version"] }} on
+      {{ ansible_facts["architecture"] }}.
+
+- name: Discover latest stable Discord package
+  ansible.builtin.uri:
+    url: "{{ discord_download_endpoint }}"
+    method: HEAD
+    follow_redirects: none
+    status_code: 302
+    return_content: false
+  register: discord_download_response
+  changed_when: false
+  check_mode: false
+
+- name: Validate latest stable Discord package location
+  vars:
+    discord_release_location: >-
+      {{ discord_download_response.location | default('') }}
+    discord_release_path: >-
+      {{ discord_release_location | ansible.builtin.urlsplit('path') }}
+  ansible.builtin.assert:
+    that:
+      - >-
+        (discord_release_location | ansible.builtin.urlsplit('scheme'))
+        == 'https'
+      - >-
+        (discord_release_location | ansible.builtin.urlsplit('hostname'))
+        == discord_release_hostname
+      - >-
+        (discord_release_location | ansible.builtin.urlsplit('query'))
+        | length == 0
+      - >-
+        discord_release_path is match(
+        '^/apps/linux/[0-9]+([.][0-9]+)+/'
+        ~ 'discord-[0-9]+([.][0-9]+)+[.]deb$')
+    fail_msg: >-
+      Discord's stable download endpoint did not redirect to the expected
+      HTTPS package location.
+
+- name: Select latest stable Discord package
+  vars:
+    discord_release_location: "{{ discord_download_response.location }}"
+    discord_release_path: >-
+      {{ discord_release_location | ansible.builtin.urlsplit('path') }}
+  ansible.builtin.set_fact:
+    discord_release:
+      url: "{{ discord_release_location }}"
+      version: "{{ discord_release_path.split('/')[-2] }}"
+      filename: "{{ discord_release_path.split('/')[-1] }}"
+
+- name: Validate latest stable Discord package version
+  ansible.builtin.assert:
+    that:
+      - discord_release.version is match('^[0-9]+([.][0-9]+)+$')
+      - >-
+        discord_release.filename ==
+        'discord-' ~ discord_release.version ~ '.deb'
+      - >-
+        discord_release.url ==
+        discord_release_base_url ~ '/' ~ discord_release.version ~ '/' ~
+        discord_release.filename
+    fail_msg: >-
+      Discord's stable package URL did not contain one consistent version.
+
+- name: Gather installed package facts for Discord
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: Determine whether Discord installation is required
+  vars:
+    discord_installed_packages: >-
+      {{ ansible_facts.packages[discord_package_name] | default([]) }}
+    discord_installed_version: >-
+      {{ (discord_installed_packages | first | default({})).version
+      | default('') }}
+  ansible.builtin.set_fact:
+    discord_install_required: >-
+      {{ discord_installed_version | length == 0 or
+      discord_installed_version is version(discord_release.version, '<') }}
+
+- name: Report pending Discord installation in check mode
+  ansible.builtin.debug:
+    msg: Discord {{ discord_release.version }} would be installed.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - discord_install_required
+
+- name: Install latest stable Discord package
+  when:
+    - discord_install_required
+    - not ansible_check_mode
+  block:
+    - name: Install Discord package prerequisites
+      ansible.builtin.apt:
+        name: xz-utils
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        lock_timeout: 120
+
+    - name: Create temporary directory for Discord package
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .discord
+      register: discord_package_tempdir
+      changed_when: false
+
+    - name: Download, validate, and install Discord package
+      block:
+        - name: Download Discord package
+          ansible.builtin.uri:
+            url: "{{ discord_release.url }}"
+            dest: >-
+              {{ discord_package_tempdir.path }}/{{ discord_release.filename }}
+            method: GET
+            follow_redirects: none
+            status_code: 200
+            mode: "0600"
+
+        - name: Inspect downloaded Discord package metadata
+          ansible.builtin.command:
+            argv:
+              - dpkg-deb
+              - --show
+              - '--showformat=${Package}\t${Version}\t${Architecture}\n'
+              - >-
+                {{ discord_package_tempdir.path }}/{{ discord_release.filename }}
+          register: discord_downloaded_package_metadata
+          changed_when: false
+
+        - name: Validate downloaded Discord package metadata
+          vars:
+            discord_expected_package_metadata:
+              - "{{ discord_package_name }}"
+              - "{{ discord_release.version }}"
+              - "{{ discord_package_architecture }}"
+          ansible.builtin.assert:
+            that:
+              - >-
+                discord_downloaded_package_metadata.stdout.split() ==
+                discord_expected_package_metadata
+            fail_msg: >-
+              The downloaded Discord package metadata does not match the
+              expected package name, version, and AMD64 architecture.
+
+        - name: Install validated Discord package
+          ansible.builtin.apt:
+            deb: >-
+              {{ discord_package_tempdir.path }}/{{ discord_release.filename }}
+            state: present
+            lock_timeout: 120
+      always:
+        - name: Remove temporary Discord package directory
+          ansible.builtin.file:
+            path: "{{ discord_package_tempdir.path }}"
+            state: absent
+          changed_when: false

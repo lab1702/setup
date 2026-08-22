@@ -6,10 +6,11 @@ available. Posit RStudio Desktop, Discord, and Zoom are installed only on AMD64
 systems because their configured distribution channels do not publish ARM64
 packages. Ruff, ty, uv, and uvx track the latest GitHub releases for AMD64 and
 ARM64; their release archives are verified with the SHA-256 digests published
-by GitHub before installation. Visual Studio Code tracks the latest stable
-package from Microsoft's signed APT repository on AMD64 and ARM64. Zoom
-Workplace tracks the latest package from Zoom's signed, AMD64-only APT
-repository.
+by GitHub before installation. Discord tracks the latest official stable AMD64
+DEB and validates its HTTPS download location and package metadata before
+installation. Visual Studio Code tracks the latest stable package from
+Microsoft's signed APT repository on AMD64 and ARM64. Zoom Workplace tracks the
+latest package from Zoom's signed, AMD64-only APT repository.
 
 ## Accepted Security Tradeoffs
 
@@ -38,6 +39,13 @@ that use case:
   custom hardening policy. This is acceptable while SSH is reachable only from
   the trusted home network, is not forwarded or otherwise exposed publicly, and
   only owner-controlled accounts can authenticate.
+- **Item 8 — Discord package transport trust:** Discord publishes its stable
+  Linux DEB through an official HTTPS endpoint, but does not publish a signed
+  APT repository, detached signature, or checksum for it. The playbook restricts
+  downloads to Discord's expected HTTPS hosts and validates the package name,
+  version, and architecture, but package authenticity ultimately relies on TLS
+  and Discord's download infrastructure. This is acceptable for this
+  personally managed workstation.
 
 Reassess these decisions before using the playbook on a shared workstation, an
 untrusted network, infrastructure managed by multiple people, or a host whose

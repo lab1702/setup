@@ -1,0 +1,14 @@
+---
+discord_package_name: discord
+discord_package_architecture: amd64
+
+discord_supported_ubuntu_versions:
+  - "26.04"
+discord_supported_architectures:
+  - x86_64
+  - amd64
+
+discord_download_endpoint: >-
+  https://discord.com/api/download?format=deb&platform=linux
+discord_release_base_url: https://stable.dl2.discordapp.net/apps/linux
+discord_release_hostname: stable.dl2.discordapp.net
