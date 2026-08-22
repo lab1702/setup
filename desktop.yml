@@ -20,6 +20,18 @@
     name: rstudio
   when: linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
 
+- name: Install latest Ruff release from GitHub
+  ansible.builtin.include_role:
+    name: ruff
+
+- name: Install latest ty release from GitHub
+  ansible.builtin.include_role:
+    name: ty
+
+- name: Install latest uv release from GitHub
+  ansible.builtin.include_role:
+    name: uv
+
 - name: Install Desktop Packages
   ansible.builtin.apt:
     name:
@@ -62,9 +74,12 @@
         (not snapd_socket_configuration.changed and
         not (snapd_seed_readiness.changed | default(true)))
       block:
-        - name: Install Standard Snaps on all supported architectures
+        - name: Remove superseded Ruff and uv snaps
           community.general.snap:
-            name: ruff
+            name:
+              - ruff
+              - astral-uv
+            state: absent
 
         - name: Install AMD64-only Standard Snaps
           community.general.snap:
@@ -74,11 +89,6 @@
           when: >-
             linux_release_architecture_map[ansible_facts["architecture"]]
             == "amd64"
-
-        - name: Install Classic Snaps on all supported architectures
-          community.general.snap:
-            name: astral-uv
-            classic: true
 
         - name: Install AMD64-only Classic Snaps
           community.general.snap:

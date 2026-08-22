@@ -1,0 +1,174 @@
+---
+- name: Validate uv architecture support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["architecture"] in uv_architecture_map
+    fail_msg: >-
+      uv supports AMD64 and ARM64. Detected
+      {{ ansible_facts["architecture"] }}.
+
+- name: Get latest uv release
+  ansible.builtin.uri:
+    url: "{{ uv_release_api_url }}"
+    return_content: true
+  register: uv_release
+  changed_when: false
+  check_mode: false
+
+- name: Select uv archive asset
+  vars:
+    uv_release_architecture: >-
+      {{ uv_architecture_map[ansible_facts["architecture"]] }}
+    uv_archive_filename: >-
+      uv-{{ uv_release_architecture }}-unknown-linux-gnu.tar.gz
+  ansible.builtin.set_fact:
+    uv_release_asset: >-
+      {{ uv_release.json.assets
+      | selectattr('name', 'equalto', uv_archive_filename)
+      | first | default({}) }}
+
+- name: Validate uv archive asset
+  ansible.builtin.assert:
+    that:
+      - uv_release_asset | length > 0
+      - uv_release_asset.state | default('') == 'uploaded'
+      - >-
+        (uv_release_asset.browser_download_url | default('')).startswith(
+        uv_release_base_url ~ '/')
+      - >-
+        (uv_release_asset.digest | default(''))
+        is match('^sha256:[0-9a-f]{64}$')
+    fail_msg: >-
+      The latest uv release did not contain the expected uploaded Linux
+      archive with a trusted GitHub download URL and SHA-256 digest.
+
+- name: Inspect installed uv version
+  ansible.builtin.command:
+    argv:
+      - "{{ uv_install_directory }}/uv"
+      - --version
+  register: uv_installed_release
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Inspect installed uvx version
+  ansible.builtin.command:
+    argv:
+      - "{{ uv_install_directory }}/uvx"
+      - --version
+  register: uv_installed_uvx_release
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Determine whether uv installation is required
+  vars:
+    uv_release_version: >-
+      {{ uv_release.json.tag_name | regex_replace('^v', '') }}
+    uv_installed_version: >-
+      {{ ((uv_installed_release.stdout | default('')).split()
+      + ['', ''])[1] | regex_replace('^v', '') }}
+    uv_installed_uvx_version: >-
+      {{ ((uv_installed_uvx_release.stdout | default('')).split()
+      + ['', ''])[1] | regex_replace('^v', '') }}
+  ansible.builtin.set_fact:
+    uv_install_required: >-
+      {{ uv_installed_release.rc | default(1) != 0 or
+      uv_installed_uvx_release.rc | default(1) != 0 or
+      uv_installed_version != uv_release_version or
+      uv_installed_uvx_version != uv_release_version }}
+
+- name: Report pending uv installation in check mode
+  ansible.builtin.debug:
+    msg: >-
+      uv {{ uv_release.json.tag_name }} would be installed in
+      {{ uv_install_directory }} with uvx.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - uv_install_required
+
+- name: Download, verify, and install required uv release
+  when:
+    - uv_install_required
+    - not ansible_check_mode
+  block:
+    - name: Create temporary directory for uv archive
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .uv
+      register: uv_archive_tempdir
+      changed_when: false
+
+    - name: Download and install verified uv archive
+      block:
+        - name: Download verified uv archive
+          ansible.builtin.get_url:
+            url: "{{ uv_release_asset.browser_download_url }}"
+            dest: >-
+              {{ uv_archive_tempdir.path }}/{{ uv_release_asset.name }}
+            checksum: "{{ uv_release_asset.digest }}"
+            mode: "0600"
+
+        - name: Extract verified uv archive
+          ansible.builtin.unarchive:
+            src: >-
+              {{ uv_archive_tempdir.path }}/{{ uv_release_asset.name }}
+            dest: "{{ uv_archive_tempdir.path }}"
+            remote_src: true
+            extra_opts:
+              - --strip-components=1
+            mode: "0755"
+
+        - name: Inspect downloaded uv version
+          ansible.builtin.command:
+            argv:
+              - "{{ uv_archive_tempdir.path }}/uv"
+              - --version
+          register: uv_downloaded_release
+          changed_when: false
+
+        - name: Inspect downloaded uvx version
+          ansible.builtin.command:
+            argv:
+              - "{{ uv_archive_tempdir.path }}/uvx"
+              - --version
+          register: uv_downloaded_uvx_release
+          changed_when: false
+
+        - name: Validate downloaded uv and uvx versions
+          vars:
+            uv_release_version: >-
+              {{ uv_release.json.tag_name | regex_replace('^v', '') }}
+            uv_downloaded_version: >-
+              {{ (uv_downloaded_release.stdout.split()
+              + ['', ''])[1] | regex_replace('^v', '') }}
+            uv_downloaded_uvx_version: >-
+              {{ (uv_downloaded_uvx_release.stdout.split()
+              + ['', ''])[1] | regex_replace('^v', '') }}
+          ansible.builtin.assert:
+            that:
+              - uv_downloaded_version == uv_release_version
+              - uv_downloaded_uvx_version == uv_release_version
+            fail_msg: >-
+              The downloaded uv or uvx binary version does not match
+              GitHub's latest release tag.
+
+        - name: Install verified uv binaries
+          ansible.builtin.copy:
+            src: "{{ uv_archive_tempdir.path }}/{{ item }}"
+            dest: "{{ uv_install_directory }}/{{ item }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0755"
+          loop:
+            - uv
+            - uvx
+      always:
+        - name: Remove temporary uv archive directory
+          ansible.builtin.file:
+            path: "{{ uv_archive_tempdir.path }}"
+            state: absent
+          changed_when: false

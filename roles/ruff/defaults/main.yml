@@ -1,0 +1,10 @@
+---
+ruff_release_api_url: https://api.github.com/repos/astral-sh/ruff/releases/latest
+ruff_release_base_url: https://github.com/astral-sh/ruff/releases/download
+ruff_install_directory: /usr/local/bin
+
+ruff_architecture_map:
+  x86_64: x86_64
+  amd64: x86_64
+  aarch64: aarch64
+  arm64: aarch64

@@ -1,0 +1,144 @@
+---
+- name: Validate Ruff architecture support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["architecture"] in ruff_architecture_map
+    fail_msg: >-
+      Ruff supports AMD64 and ARM64. Detected
+      {{ ansible_facts["architecture"] }}.
+
+- name: Get latest Ruff release
+  ansible.builtin.uri:
+    url: "{{ ruff_release_api_url }}"
+    return_content: true
+  register: ruff_release
+  changed_when: false
+  check_mode: false
+
+- name: Select Ruff archive asset
+  vars:
+    ruff_release_architecture: >-
+      {{ ruff_architecture_map[ansible_facts["architecture"]] }}
+    ruff_archive_filename: >-
+      ruff-{{ ruff_release_architecture }}-unknown-linux-gnu.tar.gz
+  ansible.builtin.set_fact:
+    ruff_release_asset: >-
+      {{ ruff_release.json.assets
+      | selectattr('name', 'equalto', ruff_archive_filename)
+      | first | default({}) }}
+
+- name: Validate Ruff archive asset
+  ansible.builtin.assert:
+    that:
+      - ruff_release_asset | length > 0
+      - ruff_release_asset.state | default('') == 'uploaded'
+      - >-
+        (ruff_release_asset.browser_download_url | default('')).startswith(
+        ruff_release_base_url ~ '/')
+      - >-
+        (ruff_release_asset.digest | default(''))
+        is match('^sha256:[0-9a-f]{64}$')
+    fail_msg: >-
+      The latest Ruff release did not contain the expected uploaded Linux
+      archive with a trusted GitHub download URL and SHA-256 digest.
+
+- name: Inspect installed Ruff version
+  ansible.builtin.command:
+    argv:
+      - "{{ ruff_install_directory }}/ruff"
+      - --version
+  register: ruff_installed_release
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Determine whether Ruff installation is required
+  vars:
+    ruff_release_version: >-
+      {{ ruff_release.json.tag_name | regex_replace('^v', '') }}
+    ruff_installed_version: >-
+      {{ ((ruff_installed_release.stdout | default('')).split()
+      + ['', ''])[1] | regex_replace('^v', '') }}
+  ansible.builtin.set_fact:
+    ruff_install_required: >-
+      {{ ruff_installed_release.rc | default(1) != 0 or
+      ruff_installed_version != ruff_release_version }}
+
+- name: Report pending Ruff installation in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Ruff {{ ruff_release.json.tag_name }} would be installed in
+      {{ ruff_install_directory }}.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - ruff_install_required
+
+- name: Download, verify, and install required Ruff release
+  when:
+    - ruff_install_required
+    - not ansible_check_mode
+  block:
+    - name: Create temporary directory for Ruff archive
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .ruff
+      register: ruff_archive_tempdir
+      changed_when: false
+
+    - name: Download and install verified Ruff archive
+      block:
+        - name: Download verified Ruff archive
+          ansible.builtin.get_url:
+            url: "{{ ruff_release_asset.browser_download_url }}"
+            dest: >-
+              {{ ruff_archive_tempdir.path }}/{{ ruff_release_asset.name }}
+            checksum: "{{ ruff_release_asset.digest }}"
+            mode: "0600"
+
+        - name: Extract verified Ruff archive
+          ansible.builtin.unarchive:
+            src: >-
+              {{ ruff_archive_tempdir.path }}/{{ ruff_release_asset.name }}
+            dest: "{{ ruff_archive_tempdir.path }}"
+            remote_src: true
+            extra_opts:
+              - --strip-components=1
+            mode: "0755"
+
+        - name: Inspect downloaded Ruff version
+          ansible.builtin.command:
+            argv:
+              - "{{ ruff_archive_tempdir.path }}/ruff"
+              - --version
+          register: ruff_downloaded_release
+          changed_when: false
+
+        - name: Validate downloaded Ruff version
+          vars:
+            ruff_release_version: >-
+              {{ ruff_release.json.tag_name | regex_replace('^v', '') }}
+            ruff_downloaded_version: >-
+              {{ (ruff_downloaded_release.stdout.split()
+              + ['', ''])[1] | regex_replace('^v', '') }}
+          ansible.builtin.assert:
+            that:
+              - ruff_downloaded_version == ruff_release_version
+            fail_msg: >-
+              The downloaded Ruff binary version does not match GitHub's
+              latest release tag.
+
+        - name: Install verified Ruff binary
+          ansible.builtin.copy:
+            src: "{{ ruff_archive_tempdir.path }}/ruff"
+            dest: "{{ ruff_install_directory }}/ruff"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0755"
+      always:
+        - name: Remove temporary Ruff archive directory
+          ansible.builtin.file:
+            path: "{{ ruff_archive_tempdir.path }}"
+            state: absent
+          changed_when: false

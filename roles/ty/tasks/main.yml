@@ -1,0 +1,144 @@
+---
+- name: Validate ty architecture support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["architecture"] in ty_architecture_map
+    fail_msg: >-
+      ty supports AMD64 and ARM64. Detected
+      {{ ansible_facts["architecture"] }}.
+
+- name: Get latest ty release
+  ansible.builtin.uri:
+    url: "{{ ty_release_api_url }}"
+    return_content: true
+  register: ty_release
+  changed_when: false
+  check_mode: false
+
+- name: Select ty archive asset
+  vars:
+    ty_release_architecture: >-
+      {{ ty_architecture_map[ansible_facts["architecture"]] }}
+    ty_archive_filename: >-
+      ty-{{ ty_release_architecture }}-unknown-linux-gnu.tar.gz
+  ansible.builtin.set_fact:
+    ty_release_asset: >-
+      {{ ty_release.json.assets
+      | selectattr('name', 'equalto', ty_archive_filename)
+      | first | default({}) }}
+
+- name: Validate ty archive asset
+  ansible.builtin.assert:
+    that:
+      - ty_release_asset | length > 0
+      - ty_release_asset.state | default('') == 'uploaded'
+      - >-
+        (ty_release_asset.browser_download_url | default('')).startswith(
+        ty_release_base_url ~ '/')
+      - >-
+        (ty_release_asset.digest | default(''))
+        is match('^sha256:[0-9a-f]{64}$')
+    fail_msg: >-
+      The latest ty release did not contain the expected uploaded Linux
+      archive with a trusted GitHub download URL and SHA-256 digest.
+
+- name: Inspect installed ty version
+  ansible.builtin.command:
+    argv:
+      - "{{ ty_install_directory }}/ty"
+      - --version
+  register: ty_installed_release
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Determine whether ty installation is required
+  vars:
+    ty_release_version: >-
+      {{ ty_release.json.tag_name | regex_replace('^v', '') }}
+    ty_installed_version: >-
+      {{ ((ty_installed_release.stdout | default('')).split()
+      + ['', ''])[1] | regex_replace('^v', '') }}
+  ansible.builtin.set_fact:
+    ty_install_required: >-
+      {{ ty_installed_release.rc | default(1) != 0 or
+      ty_installed_version != ty_release_version }}
+
+- name: Report pending ty installation in check mode
+  ansible.builtin.debug:
+    msg: >-
+      ty {{ ty_release.json.tag_name }} would be installed in
+      {{ ty_install_directory }}.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - ty_install_required
+
+- name: Download, verify, and install required ty release
+  when:
+    - ty_install_required
+    - not ansible_check_mode
+  block:
+    - name: Create temporary directory for ty archive
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .ty
+      register: ty_archive_tempdir
+      changed_when: false
+
+    - name: Download and install verified ty archive
+      block:
+        - name: Download verified ty archive
+          ansible.builtin.get_url:
+            url: "{{ ty_release_asset.browser_download_url }}"
+            dest: >-
+              {{ ty_archive_tempdir.path }}/{{ ty_release_asset.name }}
+            checksum: "{{ ty_release_asset.digest }}"
+            mode: "0600"
+
+        - name: Extract verified ty archive
+          ansible.builtin.unarchive:
+            src: >-
+              {{ ty_archive_tempdir.path }}/{{ ty_release_asset.name }}
+            dest: "{{ ty_archive_tempdir.path }}"
+            remote_src: true
+            extra_opts:
+              - --strip-components=1
+            mode: "0755"
+
+        - name: Inspect downloaded ty version
+          ansible.builtin.command:
+            argv:
+              - "{{ ty_archive_tempdir.path }}/ty"
+              - --version
+          register: ty_downloaded_release
+          changed_when: false
+
+        - name: Validate downloaded ty version
+          vars:
+            ty_release_version: >-
+              {{ ty_release.json.tag_name | regex_replace('^v', '') }}
+            ty_downloaded_version: >-
+              {{ (ty_downloaded_release.stdout.split()
+              + ['', ''])[1] | regex_replace('^v', '') }}
+          ansible.builtin.assert:
+            that:
+              - ty_downloaded_version == ty_release_version
+            fail_msg: >-
+              The downloaded ty binary version does not match GitHub's
+              latest release tag.
+
+        - name: Install verified ty binary
+          ansible.builtin.copy:
+            src: "{{ ty_archive_tempdir.path }}/ty"
+            dest: "{{ ty_install_directory }}/ty"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0755"
+      always:
+        - name: Remove temporary ty archive directory
+          ansible.builtin.file:
+            path: "{{ ty_archive_tempdir.path }}"
+            state: absent
+          changed_when: false
