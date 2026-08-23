@@ -10,7 +10,7 @@
 - name: Inspect DuckDB CLI validation account
   ansible.builtin.command:
     argv:
-      - id
+      - /usr/bin/id
       - -u
       - "{{ duckdb_validation_user }}"
   register: duckdb_validation_user_id

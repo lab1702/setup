@@ -22,6 +22,10 @@ megasync_repository_key_fingerprint: B01C811880480C854C73EC7E1A664B787094A482
 megasync_repository_sources_path: /etc/apt/sources.list.d/megaio.sources
 megasync_repository_legacy_sources_path: >-
   /etc/apt/sources.list.d/megasync.list
+megasync_repository_legacy_entry_regexp: >-
+  {{ '(?i)^[ \t]*deb(?:-src)?[ \t]+'
+  ~ '(?:\[[^]]*\][ \t]+)?https://mega[.]nz/linux/repo/'
+  ~ '[^ \t#]+(?:[ \t]+.*)?$' }}
 megasync_repository_source_content: |
   Types: deb
   URIs: {{ megasync_repository_url }}

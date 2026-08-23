@@ -99,82 +99,167 @@
         chatgpt_repository_legacy_keyring_path !=
         chatgpt_repository_keyring_path
 
-    - name: Resolve and install the exact OpenAI repository version
-      when: >-
-        not ansible_check_mode or
-        (not chatgpt_repository_keyring_installation.changed and
-        not chatgpt_repository_configuration.changed)
+    - name: Install package while preserving the pinned OpenAI repository
       block:
-        - name: Refresh OpenAI repository package metadata
-          ansible.builtin.apt:
-            update_cache: true
-            cache_valid_time: 0
-            lock_timeout: 120
-          changed_when: false
-          when: not ansible_check_mode
+        - name: Resolve and install the exact OpenAI repository version
+          block:
+            - name: Refresh OpenAI repository package metadata
+              ansible.builtin.apt:
+                update_cache: true
+                cache_valid_time: 0
+                lock_timeout: 120
+              changed_when: false
+              when: not ansible_check_mode
 
-        - name: Discover published ChatGPT repository versions
-          ansible.builtin.command:
-            argv:
-              - apt-cache
-              - madison
-              - "{{ chatgpt_package_name }}"
-          environment:
-            LC_ALL: C
-          register: chatgpt_repository_versions
-          changed_when: false
-          check_mode: false
+            - name: Refresh isolated authenticated OpenAI metadata in check mode
+              ansible.builtin.include_tasks: check_mode_repository_metadata.yml
+              vars:
+                repository_check_key_source: chatgpt-archive-keyring.gpg
+                repository_check_key_remote_src: false
+                repository_check_keyring_filename: repository-keyring.gpg
+                repository_check_source_content: >-
+                  {{ chatgpt_repository_source_content }}
+                repository_check_system_keyring_path: >-
+                  {{ chatgpt_repository_keyring_path }}
+                repository_check_source_filename: repository.sources
+                repository_check_package_names:
+                  - "{{ chatgpt_package_name }}"
+              when: ansible_check_mode
 
-        - name: Select ChatGPT versions from the OpenAI repository
-          vars:
-            chatgpt_repository_version_pattern: >-
-              {{ '^\s*'
-              ~ (chatgpt_package_name | ansible.builtin.regex_escape)
-              ~ '\s*\|\s*\S+\s*\|\s*'
-              ~ (chatgpt_repository_url | regex_replace('/+$', '')
-              | ansible.builtin.regex_escape)
-              ~ '/?(?:\s|$)' }}
-          ansible.builtin.set_fact:
-            chatgpt_repository_version_rows: >-
-              {{ chatgpt_repository_versions.stdout_lines
-              | select('match', chatgpt_repository_version_pattern) | list }}
+            - name: Discover published ChatGPT repository versions
+              ansible.builtin.command:
+                argv:
+                  - apt-cache
+                  - madison
+                  - "{{ chatgpt_package_name }}"
+              environment:
+                LC_ALL: C
+              register: chatgpt_repository_versions
+              changed_when: false
+              check_mode: false
+              when: not ansible_check_mode
 
-        - name: Validate available ChatGPT repository versions
-          ansible.builtin.assert:
-            that:
-              - chatgpt_repository_version_rows | length > 0
-            fail_msg: >-
-              The verified OpenAI repository does not publish a candidate for
-              {{ chatgpt_package_name }} on this architecture.
+            - name: Select isolated OpenAI repository output in check mode
+              ansible.builtin.set_fact:
+                chatgpt_repository_version_lines: >-
+                  {{ (chatgpt_repository_check_package_versions.results
+                  | first).stdout_lines }}
+              when: ansible_check_mode
 
-        - name: Select current ChatGPT repository version
-          ansible.builtin.set_fact:
-            chatgpt_package_candidate_version: >-
-              {{ (chatgpt_repository_version_rows | first).split('|')[1]
-              | trim }}
+            - name: Select complete OpenAI repository output in normal mode
+              ansible.builtin.set_fact:
+                chatgpt_repository_version_lines: >-
+                  {{ chatgpt_repository_versions.stdout_lines }}
+              when: not ansible_check_mode
 
-        - name: Validate current ChatGPT Debian version
-          ansible.builtin.command:
-            argv:
-              - dpkg
-              - --validate-version
-              - "{{ chatgpt_package_candidate_version }}"
-          changed_when: false
-          check_mode: false
+            - name: Select ChatGPT versions from the OpenAI repository
+              vars:
+                chatgpt_repository_version_pattern: >-
+                  {{ '^\s*'
+                  ~ (chatgpt_package_name | ansible.builtin.regex_escape)
+                  ~ '\s*\|\s*\S+\s*\|\s*'
+                  ~ (chatgpt_repository_url | regex_replace('/+$', '')
+                  | ansible.builtin.regex_escape)
+                  ~ '/?(?:\s|$)' }}
+              ansible.builtin.set_fact:
+                chatgpt_repository_version_rows: >-
+                  {{ chatgpt_repository_version_lines
+                  | select('match', chatgpt_repository_version_pattern)
+                  | list }}
 
-        - name: Install exact current ChatGPT repository version
-          ansible.builtin.apt:
-            name: >-
-              {{ chatgpt_package_name }}={{
-              chatgpt_package_candidate_version }}
-            state: present
-            allow_downgrade: true
-            lock_timeout: 120
-          register: chatgpt_package_installation
+            - name: Validate available ChatGPT repository versions
+              ansible.builtin.assert:
+                that:
+                  - chatgpt_repository_version_rows | length > 0
+                fail_msg: >-
+                  The verified OpenAI repository does not publish a candidate
+                  for {{ chatgpt_package_name }} on this architecture.
 
-    - name: Reassert pinned OpenAI apt repository after package changes
-      ansible.builtin.import_tasks: repository.yml
-      when:
-        - not ansible_check_mode
-        - chatgpt_package_installation is defined
-        - chatgpt_package_installation.changed
+            - name: Select current ChatGPT repository version
+              ansible.builtin.set_fact:
+                chatgpt_package_candidate_version: >-
+                  {{ (chatgpt_repository_version_rows | first).split('|')[1]
+                  | trim }}
+
+            - name: Validate current ChatGPT Debian version
+              ansible.builtin.command:
+                argv:
+                  - dpkg
+                  - --validate-version
+                  - "{{ chatgpt_package_candidate_version }}"
+              changed_when: false
+              check_mode: false
+
+            - name: Select every source instance of the ChatGPT version
+              vars:
+                chatgpt_candidate_version_pattern: >-
+                  {{ '^\s*'
+                  ~ (chatgpt_package_name | ansible.builtin.regex_escape)
+                  ~ '\s*\|\s*'
+                  ~ (chatgpt_package_candidate_version
+                  | ansible.builtin.regex_escape)
+                  ~ '\s*\|' }}
+              ansible.builtin.set_fact:
+                chatgpt_candidate_version_rows: >-
+                  {{ chatgpt_repository_version_lines
+                  | select('match', chatgpt_candidate_version_pattern)
+                  | list }}
+              when: not ansible_check_mode
+
+            - name: Reject ambiguous ChatGPT package origins
+              ansible.builtin.assert:
+                that:
+                  - chatgpt_candidate_version_rows | length > 0
+                  - >-
+                    chatgpt_candidate_version_rows
+                    | difference(chatgpt_repository_version_rows)
+                    | length == 0
+                fail_msg: >-
+                  Refusing to install {{ chatgpt_package_name }}={{
+                  chatgpt_package_candidate_version }} because the same
+                  version is also available from a non-OpenAI repository.
+              when: not ansible_check_mode
+
+            - name: Inspect installed ChatGPT package version
+              ansible.builtin.command:
+                argv:
+                  - dpkg-query
+                  - --show
+                  - --showformat=${Version}\t${db:Status-Status}\n
+                  - "{{ chatgpt_package_name }}"
+              register: chatgpt_installed_package
+              changed_when: false
+              failed_when: false
+              check_mode: false
+
+            - name: Determine whether ChatGPT needs installation
+              ansible.builtin.set_fact:
+                chatgpt_package_installation_required: >-
+                  {{ chatgpt_installed_package.rc != 0 or
+                  (chatgpt_package_candidate_version ~ '\tinstalled') not in
+                  chatgpt_installed_package.stdout_lines }}
+
+            - name: Report pending ChatGPT package installation
+              ansible.builtin.debug:
+                msg: >-
+                  ChatGPT {{ chatgpt_package_candidate_version }} would be
+                  installed from the verified OpenAI repository.
+              changed_when: chatgpt_package_installation_required
+              when: ansible_check_mode
+
+            - name: Install exact current ChatGPT repository version
+              ansible.builtin.apt:
+                name: >-
+                  {{ chatgpt_package_name }}={{
+                  chatgpt_package_candidate_version }}
+                state: present
+                allow_downgrade: true
+                lock_timeout: 120
+              register: chatgpt_package_installation
+              when: not ansible_check_mode
+      always:
+        - name: Reassert pinned OpenAI apt repository after install attempt
+          ansible.builtin.import_tasks: repository.yml
+          when:
+            - not ansible_check_mode
+            - chatgpt_package_installation is defined

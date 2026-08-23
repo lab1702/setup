@@ -126,18 +126,58 @@
       Refusing to remove {{ megasync_repository_legacy_sources_path }} because
       it is neither a regular file nor a symbolic link.
 
-- name: Stop check mode when the legacy MEGA repository requires removal
+- name: Read legacy MEGA apt repository source
+  ansible.builtin.slurp:
+    src: "{{ megasync_repository_legacy_sources_path }}"
+  register: megasync_repository_legacy_source
+  failed_when: false
+  when: megasync_repository_legacy_source_status.stat.exists
+
+- name: Validate readable legacy MEGA apt repository source
+  ansible.builtin.assert:
+    that:
+      - not megasync_repository_legacy_source.failed | default(true)
+    fail_msg: >-
+      Refusing to migrate {{ megasync_repository_legacy_sources_path }} because
+      its contents cannot be inspected safely.
+  when: megasync_repository_legacy_source_status.stat.exists
+
+- name: Detect legacy MEGA repository entries
+  ansible.builtin.set_fact:
+    megasync_repository_legacy_migration_required: >-
+      {{ (megasync_repository_legacy_source.content
+      | default('') | b64decode).splitlines()
+      | select('match', megasync_repository_legacy_entry_regexp)
+      | list | length > 0 }}
+  changed_when: false
+
+- name: Refuse to edit legacy MEGA entries through a symbolic link
   ansible.builtin.fail:
     msg: >-
-      {{ megasync_repository_legacy_sources_path }} must be removed before APT
-      can be checked safely. Run this playbook once without --check to migrate
-      the legacy MEGA repository source.
+      {{ megasync_repository_legacy_sources_path }} is a symbolic link whose
+      target contains MEGA entries. Replace it with a regular managed source
+      file or migrate those entries manually; unrelated target entries will
+      not be deleted.
+  when:
+    - megasync_repository_legacy_source_status.stat.islnk | default(false)
+    - megasync_repository_legacy_migration_required
+
+- name: Stop check mode when regular legacy MEGA entries require migration
+  ansible.builtin.fail:
+    msg: >-
+      MEGA entries in {{ megasync_repository_legacy_sources_path }} must be
+      removed before system APT can be checked safely. Run this playbook once
+      without --check to migrate only those entries.
   when:
     - ansible_check_mode
-    - megasync_repository_legacy_source_status.stat.exists
+    - megasync_repository_legacy_migration_required
 
-- name: Remove legacy MEGA apt repository source
-  ansible.builtin.file:
+- name: Remove only legacy MEGA repository entries
+  ansible.builtin.lineinfile:
     path: "{{ megasync_repository_legacy_sources_path }}"
+    regexp: "{{ megasync_repository_legacy_entry_regexp }}"
     state: absent
-  when: megasync_repository_legacy_source_status.stat.exists
+  when:
+    - not ansible_check_mode
+    - megasync_repository_legacy_source_status.stat.isreg | default(false)
+    - megasync_repository_legacy_migration_required

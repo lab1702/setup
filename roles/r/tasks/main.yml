@@ -92,6 +92,13 @@
             group: root
             mode: "0644"
           register: r_repository_keyring_installation
+
+        - name: Retain verified CRAN key for isolated metadata checks
+          ansible.builtin.slurp:
+            src: "{{ r_repository_key_tempdir.path }}/key.asc"
+          register: r_verified_repository_key
+          changed_when: false
+          check_mode: false
       always:
         - name: Remove temporary CRAN signing key directory
           ansible.builtin.file:
@@ -110,10 +117,6 @@
       register: r_repository_configuration
 
     - name: Resolve and install exact current CRAN package versions
-      when: >-
-        not ansible_check_mode or
-        (not r_repository_keyring_installation.changed and
-        not r_repository_configuration.changed)
       block:
         - name: Refresh CRAN repository package metadata
           ansible.builtin.apt:
@@ -122,6 +125,21 @@
             lock_timeout: 120
           changed_when: false
           when: not ansible_check_mode
+
+        - name: Refresh isolated CRAN metadata in check mode
+          ansible.builtin.include_tasks: check_mode_repository_metadata.yml
+          vars:
+            repository_check_key_content: >-
+              {{ r_verified_repository_key.content | b64decode }}
+            repository_check_keyring_filename: repository-keyring.asc
+            repository_check_source_content: >-
+              {{ r_repository_source_content }}
+            repository_check_system_keyring_path: >-
+              {{ r_repository_keyring_path }}
+            repository_check_source_filename: repository.sources
+            repository_check_package_names: >-
+              {{ r_package_names | unique | list }}
+          when: ansible_check_mode
 
         - name: Discover published CRAN package versions
           ansible.builtin.command:
@@ -137,6 +155,19 @@
           register: r_repository_package_versions
           changed_when: false
           check_mode: false
+          when: not ansible_check_mode
+
+        - name: Select isolated CRAN output in check mode
+          ansible.builtin.set_fact:
+            r_repository_package_version_results: >-
+              {{ r_repository_check_package_versions.results }}
+          when: ansible_check_mode
+
+        - name: Select complete CRAN output in normal mode
+          ansible.builtin.set_fact:
+            r_repository_package_version_results: >-
+              {{ r_repository_package_versions.results }}
+          when: not ansible_check_mode
 
         - name: Initialize current CRAN package versions
           ansible.builtin.set_fact:
@@ -164,7 +195,7 @@
             r_repository_package_candidate_versions: >-
               {{ r_repository_package_candidate_versions
               | combine({item.item: r_repository_candidate_version}) }}
-          loop: "{{ r_repository_package_versions.results }}"
+          loop: "{{ r_repository_package_version_results }}"
           loop_control:
             label: "{{ item.item }}"
           changed_when: false
@@ -195,6 +226,46 @@
           changed_when: false
           check_mode: false
 
+        - name: Reject ambiguous CRAN package origins
+          vars:
+            r_repository_candidate_version: >-
+              {{ r_repository_package_candidate_versions[item.item] }}
+            r_candidate_version_pattern: >-
+              {{ '^\s*'
+              ~ (item.item | ansible.builtin.regex_escape)
+              ~ '\s*\|\s*'
+              ~ (r_repository_candidate_version
+              | ansible.builtin.regex_escape)
+              ~ '\s*\|' }}
+            r_vendor_version_pattern: >-
+              {{ '^\s*'
+              ~ (item.item | ansible.builtin.regex_escape)
+              ~ '\s*\|\s*\S+\s*\|\s*'
+              ~ (r_repository_url | regex_replace('/+$', '')
+              | ansible.builtin.regex_escape)
+              ~ '/?(?:\s|$)' }}
+            r_candidate_version_rows: >-
+              {{ item.stdout_lines
+              | select('match', r_candidate_version_pattern) | list }}
+            r_vendor_version_rows: >-
+              {{ item.stdout_lines
+              | select('match', r_vendor_version_pattern) | list }}
+          ansible.builtin.assert:
+            that:
+              - r_candidate_version_rows | length > 0
+              - >-
+                r_candidate_version_rows
+                | difference(r_vendor_version_rows)
+                | length == 0
+            fail_msg: >-
+              Refusing to install {{ item.item }}={{
+              r_repository_candidate_version }} because the same version is
+              available from a non-CRAN repository.
+          loop: "{{ r_repository_package_version_results }}"
+          loop_control:
+            label: "{{ item.item }}"
+          when: not ansible_check_mode
+
         - name: Initialize exact CRAN package specifications
           ansible.builtin.set_fact:
             r_repository_exact_package_names: []
@@ -211,6 +282,48 @@
             label: "{{ item }}"
           changed_when: false
 
+        - name: Inspect installed CRAN package versions
+          ansible.builtin.command:
+            argv:
+              - dpkg-query
+              - --show
+              - --showformat=${Version}\t${db:Status-Status}\n
+              - "{{ item }}"
+          loop: "{{ r_package_names | unique | list }}"
+          loop_control:
+            label: "{{ item }}"
+          register: r_installed_packages
+          changed_when: false
+          failed_when: false
+          check_mode: false
+
+        - name: Initialize pending CRAN package state
+          ansible.builtin.set_fact:
+            r_package_installation_required: false
+          changed_when: false
+
+        - name: Determine whether CRAN packages need installation
+          vars:
+            r_expected_installed_state: >-
+              {{ r_repository_package_candidate_versions[item.item]
+              ~ '\tinstalled' }}
+          ansible.builtin.set_fact:
+            r_package_installation_required: >-
+              {{ r_package_installation_required or item.rc != 0 or
+              r_expected_installed_state not in item.stdout_lines }}
+          loop: "{{ r_installed_packages.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+          changed_when: false
+
+        - name: Report pending CRAN package installation
+          ansible.builtin.debug:
+            msg: >-
+              Exact current R packages would be installed from the verified
+              CRAN repository.
+          changed_when: r_package_installation_required
+          when: ansible_check_mode
+
         - name: Install exact current CRAN package versions
           ansible.builtin.apt:
             name: "{{ r_repository_exact_package_names }}"
@@ -220,3 +333,4 @@
             allow_downgrade: true
             install_recommends: false
             lock_timeout: 120
+          when: not ansible_check_mode

@@ -91,19 +91,12 @@ KVM so the new login session receives those memberships. For Docker, running
 
 ---
 
-## Optional: Setup pip
+## Python and NPM shell configuration
 
-```bash
-echo 'export PIP_REQUIRE_VIRTUALENV=1' >> ~/.bashrc
-```
-
-## Optional: Setup NPM
-
-```bash
-mkdir -p ~/.npm-global
-npm config set prefix '~/.npm-global'
-echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
-```
+The playbook uses idempotent Ansible tasks to require a virtual environment for
+user-level pip installations, configure `~/.npm-global` as the user's NPM
+prefix, and add its `bin` directory to `PATH`. Existing matching entries in
+`.bashrc` and `.npmrc` are updated, and duplicate legacy entries are collapsed.
 
 ## Optional: Setup Git Authentication
 

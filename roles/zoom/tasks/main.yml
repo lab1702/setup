@@ -92,6 +92,13 @@
             group: root
             mode: "0644"
           register: zoom_repository_keyring_installation
+
+        - name: Retain verified Zoom key for isolated metadata checks
+          ansible.builtin.slurp:
+            src: "{{ zoom_repository_key_tempdir.path }}/key.asc"
+          register: zoom_verified_repository_key
+          changed_when: false
+          check_mode: false
       always:
         - name: Remove temporary Zoom signing key directory
           ansible.builtin.file:
@@ -110,10 +117,6 @@
       register: zoom_repository_configuration
 
     - name: Resolve and install the exact Zoom repository version
-      when: >-
-        not ansible_check_mode or
-        (not zoom_repository_keyring_installation.changed and
-        not zoom_repository_configuration.changed)
       block:
         - name: Refresh Zoom repository package metadata
           ansible.builtin.apt:
@@ -122,6 +125,21 @@
             lock_timeout: 120
           changed_when: false
           when: not ansible_check_mode
+
+        - name: Refresh isolated Zoom metadata in check mode
+          ansible.builtin.include_tasks: check_mode_repository_metadata.yml
+          vars:
+            repository_check_key_content: >-
+              {{ zoom_verified_repository_key.content | b64decode }}
+            repository_check_keyring_filename: repository-keyring.asc
+            repository_check_source_content: >-
+              {{ zoom_repository_source_content }}
+            repository_check_system_keyring_path: >-
+              {{ zoom_repository_keyring_path }}
+            repository_check_source_filename: repository.list
+            repository_check_package_names:
+              - "{{ zoom_package_name }}"
+          when: ansible_check_mode
 
         - name: Discover published Zoom repository versions
           ansible.builtin.command:
@@ -134,6 +152,20 @@
           register: zoom_repository_versions
           changed_when: false
           check_mode: false
+          when: not ansible_check_mode
+
+        - name: Select isolated Zoom output in check mode
+          ansible.builtin.set_fact:
+            zoom_repository_version_lines: >-
+              {{ (zoom_repository_check_package_versions.results
+              | first).stdout_lines }}
+          when: ansible_check_mode
+
+        - name: Select complete Zoom output in normal mode
+          ansible.builtin.set_fact:
+            zoom_repository_version_lines: >-
+              {{ zoom_repository_versions.stdout_lines }}
+          when: not ansible_check_mode
 
         - name: Select versions from the Zoom repository
           vars:
@@ -146,7 +178,7 @@
               ~ '/?(?:\s|$)' }}
           ansible.builtin.set_fact:
             zoom_repository_version_rows: >-
-              {{ zoom_repository_versions.stdout_lines
+              {{ zoom_repository_version_lines
               | select('match', zoom_repository_version_pattern) | list }}
 
         - name: Validate available Zoom repository versions
@@ -172,6 +204,62 @@
           changed_when: false
           check_mode: false
 
+        - name: Select every source instance of the Zoom version
+          vars:
+            zoom_candidate_version_pattern: >-
+              {{ '^\s*'
+              ~ (zoom_package_name | ansible.builtin.regex_escape)
+              ~ '\s*\|\s*'
+              ~ (zoom_package_candidate_version
+              | ansible.builtin.regex_escape)
+              ~ '\s*\|' }}
+          ansible.builtin.set_fact:
+            zoom_candidate_version_rows: >-
+              {{ zoom_repository_version_lines
+              | select('match', zoom_candidate_version_pattern) | list }}
+          when: not ansible_check_mode
+
+        - name: Reject ambiguous Zoom package origins
+          ansible.builtin.assert:
+            that:
+              - zoom_candidate_version_rows | length > 0
+              - >-
+                zoom_candidate_version_rows
+                | difference(zoom_repository_version_rows)
+                | length == 0
+            fail_msg: >-
+              Refusing to install {{ zoom_package_name }}={{
+              zoom_package_candidate_version }} because the same version is
+              available from a non-Zoom repository.
+          when: not ansible_check_mode
+
+        - name: Inspect installed Zoom package version
+          ansible.builtin.command:
+            argv:
+              - dpkg-query
+              - --show
+              - --showformat=${Version}\t${db:Status-Status}\n
+              - "{{ zoom_package_name }}"
+          register: zoom_installed_package
+          changed_when: false
+          failed_when: false
+          check_mode: false
+
+        - name: Determine whether Zoom needs installation
+          ansible.builtin.set_fact:
+            zoom_package_installation_required: >-
+              {{ zoom_installed_package.rc != 0 or
+              (zoom_package_candidate_version ~ '\tinstalled') not in
+              zoom_installed_package.stdout_lines }}
+
+        - name: Report pending Zoom package installation
+          ansible.builtin.debug:
+            msg: >-
+              Zoom {{ zoom_package_candidate_version }} would be installed
+              from the verified Zoom repository.
+          changed_when: zoom_package_installation_required
+          when: ansible_check_mode
+
         - name: Install exact current Zoom repository version
           ansible.builtin.apt:
             name: >-
@@ -179,3 +267,4 @@
             state: present
             allow_downgrade: true
             lock_timeout: 120
+          when: not ansible_check_mode

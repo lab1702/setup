@@ -65,6 +65,8 @@
       {{ uv_release.json.assets
       | selectattr('name', 'equalto', uv_archive_filename)
       | first | default({}) }}
+    uv_release_archive_directory: >-
+      uv-{{ uv_release_architecture }}-unknown-linux-gnu
 
 - name: Validate uv archive asset
   ansible.builtin.assert:
@@ -195,7 +197,7 @@
       register: uv_archive_tempdir
       changed_when: false
 
-    - name: Download and install verified uv archive
+    - name: Download, inspect, and install verified uv archive
       block:
         - name: Download verified uv archive
           ansible.builtin.get_url:
@@ -205,21 +207,110 @@
             checksum: "{{ uv_release_asset.digest }}"
             mode: "0600"
 
-        - name: Extract verified uv archive
+        - name: Inspect uv archive member names
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/tar
+              - --gzip
+              - --list
+              - --file
+              - >-
+                {{ uv_archive_tempdir.path }}/{{ uv_release_asset.name }}
+              - --quoting-style=escape
+          environment:
+            GZIP: ""
+            LC_ALL: C
+            PATH: /usr/bin:/bin
+            TAR_OPTIONS: ""
+          register: uv_archive_member_names
+          changed_when: false
+
+        - name: Inspect uv archive member metadata
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/tar
+              - --gzip
+              - --list
+              - --verbose
+              - --file
+              - >-
+                {{ uv_archive_tempdir.path }}/{{ uv_release_asset.name }}
+              - --quoting-style=escape
+          environment:
+            GZIP: ""
+            LC_ALL: C
+            PATH: /usr/bin:/bin
+            TAR_OPTIONS: ""
+          register: uv_archive_member_metadata
+          changed_when: false
+
+        - name: Validate uv archive members
+          vars:
+            uv_expected_archive_members:
+              - "{{ uv_release_archive_directory }}/"
+              - "{{ uv_release_archive_directory }}/uv"
+              - "{{ uv_release_archive_directory }}/uvx"
+            uv_expected_archive_member_type_pairs:
+              - ["{{ uv_release_archive_directory }}/", "d"]
+              - ["{{ uv_release_archive_directory }}/uv", "-"]
+              - ["{{ uv_release_archive_directory }}/uvx", "-"]
+            uv_archive_member_type_pairs: >-
+              {{ uv_archive_member_names.stdout_lines
+              | zip(uv_archive_member_metadata.stdout_lines
+              | map('first') | list) | map('list') | list | sort }}
+          ansible.builtin.assert:
+            that:
+              - >-
+                uv_archive_member_names.stdout_lines | length ==
+                uv_expected_archive_members | length
+              - >-
+                uv_archive_member_names.stdout_lines | unique | list
+                | length == uv_archive_member_names.stdout_lines | length
+              - >-
+                uv_archive_member_names.stdout_lines | sort ==
+                uv_expected_archive_members | sort
+              - >-
+                uv_archive_member_metadata.stdout_lines | length ==
+                uv_expected_archive_members | length
+              - >-
+                uv_archive_member_type_pairs ==
+                uv_expected_archive_member_type_pairs | sort
+            fail_msg: >-
+              The verified uv archive must contain exactly one top-level target
+              directory and regular uv and uvx binaries, without duplicate or
+              unexpected members.
+
+        - name: Create vetted uv binary staging directory
+          ansible.builtin.file:
+            path: "{{ uv_archive_tempdir.path }}/staging"
+            state: directory
+            owner: root
+            group: root
+            mode: "0700"
+          changed_when: false
+
+        - name: Extract validated uv binaries into staging directory
           ansible.builtin.unarchive:
             src: >-
               {{ uv_archive_tempdir.path }}/{{ uv_release_asset.name }}
-            dest: "{{ uv_archive_tempdir.path }}"
+            dest: "{{ uv_archive_tempdir.path }}/staging"
             remote_src: true
+            include:
+              - "{{ uv_release_archive_directory }}/uv"
+              - "{{ uv_release_archive_directory }}/uvx"
             extra_opts:
               - --strip-components=1
             owner: root
             group: root
             mode: "0755"
+          environment:
+            GZIP: ""
+            PATH: /usr/bin:/bin
+            TAR_OPTIONS: ""
 
         - name: Inspect extracted uv binary paths
           ansible.builtin.stat:
-            path: "{{ uv_archive_tempdir.path }}/{{ item }}"
+            path: "{{ uv_archive_tempdir.path }}/staging/{{ item }}"
             follow: false
           loop:
             - uv
@@ -243,19 +334,24 @@
 
         - name: Inspect downloaded uv versions without root privileges
           block:
-            - name: Grant unprivileged traversal of uv temporary directory
+            - name: Grant unprivileged traversal of uv staging path
               ansible.builtin.file:
-                path: "{{ uv_archive_tempdir.path }}"
+                path: "{{ item }}"
                 state: directory
                 mode: "0701"
+              loop:
+                - "{{ uv_archive_tempdir.path }}"
+                - "{{ uv_archive_tempdir.path }}/staging"
+              loop_control:
+                label: "{{ item }}"
               changed_when: false
 
             - name: Run downloaded uv version probe as nobody
               ansible.builtin.command:
                 argv:
-                  - "{{ uv_archive_tempdir.path }}/uv"
+                  - "{{ uv_archive_tempdir.path }}/staging/uv"
                   - --version
-                chdir: "{{ uv_archive_tempdir.path }}"
+                chdir: "{{ uv_archive_tempdir.path }}/staging"
               become: true
               become_user: nobody
               register: uv_downloaded_release
@@ -264,19 +360,24 @@
             - name: Run downloaded uvx version probe as nobody
               ansible.builtin.command:
                 argv:
-                  - "{{ uv_archive_tempdir.path }}/uvx"
+                  - "{{ uv_archive_tempdir.path }}/staging/uvx"
                   - --version
-                chdir: "{{ uv_archive_tempdir.path }}"
+                chdir: "{{ uv_archive_tempdir.path }}/staging"
               become: true
               become_user: nobody
               register: uv_downloaded_uvx_release
               changed_when: false
           always:
-            - name: Restore uv temporary directory permissions
+            - name: Restore uv staging path permissions
               ansible.builtin.file:
-                path: "{{ uv_archive_tempdir.path }}"
+                path: "{{ item }}"
                 state: directory
                 mode: "0700"
+              loop:
+                - "{{ uv_archive_tempdir.path }}/staging"
+                - "{{ uv_archive_tempdir.path }}"
+              loop_control:
+                label: "{{ item }}"
               changed_when: false
 
         - name: Validate downloaded uv and uvx versions
@@ -299,7 +400,7 @@
 
         - name: Install verified uv binaries
           ansible.builtin.copy:
-            src: "{{ uv_archive_tempdir.path }}/{{ item }}"
+            src: "{{ uv_archive_tempdir.path }}/staging/{{ item }}"
             dest: "{{ uv_install_directory }}/{{ item }}"
             remote_src: true
             owner: root

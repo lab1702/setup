@@ -11,11 +11,13 @@ claude_desktop_repository_component: main
 claude_desktop_repository_filename: claude-desktop
 claude_desktop_repository_sources_path: >-
   /etc/apt/sources.list.d/{{ claude_desktop_repository_filename }}.list
-claude_desktop_repository_architectures:
-  - amd64
-  - arm64
+claude_desktop_architecture_map:
+  x86_64: amd64
+  amd64: amd64
+  aarch64: arm64
+  arm64: arm64
 claude_desktop_repository_definition: >-
-  deb [arch={{ claude_desktop_repository_architectures | join(',') }}
+  deb [arch={{ claude_desktop_architecture_map[ansible_facts["architecture"]] }}
   signed-by={{ claude_desktop_keyring_path }}]
   {{ claude_desktop_repository_url }}
   {{ claude_desktop_repository_suite }}

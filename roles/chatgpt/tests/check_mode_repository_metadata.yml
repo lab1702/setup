@@ -1,0 +1,69 @@
+---
+- name: Exercise isolated deb822 OpenAI repository metadata
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    chatgpt_test_architecture_map:
+      x86_64: amd64
+      amd64: amd64
+      aarch64: arm64
+      arm64: arm64
+    repository_test_architecture: >-
+      {{ chatgpt_test_architecture_map[
+      ansible_facts["architecture"]] }}
+    repository_check_owner: "{{ ansible_facts['user_id'] }}"
+    repository_check_group: "{{ ansible_facts['user_gid'] }}"
+    repository_check_apt_user: "{{ ansible_facts['user_id'] }}"
+  tasks:
+    - name: Validate test architecture support
+      ansible.builtin.assert:
+        that:
+          - ansible_facts["architecture"] in chatgpt_test_architecture_map
+
+    - name: Inspect bundled OpenAI signing key
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --batch
+          - --show-keys
+          - --with-colons
+          - "{{ playbook_dir }}/../files/chatgpt-archive-keyring.gpg"
+      register: chatgpt_test_repository_key
+      changed_when: false
+
+    - name: Validate bundled OpenAI signing key
+      ansible.builtin.assert:
+        that:
+          - >-
+            chatgpt_test_repository_key.stdout_lines
+            | select('equalto',
+            'fpr:::::::::3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4:')
+            | list | length == 1
+
+    - name: Refresh isolated deb822 OpenAI metadata
+      ansible.builtin.include_tasks: >-
+        {{ playbook_dir }}/../tasks/check_mode_repository_metadata.yml
+      vars:
+        repository_check_key_source: >-
+          {{ playbook_dir }}/../files/chatgpt-archive-keyring.gpg
+        repository_check_key_remote_src: true
+        repository_check_keyring_filename: repository-keyring.gpg
+        repository_check_source_content: |
+          Types: deb
+          URIs: https://persistent.oaistatic.com/codex-app-prod/linux/deb
+          Suites: stable
+          Components: main
+          Architectures: {{ repository_test_architecture }}
+          Signed-By: /tmp/chatgpt-test-keyring
+        repository_check_system_keyring_path: /tmp/chatgpt-test-keyring
+        repository_check_source_filename: repository.sources
+        repository_check_package_names:
+          - chatgpt
+
+    - name: Validate isolated OpenAI package metadata
+      ansible.builtin.assert:
+        that:
+          - >-
+            (chatgpt_repository_check_package_versions.results
+            | first).stdout is search('chatgpt')

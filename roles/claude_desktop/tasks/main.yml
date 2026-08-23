@@ -1,4 +1,12 @@
 ---
+- name: Validate Claude Desktop architecture support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["architecture"] in claude_desktop_architecture_map
+    fail_msg: >-
+      Claude Desktop supports x86_64 or ARM64; detected
+      {{ ansible_facts["architecture"] }}.
+
 - name: Preflight Claude Desktop apt repository
   ansible.builtin.import_tasks: repository_preflight.yml
 
@@ -90,10 +98,6 @@
         - name: Install package while preserving verified Claude repository
           block:
             - name: Resolve and install exact Claude repository version
-              when: >-
-                not ansible_check_mode or
-                (not claude_desktop_keyring_installation.changed and
-                not claude_desktop_repository_configuration.changed)
               block:
                 - name: Refresh Claude Desktop repository package metadata
                   ansible.builtin.apt:
@@ -102,6 +106,23 @@
                     lock_timeout: 120
                   changed_when: false
                   when: not ansible_check_mode
+
+                - name: Refresh isolated Claude metadata in check mode
+                  ansible.builtin.include_tasks: >-
+                    check_mode_repository_metadata.yml
+                  vars:
+                    repository_check_key_source: >-
+                      {{ claude_desktop_key_tempdir.path }}/key.asc
+                    repository_check_key_remote_src: true
+                    repository_check_keyring_filename: repository-keyring.asc
+                    repository_check_source_content: >-
+                      {{ claude_desktop_repository_source_content }}
+                    repository_check_system_keyring_path: >-
+                      {{ claude_desktop_keyring_path }}
+                    repository_check_source_filename: repository.list
+                    repository_check_package_names:
+                      - "{{ claude_desktop_package_name }}"
+                  when: ansible_check_mode
 
                 - name: Discover published Claude Desktop repository versions
                   ansible.builtin.command:
@@ -114,6 +135,23 @@
                   register: claude_desktop_repository_versions
                   changed_when: false
                   check_mode: false
+                  when: not ansible_check_mode
+
+                - name: Select isolated Claude repository output in check mode
+                  vars:
+                    claude_desktop_repository_check_data: >-
+                      {{ claude_desktop_repository_check_package_versions }}
+                  ansible.builtin.set_fact:
+                    claude_desktop_repository_version_lines: >-
+                      {{ (claude_desktop_repository_check_data.results
+                      | first).stdout_lines }}
+                  when: ansible_check_mode
+
+                - name: Select complete Claude repository output normally
+                  ansible.builtin.set_fact:
+                    claude_desktop_repository_version_lines: >-
+                      {{ claude_desktop_repository_versions.stdout_lines }}
+                  when: not ansible_check_mode
 
                 - name: Select versions from Claude Desktop repository
                   vars:
@@ -128,7 +166,7 @@
                       ~ '/?(?:\s|$)' }}
                   ansible.builtin.set_fact:
                     claude_desktop_repository_version_rows: >-
-                      {{ claude_desktop_repository_versions.stdout_lines
+                      {{ claude_desktop_repository_version_lines
                       | select('match',
                       claude_desktop_repository_version_pattern) | list }}
 
@@ -156,6 +194,67 @@
                   changed_when: false
                   check_mode: false
 
+                - name: Select every source instance of the Claude version
+                  vars:
+                    claude_desktop_candidate_version_pattern: >-
+                      {{ '^\s*'
+                      ~ (claude_desktop_package_name
+                      | ansible.builtin.regex_escape)
+                      ~ '\s*\|\s*'
+                      ~ (claude_desktop_package_candidate_version
+                      | ansible.builtin.regex_escape)
+                      ~ '\s*\|' }}
+                  ansible.builtin.set_fact:
+                    claude_desktop_candidate_version_rows: >-
+                      {{ claude_desktop_repository_version_lines
+                      | select('match',
+                      claude_desktop_candidate_version_pattern) | list }}
+                  when: not ansible_check_mode
+
+                - name: Reject ambiguous Claude Desktop package origins
+                  ansible.builtin.assert:
+                    that:
+                      - claude_desktop_candidate_version_rows | length > 0
+                      - >-
+                        claude_desktop_candidate_version_rows
+                        | difference(claude_desktop_repository_version_rows)
+                        | length == 0
+                    fail_msg: >-
+                      Refusing to install {{ claude_desktop_package_name }}={{
+                      claude_desktop_package_candidate_version }} because the
+                      same version is available from a non-Claude repository.
+                  when: not ansible_check_mode
+
+                - name: Inspect installed Claude Desktop package version
+                  ansible.builtin.command:
+                    argv:
+                      - dpkg-query
+                      - --show
+                      - --showformat=${Version}\t${db:Status-Status}\n
+                      - "{{ claude_desktop_package_name }}"
+                  register: claude_desktop_installed_package
+                  changed_when: false
+                  failed_when: false
+                  check_mode: false
+
+                - name: Determine whether Claude Desktop needs installation
+                  ansible.builtin.set_fact:
+                    claude_desktop_package_installation_required: >-
+                      {{ claude_desktop_installed_package.rc != 0 or
+                      (claude_desktop_package_candidate_version ~
+                      '\tinstalled') not in
+                      claude_desktop_installed_package.stdout_lines }}
+
+                - name: Report pending Claude Desktop package installation
+                  ansible.builtin.debug:
+                    msg: >-
+                      Claude Desktop {{
+                      claude_desktop_package_candidate_version }} would be
+                      installed from the verified Claude repository.
+                  changed_when: >-
+                    claude_desktop_package_installation_required
+                  when: ansible_check_mode
+
                 - name: Install exact current Claude repository version
                   ansible.builtin.apt:
                     name: >-
@@ -165,6 +264,7 @@
                     allow_downgrade: true
                     lock_timeout: 120
                   register: claude_desktop_package_installation
+                  when: not ansible_check_mode
           always:
             - name: Reassert verified Claude key after package changes
               ansible.builtin.copy:

@@ -89,7 +89,9 @@
 - name: Select installed Discord package version
   vars:
     discord_installed_packages: >-
-      {{ ansible_facts.packages[discord_package_name] | default([]) }}
+      {{ ansible_facts.packages[discord_package_name] | default([])
+      | selectattr('arch', 'defined')
+      | selectattr('arch', 'equalto', discord_package_architecture) | list }}
   ansible.builtin.set_fact:
     discord_installed_version: >-
       {{ (discord_installed_packages | first | default({})).version
@@ -154,24 +156,11 @@
     - ansible_check_mode
     - discord_configuration_repair_required
 
-- name: Repair incomplete matching Discord package configuration
-  ansible.builtin.command:
-    argv:
-      - dpkg
-      - --force-confdef
-      - --force-confold
-      - --configure
-      - "{{ discord_package_name }}"
-  environment:
-    DEBIAN_FRONTEND: noninteractive
-  changed_when: true
-  when:
-    - not ansible_check_mode
-    - discord_configuration_repair_required
-
 - name: Install latest stable Discord package
   when:
-    - discord_install_required
+    - >-
+      discord_install_required or
+      discord_configuration_repair_required
     - not ansible_check_mode
   block:
     - name: Install Discord package prerequisites
@@ -234,6 +223,63 @@
             state: present
             allow_downgrade: true
             lock_timeout: 120
+          when: discord_install_required
+
+        - name: Repair matching Discord package through APT
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/apt-get
+              - --yes
+              - --fix-broken
+              - --no-remove
+              - --reinstall
+              - -o
+              - DPkg::Lock::Timeout=120
+              - -o
+              - Dpkg::Options::=--force-confdef
+              - -o
+              - Dpkg::Options::=--force-confold
+              - install
+              - >-
+                {{ discord_package_tempdir.path }}/{{
+                discord_release.filename }}
+          environment:
+            DEBIAN_FRONTEND: noninteractive
+            LC_ALL: C
+          changed_when: true
+          when: discord_configuration_repair_required
+
+        - name: Inspect repaired Discord package state
+          ansible.builtin.command:
+            argv:
+              - dpkg-query
+              - --show
+              - >-
+                --showformat=${Version}\t${Architecture}\t${db:Status-Abbrev}\n
+              - "{{ discord_package_name }}:{{ discord_package_architecture }}"
+          environment:
+            LC_ALL: C
+          register: discord_repaired_package_status
+          changed_when: false
+          failed_when: false
+          when: discord_configuration_repair_required
+
+        - name: Validate repaired Discord package state
+          vars:
+            discord_expected_repaired_package_status:
+              - "{{ discord_release.version }}"
+              - "{{ discord_package_architecture }}"
+              - ii
+          ansible.builtin.assert:
+            that:
+              - discord_repaired_package_status.rc | default(1) == 0
+              - >-
+                discord_repaired_package_status.stdout.split() ==
+                discord_expected_repaired_package_status
+            fail_msg: >-
+              APT did not leave the expected Discord package version and
+              architecture fully configured.
+          when: discord_configuration_repair_required
       always:
         - name: Remove temporary Discord package directory
           ansible.builtin.file:

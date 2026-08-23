@@ -1,0 +1,175 @@
+---
+- name: Create isolated APT metadata directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: .repository-check
+  register: claude_desktop_repository_check_tempdir
+  changed_when: false
+  check_mode: false
+
+- name: Resolve packages with isolated authenticated APT metadata
+  vars:
+    repository_check_path: >-
+      {{ claude_desktop_repository_check_tempdir.path }}
+    repository_check_config_path: "{{ repository_check_path }}/apt.conf"
+    repository_check_key_path: >-
+      {{ repository_check_path }}/{{ repository_check_keyring_filename }}
+    repository_check_source_path: >-
+      {{ repository_check_path }}/{{ repository_check_source_filename }}
+  block:
+    - name: Make isolated APT metadata readable by APT helpers
+      ansible.builtin.file:
+        path: "{{ repository_check_path }}"
+        state: directory
+        owner: "{{ repository_check_owner | default('root') }}"
+        group: "{{ repository_check_group | default('root') }}"
+        mode: "0755"
+      changed_when: false
+      check_mode: false
+
+    - name: Create isolated APT metadata directories
+      ansible.builtin.file:
+        path: "{{ repository_check_path }}/{{ item }}"
+        state: directory
+        owner: "{{ repository_check_owner | default('root') }}"
+        group: "{{ repository_check_group | default('root') }}"
+        mode: "0755"
+      loop:
+        - lists
+        - sourceparts
+        - preferencesparts
+        - aptconfparts
+      changed_when: false
+      check_mode: false
+
+    - name: Write isolated APT configuration
+      ansible.builtin.copy:
+        dest: "{{ repository_check_config_path }}"
+        content: |
+          Dir::Etc::main "/dev/null";
+          Dir::Etc::parts "{{ repository_check_path }}/aptconfparts";
+        owner: "{{ repository_check_owner | default('root') }}"
+        group: "{{ repository_check_group | default('root') }}"
+        mode: "0644"
+      changed_when: false
+      check_mode: false
+
+    - name: Create isolated APT acquisition directory
+      ansible.builtin.file:
+        path: "{{ repository_check_path }}/lists/partial"
+        state: directory
+        owner: "{{ repository_check_apt_user | default('_apt') }}"
+        group: "{{ repository_check_group | default('root') }}"
+        mode: "0700"
+      changed_when: false
+      check_mode: false
+
+    - name: Copy verified signing key into isolated APT metadata
+      ansible.builtin.copy:
+        src: "{{ repository_check_key_source }}"
+        dest: "{{ repository_check_key_path }}"
+        remote_src: "{{ repository_check_key_remote_src }}"
+        owner: "{{ repository_check_owner | default('root') }}"
+        group: "{{ repository_check_group | default('root') }}"
+        mode: "0644"
+      when: repository_check_key_source is defined
+      changed_when: false
+      check_mode: false
+
+    - name: Write verified signing key into isolated APT metadata
+      ansible.builtin.copy:
+        content: "{{ repository_check_key_content }}"
+        dest: "{{ repository_check_key_path }}"
+        owner: "{{ repository_check_owner | default('root') }}"
+        group: "{{ repository_check_group | default('root') }}"
+        mode: "0644"
+      when: repository_check_key_content is defined
+      changed_when: false
+      check_mode: false
+
+    - name: Write isolated vendor repository definition
+      ansible.builtin.copy:
+        content: >-
+          {{ repository_check_source_content
+          | replace(repository_check_system_keyring_path,
+          repository_check_key_path) }}
+        dest: "{{ repository_check_source_path }}"
+        owner: "{{ repository_check_owner | default('root') }}"
+        group: "{{ repository_check_group | default('root') }}"
+        mode: "0644"
+      changed_when: false
+      check_mode: false
+
+    - name: Refresh isolated authenticated vendor metadata
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/apt-get
+          - -o
+          - Dir::Etc::sourcelist={{ repository_check_source_path }}
+          - -o
+          - >-
+            Dir::Etc::sourceparts={{
+            repository_check_path }}/sourceparts
+          - -o
+          - Dir::Etc::preferences=/dev/null
+          - -o
+          - >-
+            Dir::Etc::preferencesparts={{
+            repository_check_path }}/preferencesparts
+          - -o
+          - Dir::State::lists={{ repository_check_path }}/lists
+          - -o
+          - Dir::Cache::pkgcache=
+          - -o
+          - Dir::Cache::srcpkgcache=
+          - -o
+          - Debug::NoLocking=true
+          - -o
+          - Acquire::Languages=none
+          - -o
+          - APT::Update::Error-Mode=any
+          - update
+      environment:
+        APT_CONFIG: "{{ repository_check_config_path }}"
+        LC_ALL: C
+      changed_when: false
+      check_mode: false
+
+    - name: Discover packages in isolated vendor metadata
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/apt-cache
+          - -o
+          - Dir::Etc::sourcelist={{ repository_check_source_path }}
+          - -o
+          - >-
+            Dir::Etc::sourceparts={{
+            repository_check_path }}/sourceparts
+          - -o
+          - Dir::Etc::preferences=/dev/null
+          - -o
+          - >-
+            Dir::Etc::preferencesparts={{
+            repository_check_path }}/preferencesparts
+          - -o
+          - Dir::State::lists={{ repository_check_path }}/lists
+          - -o
+          - Dir::Cache::pkgcache=
+          - -o
+          - Dir::Cache::srcpkgcache=
+          - madison
+          - "{{ item }}"
+      environment:
+        APT_CONFIG: "{{ repository_check_config_path }}"
+        LC_ALL: C
+      loop: "{{ repository_check_package_names }}"
+      register: claude_desktop_repository_check_package_versions
+      changed_when: false
+      check_mode: false
+  always:
+    - name: Remove isolated APT metadata directory
+      ansible.builtin.file:
+        path: "{{ repository_check_path }}"
+        state: absent
+      changed_when: false
+      check_mode: false

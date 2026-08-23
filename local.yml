@@ -6,6 +6,7 @@
   hosts: localhost
   connection: local
   become: true
+  gather_facts: true
 
   vars:
     user_name: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
@@ -19,6 +20,15 @@
       amd64: amd64
       aarch64: arm64
       arm64: arm64
+    workstation_user_home: >-
+      {{ ansible_facts["getent_passwd"][user_name][4] }}
+    workstation_user_primary_gid: >-
+      {{ ansible_facts["getent_passwd"][user_name][2] }}
+    pip_virtualenv_shell_regexp: >-
+      ^\s*export\s+PIP_REQUIRE_VIRTUALENV=.*$
+    npm_prefix_config_regexp: '^\s*prefix\s*='
+    npm_path_shell_regexp: >-
+      ^\s*export\s+PATH=["']?\$HOME/\.npm-global/bin:\$PATH["']?\s*$
 
   pre_tasks:
     - name: Validate Ubuntu release and architecture support
@@ -32,6 +42,11 @@
           Detected {{ ansible_facts["distribution"] }}
           {{ ansible_facts["distribution_version"] }} on
           {{ ansible_facts["architecture"] }}.
+
+    - name: Gather workstation user account details
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ user_name }}"
 
     - name: Inspect graphical desktop session directories
       ansible.builtin.stat:
@@ -191,16 +206,118 @@
           - dos2unix
           - htop
           - btop
+          # Accepted Finding 5: retain the distribution-default service and
+          # privilege behavior for glances on this trusted single-user host.
+          # This playbook does not deliberately expose the service remotely.
           - glances
           - nvtop
           - jnettop
           - ffmpeg
+          # Accepted Finding 5: retain the distribution-default service and
+          # privilege behavior for ttyd on this trusted single-user host.
+          # This playbook does not deliberately expose the service remotely.
           - ttyd
         state: present
 
     - name: Install latest R release from CRAN
       ansible.builtin.include_role:
         name: r
+
+    - name: Ensure user-local NPM prefix directory exists
+      ansible.builtin.file:
+        path: "{{ workstation_user_home }}/.npm-global"
+        state: directory
+        owner: "{{ user_name }}"
+        group: "{{ workstation_user_primary_gid }}"
+        mode: "0755"
+
+    - name: Inspect existing user NPM configuration
+      ansible.builtin.slurp:
+        src: "{{ workstation_user_home }}/.npmrc"
+      register: workstation_user_npm_configuration
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Inspect existing user shell configuration
+      ansible.builtin.slurp:
+        src: "{{ workstation_user_home }}/.bashrc"
+      register: workstation_user_shell_configuration
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Remove duplicate user-local NPM prefix entries
+      vars:
+        npm_configuration_lines: >-
+          {{ (workstation_user_npm_configuration.content | default('')
+          | b64decode).splitlines() }}
+        npm_prefix_entry_count: >-
+          {{ npm_configuration_lines
+          | select('match', npm_prefix_config_regexp) | list | length }}
+      ansible.builtin.lineinfile:
+        path: "{{ workstation_user_home }}/.npmrc"
+        regexp: "{{ npm_prefix_config_regexp }}"
+        state: absent
+      when: npm_prefix_entry_count | int > 1
+
+    - name: Configure user-local NPM prefix
+      ansible.builtin.lineinfile:
+        path: "{{ workstation_user_home }}/.npmrc"
+        regexp: "{{ npm_prefix_config_regexp }}"
+        line: "prefix={{ workstation_user_home }}/.npm-global"
+        create: true
+        owner: "{{ user_name }}"
+        group: "{{ workstation_user_primary_gid }}"
+        mode: "0644"
+
+    - name: Remove duplicate pip virtual-environment requirements
+      vars:
+        shell_configuration_lines: >-
+          {{ (workstation_user_shell_configuration.content | default('')
+          | b64decode).splitlines() }}
+        pip_virtualenv_entry_count: >-
+          {{ shell_configuration_lines
+          | select('match', pip_virtualenv_shell_regexp) | list | length }}
+      ansible.builtin.lineinfile:
+        path: "{{ workstation_user_home }}/.bashrc"
+        regexp: "{{ pip_virtualenv_shell_regexp }}"
+        state: absent
+      when: pip_virtualenv_entry_count | int > 1
+
+    - name: Require virtual environments for user pip installations
+      ansible.builtin.lineinfile:
+        path: "{{ workstation_user_home }}/.bashrc"
+        regexp: "{{ pip_virtualenv_shell_regexp }}"
+        line: 'export PIP_REQUIRE_VIRTUALENV=1'
+        create: true
+        owner: "{{ user_name }}"
+        group: "{{ workstation_user_primary_gid }}"
+        mode: "0644"
+
+    - name: Remove duplicate user-local NPM shell path entries
+      vars:
+        shell_configuration_lines: >-
+          {{ (workstation_user_shell_configuration.content | default('')
+          | b64decode).splitlines() }}
+        npm_path_entry_count: >-
+          {{ shell_configuration_lines
+          | select('match', npm_path_shell_regexp) | list | length }}
+      ansible.builtin.lineinfile:
+        path: "{{ workstation_user_home }}/.bashrc"
+        regexp: "{{ npm_path_shell_regexp }}"
+        state: absent
+      when: npm_path_entry_count | int > 1
+
+    - name: Add user-local NPM binaries to the shell path
+      ansible.builtin.lineinfile:
+        path: "{{ workstation_user_home }}/.bashrc"
+        regexp: "{{ npm_path_shell_regexp }}"
+        line: 'export PATH="$HOME/.npm-global/bin:$PATH"'
+        create: true
+        owner: "{{ user_name }}"
+        group: "{{ workstation_user_primary_gid }}"
+        mode: "0644"
 
     - name: Inspect Docker group before managing membership
       ansible.builtin.getent:

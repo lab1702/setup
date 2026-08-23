@@ -3,11 +3,11 @@ vscode_package_name: code
 
 vscode_supported_ubuntu_versions:
   - "26.04"
-vscode_supported_architectures:
-  - x86_64
-  - amd64
-  - aarch64
-  - arm64
+vscode_architecture_map:
+  x86_64: amd64
+  amd64: amd64
+  aarch64: arm64
+  arm64: arm64
 
 vscode_repository_key_url: https://packages.microsoft.com/keys/microsoft.asc
 vscode_repository_keyring_path: /usr/share/keyrings/microsoft-vscode.gpg
@@ -21,13 +21,10 @@ vscode_repository_legacy_sources_path: /etc/apt/sources.list.d/vscode.list
 vscode_repository_legacy_entry_regexp: >-
   (?ix)^[ \t]*deb(?:-src)?[ \t]+(?:\[[^]]*\][ \t]+)?
   https://packages[.]microsoft[.]com/repos/code/?([ \t]|$)
-vscode_repository_architectures:
-  - amd64
-  - arm64
 vscode_repository_source_content: |
   Types: deb
   URIs: {{ vscode_repository_url }}
   Suites: {{ vscode_repository_suite }}
   Components: {{ vscode_repository_component }}
-  Architectures: {{ vscode_repository_architectures | join(' ') }}
+  Architectures: {{ vscode_architecture_map[ansible_facts["architecture"]] }}
   Signed-By: {{ vscode_repository_keyring_path }}

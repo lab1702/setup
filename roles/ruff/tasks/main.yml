@@ -65,6 +65,8 @@
       {{ ruff_release.json.assets
       | selectattr('name', 'equalto', ruff_archive_filename)
       | first | default({}) }}
+    ruff_release_archive_directory: >-
+      ruff-{{ ruff_release_architecture }}-unknown-linux-gnu
 
 - name: Validate Ruff archive asset
   ansible.builtin.assert:
@@ -156,7 +158,7 @@
       register: ruff_archive_tempdir
       changed_when: false
 
-    - name: Download and install verified Ruff archive
+    - name: Download, inspect, and install verified Ruff archive
       block:
         - name: Download verified Ruff archive
           ansible.builtin.get_url:
@@ -166,21 +168,107 @@
             checksum: "{{ ruff_release_asset.digest }}"
             mode: "0600"
 
-        - name: Extract verified Ruff archive
+        - name: Inspect Ruff archive member names
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/tar
+              - --gzip
+              - --list
+              - --file
+              - >-
+                {{ ruff_archive_tempdir.path }}/{{ ruff_release_asset.name }}
+              - --quoting-style=escape
+          environment:
+            GZIP: ""
+            LC_ALL: C
+            PATH: /usr/bin:/bin
+            TAR_OPTIONS: ""
+          register: ruff_archive_member_names
+          changed_when: false
+
+        - name: Inspect Ruff archive member metadata
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/tar
+              - --gzip
+              - --list
+              - --verbose
+              - --file
+              - >-
+                {{ ruff_archive_tempdir.path }}/{{ ruff_release_asset.name }}
+              - --quoting-style=escape
+          environment:
+            GZIP: ""
+            LC_ALL: C
+            PATH: /usr/bin:/bin
+            TAR_OPTIONS: ""
+          register: ruff_archive_member_metadata
+          changed_when: false
+
+        - name: Validate Ruff archive members
+          vars:
+            ruff_expected_archive_members:
+              - "{{ ruff_release_archive_directory }}/"
+              - "{{ ruff_release_archive_directory }}/ruff"
+            ruff_expected_archive_member_type_pairs:
+              - ["{{ ruff_release_archive_directory }}/", "d"]
+              - ["{{ ruff_release_archive_directory }}/ruff", "-"]
+            ruff_archive_member_type_pairs: >-
+              {{ ruff_archive_member_names.stdout_lines
+              | zip(ruff_archive_member_metadata.stdout_lines
+              | map('first') | list) | map('list') | list | sort }}
+          ansible.builtin.assert:
+            that:
+              - >-
+                ruff_archive_member_names.stdout_lines | length ==
+                ruff_expected_archive_members | length
+              - >-
+                ruff_archive_member_names.stdout_lines | unique | list
+                | length == ruff_archive_member_names.stdout_lines | length
+              - >-
+                ruff_archive_member_names.stdout_lines | sort ==
+                ruff_expected_archive_members | sort
+              - >-
+                ruff_archive_member_metadata.stdout_lines | length ==
+                ruff_expected_archive_members | length
+              - >-
+                ruff_archive_member_type_pairs ==
+                ruff_expected_archive_member_type_pairs | sort
+            fail_msg: >-
+              The verified Ruff archive must contain exactly one top-level
+              target directory and one regular Ruff binary, without duplicate
+              or unexpected members.
+
+        - name: Create vetted Ruff binary staging directory
+          ansible.builtin.file:
+            path: "{{ ruff_archive_tempdir.path }}/staging"
+            state: directory
+            owner: root
+            group: root
+            mode: "0700"
+          changed_when: false
+
+        - name: Extract validated Ruff binary into staging directory
           ansible.builtin.unarchive:
             src: >-
               {{ ruff_archive_tempdir.path }}/{{ ruff_release_asset.name }}
-            dest: "{{ ruff_archive_tempdir.path }}"
+            dest: "{{ ruff_archive_tempdir.path }}/staging"
             remote_src: true
+            include:
+              - "{{ ruff_release_archive_directory }}/ruff"
             extra_opts:
               - --strip-components=1
             owner: root
             group: root
             mode: "0755"
+          environment:
+            GZIP: ""
+            PATH: /usr/bin:/bin
+            TAR_OPTIONS: ""
 
         - name: Inspect extracted Ruff binary
           ansible.builtin.stat:
-            path: "{{ ruff_archive_tempdir.path }}/ruff"
+            path: "{{ ruff_archive_tempdir.path }}/staging/ruff"
             follow: false
           register: ruff_downloaded_binary_status
 
@@ -198,29 +286,39 @@
 
         - name: Inspect downloaded Ruff version without root privileges
           block:
-            - name: Grant unprivileged traversal of Ruff temporary directory
+            - name: Grant unprivileged traversal of Ruff staging path
               ansible.builtin.file:
-                path: "{{ ruff_archive_tempdir.path }}"
+                path: "{{ item }}"
                 state: directory
                 mode: "0701"
+              loop:
+                - "{{ ruff_archive_tempdir.path }}"
+                - "{{ ruff_archive_tempdir.path }}/staging"
+              loop_control:
+                label: "{{ item }}"
               changed_when: false
 
             - name: Run downloaded Ruff version probe as nobody
               ansible.builtin.command:
                 argv:
-                  - "{{ ruff_archive_tempdir.path }}/ruff"
+                  - "{{ ruff_archive_tempdir.path }}/staging/ruff"
                   - --version
-                chdir: "{{ ruff_archive_tempdir.path }}"
+                chdir: "{{ ruff_archive_tempdir.path }}/staging"
               become: true
               become_user: nobody
               register: ruff_downloaded_release
               changed_when: false
           always:
-            - name: Restore Ruff temporary directory permissions
+            - name: Restore Ruff staging path permissions
               ansible.builtin.file:
-                path: "{{ ruff_archive_tempdir.path }}"
+                path: "{{ item }}"
                 state: directory
                 mode: "0700"
+              loop:
+                - "{{ ruff_archive_tempdir.path }}/staging"
+                - "{{ ruff_archive_tempdir.path }}"
+              loop_control:
+                label: "{{ item }}"
               changed_when: false
 
         - name: Validate downloaded Ruff version
@@ -239,7 +337,7 @@
 
         - name: Install verified Ruff binary
           ansible.builtin.copy:
-            src: "{{ ruff_archive_tempdir.path }}/ruff"
+            src: "{{ ruff_archive_tempdir.path }}/staging/ruff"
             dest: "{{ ruff_install_directory }}/ruff"
             remote_src: true
             owner: root

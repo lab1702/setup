@@ -1,0 +1,92 @@
+---
+- name: Exercise isolated one-line Claude repository metadata
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    claude_desktop_test_architecture_map:
+      x86_64: amd64
+      amd64: amd64
+      aarch64: arm64
+      arm64: arm64
+    repository_test_architecture: >-
+      {{ claude_desktop_test_architecture_map[
+      ansible_facts["architecture"]] }}
+    repository_check_owner: "{{ ansible_facts['user_id'] }}"
+    repository_check_group: "{{ ansible_facts['user_gid'] }}"
+    repository_check_apt_user: "{{ ansible_facts['user_id'] }}"
+  tasks:
+    - name: Validate test architecture support
+      ansible.builtin.assert:
+        that:
+          - >-
+            ansible_facts["architecture"]
+            in claude_desktop_test_architecture_map
+
+    - name: Create temporary Claude test key directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .claude-repository-test
+      register: claude_desktop_test_key_tempdir
+      changed_when: false
+
+    - name: Exercise verified Claude repository metadata
+      block:
+        - name: Download Claude signing key
+          ansible.builtin.get_url:
+            url: https://downloads.claude.ai/claude-desktop/key.asc
+            dest: "{{ claude_desktop_test_key_tempdir.path }}/key.asc"
+            mode: "0600"
+          changed_when: false
+
+        - name: Inspect Claude signing key
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --show-keys
+              - --with-colons
+              - "{{ claude_desktop_test_key_tempdir.path }}/key.asc"
+          register: claude_desktop_test_repository_key
+          changed_when: false
+
+        - name: Validate Claude signing key
+          ansible.builtin.assert:
+            that:
+              - >-
+                claude_desktop_test_repository_key.stdout_lines
+                | select('equalto',
+                'fpr:::::::::31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE:')
+                | list | length == 1
+
+        - name: Refresh isolated one-line Claude metadata
+          ansible.builtin.include_tasks: >-
+            {{ playbook_dir }}/../tasks/check_mode_repository_metadata.yml
+          vars:
+            repository_check_key_source: >-
+              {{ claude_desktop_test_key_tempdir.path }}/key.asc
+            repository_check_key_remote_src: true
+            repository_check_keyring_filename: repository-keyring.asc
+            repository_check_source_content: >-
+              deb [arch={{ repository_test_architecture }}
+              signed-by=/tmp/claude-desktop-test-keyring]
+              https://downloads.claude.ai/claude-desktop/apt/stable
+              stable main
+            repository_check_system_keyring_path: >-
+              /tmp/claude-desktop-test-keyring
+            repository_check_source_filename: repository.list
+            repository_check_package_names:
+              - claude-desktop
+
+        - name: Validate isolated Claude package metadata
+          ansible.builtin.assert:
+            that:
+              - >-
+                (claude_desktop_repository_check_package_versions.results
+                | first).stdout is search('claude-desktop')
+      always:
+        - name: Remove temporary Claude test key directory
+          ansible.builtin.file:
+            path: "{{ claude_desktop_test_key_tempdir.path }}"
+            state: absent
+          changed_when: false

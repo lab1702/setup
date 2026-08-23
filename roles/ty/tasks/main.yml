@@ -65,6 +65,8 @@
       {{ ty_release.json.assets
       | selectattr('name', 'equalto', ty_archive_filename)
       | first | default({}) }}
+    ty_release_archive_directory: >-
+      ty-{{ ty_release_architecture }}-unknown-linux-gnu
 
 - name: Validate ty archive asset
   ansible.builtin.assert:
@@ -156,7 +158,7 @@
       register: ty_archive_tempdir
       changed_when: false
 
-    - name: Download and install verified ty archive
+    - name: Download, inspect, and install verified ty archive
       block:
         - name: Download verified ty archive
           ansible.builtin.get_url:
@@ -166,21 +168,107 @@
             checksum: "{{ ty_release_asset.digest }}"
             mode: "0600"
 
-        - name: Extract verified ty archive
+        - name: Inspect ty archive member names
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/tar
+              - --gzip
+              - --list
+              - --file
+              - >-
+                {{ ty_archive_tempdir.path }}/{{ ty_release_asset.name }}
+              - --quoting-style=escape
+          environment:
+            GZIP: ""
+            LC_ALL: C
+            PATH: /usr/bin:/bin
+            TAR_OPTIONS: ""
+          register: ty_archive_member_names
+          changed_when: false
+
+        - name: Inspect ty archive member metadata
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/tar
+              - --gzip
+              - --list
+              - --verbose
+              - --file
+              - >-
+                {{ ty_archive_tempdir.path }}/{{ ty_release_asset.name }}
+              - --quoting-style=escape
+          environment:
+            GZIP: ""
+            LC_ALL: C
+            PATH: /usr/bin:/bin
+            TAR_OPTIONS: ""
+          register: ty_archive_member_metadata
+          changed_when: false
+
+        - name: Validate ty archive members
+          vars:
+            ty_expected_archive_members:
+              - "{{ ty_release_archive_directory }}/"
+              - "{{ ty_release_archive_directory }}/ty"
+            ty_expected_archive_member_type_pairs:
+              - ["{{ ty_release_archive_directory }}/", "d"]
+              - ["{{ ty_release_archive_directory }}/ty", "-"]
+            ty_archive_member_type_pairs: >-
+              {{ ty_archive_member_names.stdout_lines
+              | zip(ty_archive_member_metadata.stdout_lines
+              | map('first') | list) | map('list') | list | sort }}
+          ansible.builtin.assert:
+            that:
+              - >-
+                ty_archive_member_names.stdout_lines | length ==
+                ty_expected_archive_members | length
+              - >-
+                ty_archive_member_names.stdout_lines | unique | list
+                | length == ty_archive_member_names.stdout_lines | length
+              - >-
+                ty_archive_member_names.stdout_lines | sort ==
+                ty_expected_archive_members | sort
+              - >-
+                ty_archive_member_metadata.stdout_lines | length ==
+                ty_expected_archive_members | length
+              - >-
+                ty_archive_member_type_pairs ==
+                ty_expected_archive_member_type_pairs | sort
+            fail_msg: >-
+              The verified ty archive must contain exactly one top-level target
+              directory and one regular ty binary, without duplicate or
+              unexpected members.
+
+        - name: Create vetted ty binary staging directory
+          ansible.builtin.file:
+            path: "{{ ty_archive_tempdir.path }}/staging"
+            state: directory
+            owner: root
+            group: root
+            mode: "0700"
+          changed_when: false
+
+        - name: Extract validated ty binary into staging directory
           ansible.builtin.unarchive:
             src: >-
               {{ ty_archive_tempdir.path }}/{{ ty_release_asset.name }}
-            dest: "{{ ty_archive_tempdir.path }}"
+            dest: "{{ ty_archive_tempdir.path }}/staging"
             remote_src: true
+            include:
+              - "{{ ty_release_archive_directory }}/ty"
             extra_opts:
               - --strip-components=1
             owner: root
             group: root
             mode: "0755"
+          environment:
+            GZIP: ""
+            PATH: /usr/bin:/bin
+            TAR_OPTIONS: ""
 
         - name: Inspect extracted ty binary
           ansible.builtin.stat:
-            path: "{{ ty_archive_tempdir.path }}/ty"
+            path: "{{ ty_archive_tempdir.path }}/staging/ty"
             follow: false
           register: ty_downloaded_binary_status
 
@@ -198,29 +286,39 @@
 
         - name: Inspect downloaded ty version without root privileges
           block:
-            - name: Grant unprivileged traversal of ty temporary directory
+            - name: Grant unprivileged traversal of ty staging path
               ansible.builtin.file:
-                path: "{{ ty_archive_tempdir.path }}"
+                path: "{{ item }}"
                 state: directory
                 mode: "0701"
+              loop:
+                - "{{ ty_archive_tempdir.path }}"
+                - "{{ ty_archive_tempdir.path }}/staging"
+              loop_control:
+                label: "{{ item }}"
               changed_when: false
 
             - name: Run downloaded ty version probe as nobody
               ansible.builtin.command:
                 argv:
-                  - "{{ ty_archive_tempdir.path }}/ty"
+                  - "{{ ty_archive_tempdir.path }}/staging/ty"
                   - --version
-                chdir: "{{ ty_archive_tempdir.path }}"
+                chdir: "{{ ty_archive_tempdir.path }}/staging"
               become: true
               become_user: nobody
               register: ty_downloaded_release
               changed_when: false
           always:
-            - name: Restore ty temporary directory permissions
+            - name: Restore ty staging path permissions
               ansible.builtin.file:
-                path: "{{ ty_archive_tempdir.path }}"
+                path: "{{ item }}"
                 state: directory
                 mode: "0700"
+              loop:
+                - "{{ ty_archive_tempdir.path }}/staging"
+                - "{{ ty_archive_tempdir.path }}"
+              loop_control:
+                label: "{{ item }}"
               changed_when: false
 
         - name: Validate downloaded ty version
@@ -239,7 +337,7 @@
 
         - name: Install verified ty binary
           ansible.builtin.copy:
-            src: "{{ ty_archive_tempdir.path }}/ty"
+            src: "{{ ty_archive_tempdir.path }}/staging/ty"
             dest: "{{ ty_install_directory }}/ty"
             remote_src: true
             owner: root
