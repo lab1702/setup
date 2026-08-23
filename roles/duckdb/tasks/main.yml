@@ -48,14 +48,6 @@
       must not be a symbolic link, must be searchable by all users, and must
       not be group- or world-writable.
 
-- name: Install DuckDB CLI archive prerequisites
-  ansible.builtin.apt:
-    name: unzip
-    state: present
-    update_cache: true
-    cache_valid_time: 3600
-    lock_timeout: 120
-
 - name: Get latest DuckDB release
   ansible.builtin.uri:
     url: "{{ duckdb_release_api_url }}"

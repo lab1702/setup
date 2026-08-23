@@ -26,17 +26,17 @@
 - name: Install Discord
   ansible.builtin.include_role:
     name: discord
-  when: linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
+  when: workstation_architecture == "amd64"
 
 - name: Install Posit RStudio Desktop
   ansible.builtin.include_role:
     name: rstudio
-  when: linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
+  when: workstation_architecture == "amd64"
 
 - name: Install Zoom Workplace
   ansible.builtin.include_role:
     name: zoom
-  when: linux_release_architecture_map[ansible_facts["architecture"]] == "amd64"
+  when: workstation_architecture == "amd64"
 
 - name: Install LibreOffice
   ansible.builtin.apt:

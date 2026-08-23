@@ -28,16 +28,10 @@
       {{ ansible_facts["architecture"] }}.
 
 - name: Preflight apt repository for {{ vendor_repository_display_name }}
-  ansible.builtin.import_tasks: preflight.yml
-
-- name: Install repository prerequisites
-  ansible.builtin.apt:
-    name: "{{ vendor_repository_prerequisite_packages }}"
-    state: present
-    update_cache: true
-    cache_valid_time: 3600
-    lock_timeout: 120
-  register: vendor_repository_prerequisite_installation
+  ansible.builtin.include_tasks: preflight.yml
+  when: >-
+    vendor_repository_sources_path
+    not in (vendor_repository_preflighted_paths | default([]))
 
 - name: Create repository keyring directory
   ansible.builtin.file:
@@ -51,8 +45,7 @@
 - name: Configure signed repository and install packages
   when: >-
     not ansible_check_mode or
-    (not vendor_repository_prerequisite_installation.changed and
-    not vendor_repository_keyring_directory_creation.changed)
+    not vendor_repository_keyring_directory_creation.changed
   block:
     - name: Create temporary directory for repository signing key
       ansible.builtin.tempfile:

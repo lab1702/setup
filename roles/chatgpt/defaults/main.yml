@@ -21,7 +21,3 @@ chatgpt_repository:
   key_fingerprint: 3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4
   key_file: "{{ chatgpt_repository_key_file }}"
   legacy_keyring_path: /usr/share/keyrings/chatgpt-archive-keyring.asc
-  prerequisite_packages:
-    - ca-certificates
-    - gpg
-    - xz-utils

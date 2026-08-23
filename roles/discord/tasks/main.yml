@@ -2,15 +2,9 @@
 - name: Validate Discord platform support
   ansible.builtin.assert:
     that:
-      - ansible_facts["distribution"] == "Ubuntu"
-      - >-
-        ansible_facts["distribution_version"]
-        in discord_supported_ubuntu_versions
       - ansible_facts["architecture"] in discord_supported_architectures
     fail_msg: >-
-      Discord supports Ubuntu 26.04 on AMD64. Detected
-      {{ ansible_facts["distribution"] }}
-      {{ ansible_facts["distribution_version"] }} on
+      Discord supports AMD64. Detected
       {{ ansible_facts["architecture"] }}.
 
 - name: Discover latest stable Discord package
@@ -163,14 +157,6 @@
       discord_configuration_repair_required
     - not ansible_check_mode
   block:
-    - name: Install Discord package prerequisites
-      ansible.builtin.apt:
-        name: xz-utils
-        state: present
-        update_cache: true
-        cache_valid_time: 3600
-        lock_timeout: 120
-
     - name: Create temporary directory for Discord package
       ansible.builtin.tempfile:
         state: directory

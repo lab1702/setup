@@ -3,26 +3,14 @@
   ansible.builtin.assert:
     that:
       - ansible_facts["distribution"] == "Ubuntu"
-      - >-
-        ansible_facts["distribution_version"]
-        in rstudio_supported_ubuntu_versions
+      - ansible_facts["distribution_version"] in rstudio_platform_map
       - ansible_facts["architecture"] in rstudio_supported_architectures
     fail_msg: >-
       Posit's stable RStudio Desktop installer metadata supports Ubuntu
-      22.04 and 26.04 on AMD64. Detected
+      {{ rstudio_platform_map.keys() | join(', ') }} on AMD64. Detected
       {{ ansible_facts["distribution"] }}
       {{ ansible_facts["distribution_version"] }} on
       {{ ansible_facts["architecture"] }}.
-
-- name: Install Posit RStudio Desktop package prerequisites
-  ansible.builtin.apt:
-    name:
-      - ca-certificates
-      - xz-utils
-    state: present
-    update_cache: true
-    cache_valid_time: 3600
-    lock_timeout: 120
 
 - name: Get latest stable Posit RStudio Desktop release metadata
   ansible.builtin.uri:
@@ -36,8 +24,11 @@
   vars:
     rstudio_platform: >-
       {{ rstudio_platform_map[ansible_facts["distribution_version"]] }}
+    rstudio_stable_desktop_installers: >-
+      {{ rstudio_downloads_metadata.json.rstudio.open_source.stable.desktop.installer }}
   ansible.builtin.set_fact:
-    rstudio_release: "{{ rstudio_downloads_metadata.json.rstudio.open_source.stable.desktop.installer[rstudio_platform] | default({}) }}"
+    rstudio_release: >-
+      {{ rstudio_stable_desktop_installers[rstudio_platform] | default({}) }}
 
 - name: Validate Posit RStudio Desktop package metadata
   ansible.builtin.assert:

@@ -20,7 +20,6 @@
 #   legacy_entry_regexp   regexp selecting those entries (default: repository URL)
 #   legacy_keyring_path   superseded keyring file to remove
 #   supported_architectures   host architectures allowed to use the repository
-#   prerequisite_packages     packages installed before the repository is used
 #   install_recommends        apt install_recommends setting (default: apt's)
 vendor_repository_spec: {}
 
@@ -51,9 +50,6 @@ vendor_repository_legacy_keyring_path: >-
 vendor_repository_supported_architectures: >-
   {{ vendor_repository_spec.supported_architectures
   | default(vendor_repository_architecture_map.keys() | list) }}
-vendor_repository_prerequisite_packages: >-
-  {{ vendor_repository_spec.prerequisite_packages
-  | default(['ca-certificates', 'gpg']) }}
 vendor_repository_install_recommends: >-
   {{ vendor_repository_spec.install_recommends | default(omit) }}
 

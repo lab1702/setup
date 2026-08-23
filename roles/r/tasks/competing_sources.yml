@@ -181,3 +181,8 @@
     follow: false
   loop: "{{ r_repository_migration_source_statuses.results }}"
   no_log: true
+
+- name: Record completed CRAN competing-source migration
+  ansible.builtin.set_fact:
+    r_repository_competing_sources_migrated: true
+  changed_when: false

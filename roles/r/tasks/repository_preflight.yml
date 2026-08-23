@@ -1,6 +1,7 @@
 ---
 - name: Migrate competing CRAN repository sources
   ansible.builtin.import_tasks: competing_sources.yml
+  when: not r_repository_competing_sources_migrated | default(false)
 
 - name: Preflight CRAN apt repository
   ansible.builtin.include_role:

@@ -185,3 +185,10 @@
     path: "{{ vendor_repository_sources_path }}"
     state: absent
   when: vendor_repository_quarantine_required
+
+- name: Record completed repository preflight
+  ansible.builtin.set_fact:
+    vendor_repository_preflighted_paths: >-
+      {{ (vendor_repository_preflighted_paths | default([]))
+      + [vendor_repository_sources_path] }}
+  changed_when: false

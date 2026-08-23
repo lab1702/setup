@@ -20,15 +20,23 @@
       amd64: amd64
       aarch64: arm64
       arm64: arm64
+    workstation_architecture: >-
+      {{ linux_release_architecture_map[ansible_facts["architecture"]] }}
     workstation_user_home: >-
       {{ ansible_facts["getent_passwd"][user_name][4] }}
     workstation_user_primary_gid: >-
       {{ ansible_facts["getent_passwd"][user_name][2] }}
-    pip_virtualenv_shell_regexp: >-
-      ^\s*export\s+PIP_REQUIRE_VIRTUALENV=.*$
-    npm_prefix_config_regexp: '^\s*prefix\s*='
-    npm_path_shell_regexp: >-
-      ^\s*export\s+PATH=["']?\$HOME/\.npm-global/bin:\$PATH["']?\s*$
+    workstation_user_configuration_entries:
+      - path: "{{ workstation_user_home }}/.npmrc"
+        regexp: '^\s*prefix\s*='
+        line: prefix={{ workstation_user_home }}/.npm-global
+      - path: "{{ workstation_user_home }}/.bashrc"
+        regexp: ^\s*export\s+PIP_REQUIRE_VIRTUALENV=.*$
+        line: export PIP_REQUIRE_VIRTUALENV=1
+      - path: "{{ workstation_user_home }}/.bashrc"
+        regexp: >-
+          ^\s*export\s+PATH=["']?\$HOME/\.npm-global/bin:\$PATH["']?\s*$
+        line: export PATH="$HOME/.npm-global/bin:$PATH"
 
   pre_tasks:
     - name: Validate Ubuntu release and architecture support
@@ -110,6 +118,7 @@
         name:
           # Build tools and utilities
           - build-essential
+          - ca-certificates
           - ansible-lint
           - gpg
           - git
@@ -235,93 +244,43 @@
         group: "{{ workstation_user_primary_gid }}"
         mode: "0755"
 
-    - name: Inspect existing user NPM configuration
+    - name: Inspect existing user configuration files
       ansible.builtin.slurp:
-        src: "{{ workstation_user_home }}/.npmrc"
-      register: workstation_user_npm_configuration
+        src: "{{ item.path }}"
+      loop: "{{ workstation_user_configuration_entries }}"
+      loop_control:
+        label: "{{ item.path }}"
+      register: workstation_user_configuration_contents
       changed_when: false
       failed_when: false
       check_mode: false
 
-    - name: Inspect existing user shell configuration
-      ansible.builtin.slurp:
-        src: "{{ workstation_user_home }}/.bashrc"
-      register: workstation_user_shell_configuration
-      changed_when: false
-      failed_when: false
-      check_mode: false
-
-    - name: Remove duplicate user-local NPM prefix entries
+    - name: Remove duplicate managed user configuration entries
       vars:
-        npm_configuration_lines: >-
-          {{ (workstation_user_npm_configuration.content | default('')
-          | b64decode).splitlines() }}
-        npm_prefix_entry_count: >-
-          {{ npm_configuration_lines
-          | select('match', npm_prefix_config_regexp) | list | length }}
+        workstation_managed_entry_count: >-
+          {{ (item.content | default('') | b64decode).splitlines()
+          | select('match', item.item.regexp) | list | length }}
       ansible.builtin.lineinfile:
-        path: "{{ workstation_user_home }}/.npmrc"
-        regexp: "{{ npm_prefix_config_regexp }}"
+        path: "{{ item.item.path }}"
+        regexp: "{{ item.item.regexp }}"
         state: absent
-      when: npm_prefix_entry_count | int > 1
+      loop: "{{ workstation_user_configuration_contents.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
+      when: workstation_managed_entry_count | int > 1
 
-    - name: Configure user-local NPM prefix
+    - name: Configure managed user configuration entries
       ansible.builtin.lineinfile:
-        path: "{{ workstation_user_home }}/.npmrc"
-        regexp: "{{ npm_prefix_config_regexp }}"
-        line: "prefix={{ workstation_user_home }}/.npm-global"
+        path: "{{ item.path }}"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
         create: true
         owner: "{{ user_name }}"
         group: "{{ workstation_user_primary_gid }}"
         mode: "0644"
-
-    - name: Remove duplicate pip virtual-environment requirements
-      vars:
-        shell_configuration_lines: >-
-          {{ (workstation_user_shell_configuration.content | default('')
-          | b64decode).splitlines() }}
-        pip_virtualenv_entry_count: >-
-          {{ shell_configuration_lines
-          | select('match', pip_virtualenv_shell_regexp) | list | length }}
-      ansible.builtin.lineinfile:
-        path: "{{ workstation_user_home }}/.bashrc"
-        regexp: "{{ pip_virtualenv_shell_regexp }}"
-        state: absent
-      when: pip_virtualenv_entry_count | int > 1
-
-    - name: Require virtual environments for user pip installations
-      ansible.builtin.lineinfile:
-        path: "{{ workstation_user_home }}/.bashrc"
-        regexp: "{{ pip_virtualenv_shell_regexp }}"
-        line: 'export PIP_REQUIRE_VIRTUALENV=1'
-        create: true
-        owner: "{{ user_name }}"
-        group: "{{ workstation_user_primary_gid }}"
-        mode: "0644"
-
-    - name: Remove duplicate user-local NPM shell path entries
-      vars:
-        shell_configuration_lines: >-
-          {{ (workstation_user_shell_configuration.content | default('')
-          | b64decode).splitlines() }}
-        npm_path_entry_count: >-
-          {{ shell_configuration_lines
-          | select('match', npm_path_shell_regexp) | list | length }}
-      ansible.builtin.lineinfile:
-        path: "{{ workstation_user_home }}/.bashrc"
-        regexp: "{{ npm_path_shell_regexp }}"
-        state: absent
-      when: npm_path_entry_count | int > 1
-
-    - name: Add user-local NPM binaries to the shell path
-      ansible.builtin.lineinfile:
-        path: "{{ workstation_user_home }}/.bashrc"
-        regexp: "{{ npm_path_shell_regexp }}"
-        line: 'export PATH="$HOME/.npm-global/bin:$PATH"'
-        create: true
-        owner: "{{ user_name }}"
-        group: "{{ workstation_user_primary_gid }}"
-        mode: "0644"
+      loop: "{{ workstation_user_configuration_entries }}"
+      loop_control:
+        label: "{{ item.path }}: {{ item.line }}"
 
     - name: Inspect Docker group before managing membership
       ansible.builtin.getent:
