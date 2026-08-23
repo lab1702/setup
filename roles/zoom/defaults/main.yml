@@ -1,6 +1,5 @@
 ---
 zoom_package_name: zoom
-zoom_package_state: latest
 
 zoom_supported_ubuntu_versions:
   - "26.04"

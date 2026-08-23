@@ -101,6 +101,32 @@
             checksum: "sha256:{{ rstudio_release.sha256 }}"
             mode: "0600"
 
+        - name: Inspect downloaded Posit RStudio Desktop package metadata
+          ansible.builtin.command:
+            argv:
+              - dpkg-deb
+              - --show
+              - '--showformat=${Package}\t${Version}\t${Architecture}\n'
+              - >-
+                {{ rstudio_package_tempdir.path }}/{{ rstudio_release.basename }}
+          register: rstudio_downloaded_package_metadata
+          changed_when: false
+
+        - name: Validate downloaded Posit RStudio Desktop package metadata
+          vars:
+            rstudio_expected_package_metadata:
+              - "{{ rstudio_package_name }}"
+              - "{{ rstudio_release.version }}"
+              - "{{ rstudio_package_architecture }}"
+          ansible.builtin.assert:
+            that:
+              - >-
+                rstudio_downloaded_package_metadata.stdout.split() ==
+                rstudio_expected_package_metadata
+            fail_msg: >-
+              The downloaded Posit RStudio Desktop package metadata does not
+              match the expected package name, version, and architecture.
+
         - name: Install Posit RStudio Desktop package
           ansible.builtin.apt:
             deb: >-

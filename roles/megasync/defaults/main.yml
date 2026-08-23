@@ -1,6 +1,5 @@
 ---
 megasync_package_name: megasync
-megasync_package_state: latest
 
 megasync_supported_ubuntu_versions:
   - "26.04"

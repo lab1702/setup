@@ -84,6 +84,11 @@ sudo apt update && sudo apt upgrade -y &&  sudo apt install -y git ansible
 sudo ansible-pull -U https://github.com/lab1702/setup.git
 ```
 
+The playbook adds the workstation user to the `docker` group and, on desktop
+systems, the `kvm` group. Log out and back in or reboot before using Docker or
+KVM so the new login session receives those memberships. For Docker, running
+`newgrp docker` can instead activate the membership in a new shell.
+
 ---
 
 ## Optional: Setup pip

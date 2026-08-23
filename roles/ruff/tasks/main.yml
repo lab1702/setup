@@ -176,12 +176,6 @@
               The downloaded Ruff binary version does not match GitHub's
               latest release tag.
 
-        - name: Remove installed Ruff binary symbolic link
-          ansible.builtin.file:
-            path: "{{ ruff_install_directory }}/ruff"
-            state: absent
-          when: ruff_installed_binary_status.stat.islnk | default(false)
-
         - name: Install verified Ruff binary
           ansible.builtin.copy:
             src: "{{ ruff_archive_tempdir.path }}/ruff"

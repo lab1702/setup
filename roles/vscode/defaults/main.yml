@@ -1,6 +1,5 @@
 ---
 vscode_package_name: code
-vscode_package_state: latest
 
 vscode_supported_ubuntu_versions:
   - "26.04"

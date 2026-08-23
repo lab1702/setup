@@ -109,14 +109,73 @@
         update_cache: "{{ not ansible_check_mode }}"
       register: zoom_repository_configuration
 
-    - name: Install Zoom Workplace package
-      ansible.builtin.apt:
-        name: "{{ zoom_package_name }}"
-        state: "{{ zoom_package_state }}"
-        update_cache: true
-        cache_valid_time: 3600
-        lock_timeout: 120
+    - name: Resolve and install the exact Zoom repository version
       when: >-
         not ansible_check_mode or
         (not zoom_repository_keyring_installation.changed and
         not zoom_repository_configuration.changed)
+      block:
+        - name: Refresh Zoom repository package metadata
+          ansible.builtin.apt:
+            update_cache: true
+            cache_valid_time: 0
+            lock_timeout: 120
+          changed_when: false
+          when: not ansible_check_mode
+
+        - name: Discover published Zoom repository versions
+          ansible.builtin.command:
+            argv:
+              - apt-cache
+              - madison
+              - "{{ zoom_package_name }}"
+          environment:
+            LC_ALL: C
+          register: zoom_repository_versions
+          changed_when: false
+          check_mode: false
+
+        - name: Select versions from the Zoom repository
+          vars:
+            zoom_repository_version_pattern: >-
+              {{ '^\s*'
+              ~ (zoom_package_name | ansible.builtin.regex_escape)
+              ~ '\s*\|\s*\S+\s*\|\s*'
+              ~ (zoom_repository_url | regex_replace('/+$', '')
+              | ansible.builtin.regex_escape)
+              ~ '/?(?:\s|$)' }}
+          ansible.builtin.set_fact:
+            zoom_repository_version_rows: >-
+              {{ zoom_repository_versions.stdout_lines
+              | select('match', zoom_repository_version_pattern) | list }}
+
+        - name: Validate available Zoom repository versions
+          ansible.builtin.assert:
+            that:
+              - zoom_repository_version_rows | length > 0
+            fail_msg: >-
+              The verified Zoom repository does not publish a candidate for
+              {{ zoom_package_name }} on this architecture.
+
+        - name: Select current Zoom repository version
+          ansible.builtin.set_fact:
+            zoom_package_candidate_version: >-
+              {{ (zoom_repository_version_rows | first).split('|')[1]
+              | trim }}
+
+        - name: Validate current Zoom Debian version
+          ansible.builtin.command:
+            argv:
+              - dpkg
+              - --validate-version
+              - "{{ zoom_package_candidate_version }}"
+          changed_when: false
+          check_mode: false
+
+        - name: Install exact current Zoom repository version
+          ansible.builtin.apt:
+            name: >-
+              {{ zoom_package_name }}={{ zoom_package_candidate_version }}
+            state: present
+            allow_downgrade: true
+            lock_timeout: 120

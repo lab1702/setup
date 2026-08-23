@@ -43,8 +43,7 @@
         | length == 0
       - >-
         discord_release_path is match(
-        '^/apps/linux/[0-9]+([.][0-9]+)+/'
-        ~ 'discord-[0-9]+([.][0-9]+)+[.]deb$')
+        '^/apps/linux/[^/]+/discord-[^/]+[.]deb$')
     fail_msg: >-
       Discord's stable download endpoint did not redirect to the expected
       HTTPS package location.
@@ -63,7 +62,7 @@
 - name: Validate latest stable Discord package version
   ansible.builtin.assert:
     that:
-      - discord_release.version is match('^[0-9]+([.][0-9]+)+$')
+      - discord_release.version | length > 0
       - >-
         discord_release.filename ==
         'discord-' ~ discord_release.version ~ '.deb'
@@ -74,21 +73,47 @@
     fail_msg: >-
       Discord's stable package URL did not contain one consistent version.
 
+- name: Validate latest stable Discord Debian version
+  ansible.builtin.command:
+    argv:
+      - dpkg
+      - --validate-version
+      - "{{ discord_release.version }}"
+  changed_when: false
+  check_mode: false
+
 - name: Gather installed package facts for Discord
   ansible.builtin.package_facts:
     manager: auto
 
-- name: Determine whether Discord installation is required
+- name: Select installed Discord package version
   vars:
     discord_installed_packages: >-
       {{ ansible_facts.packages[discord_package_name] | default([]) }}
+  ansible.builtin.set_fact:
     discord_installed_version: >-
       {{ (discord_installed_packages | first | default({})).version
       | default('') }}
+
+- name: Compare installed and stable Discord Debian versions
+  ansible.builtin.command:
+    argv:
+      - dpkg
+      - --compare-versions
+      - "{{ discord_installed_version }}"
+      - eq
+      - "{{ discord_release.version }}"
+  register: discord_installed_version_comparison
+  changed_when: false
+  failed_when: discord_installed_version_comparison.rc not in [0, 1]
+  check_mode: false
+  when: discord_installed_version | length > 0
+
+- name: Determine whether Discord installation is required
   ansible.builtin.set_fact:
     discord_install_required: >-
       {{ discord_installed_version | length == 0 or
-      discord_installed_version is version(discord_release.version, '<') }}
+      discord_installed_version_comparison.rc | default(1) != 0 }}
 
 - name: Report pending Discord installation in check mode
   ansible.builtin.debug:
@@ -161,6 +186,7 @@
             deb: >-
               {{ discord_package_tempdir.path }}/{{ discord_release.filename }}
             state: present
+            allow_downgrade: true
             lock_timeout: 120
       always:
         - name: Remove temporary Discord package directory

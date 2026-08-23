@@ -1,5 +1,6 @@
 ---
 rstudio_package_name: rstudio
+rstudio_package_architecture: amd64
 rstudio_downloads_metadata_url: https://cdn.posit.co/downloads.json
 
 rstudio_supported_ubuntu_versions:

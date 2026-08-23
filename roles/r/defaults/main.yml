@@ -22,6 +22,11 @@ r_repository_key_fingerprint: E298A3A825C0D65DFD57CBB651716619E084DAB9
 r_repository_url: https://cloud.r-project.org/bin/linux/ubuntu
 r_repository_suite: >-
   {{ r_repository_suite_map[ansible_facts["distribution_version"]] }}
+r_repository_main_sources_path: /etc/apt/sources.list
+r_repository_sources_directory_path: /etc/apt/sources.list.d
+r_repository_source_file_patterns:
+  - "*.list"
+  - "*.sources"
 r_repository_sources_path: /etc/apt/sources.list.d/cran-r.sources
 r_repository_source_content: |
   Types: deb

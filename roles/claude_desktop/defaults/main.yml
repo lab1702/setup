@@ -1,6 +1,5 @@
 ---
 claude_desktop_package_name: claude-desktop
-claude_desktop_package_state: latest
 
 claude_desktop_key_url: https://downloads.claude.ai/claude-desktop/key.asc
 claude_desktop_keyring_path: /usr/share/keyrings/claude-desktop-archive-keyring.asc

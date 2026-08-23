@@ -102,6 +102,36 @@
             checksum: "{{ quarto_release_asset.digest }}"
             mode: "0600"
 
+        - name: Inspect downloaded Quarto CLI package metadata
+          ansible.builtin.command:
+            argv:
+              - dpkg-deb
+              - --show
+              - '--showformat=${Package}\t${Version}\t${Architecture}\n'
+              - >-
+                {{ quarto_package_tempdir.path }}/{{ quarto_release_asset.name }}
+          register: quarto_downloaded_package_metadata
+          changed_when: false
+
+        - name: Validate downloaded Quarto CLI package metadata
+          vars:
+            quarto_release_version: >-
+              {{ quarto_release.json.tag_name | regex_replace('^v', '') }}
+            quarto_release_architecture: >-
+              {{ quarto_architecture_map[ansible_facts["architecture"]] }}
+            quarto_expected_package_metadata:
+              - "{{ quarto_package_name }}"
+              - "{{ quarto_release_version }}"
+              - "{{ quarto_release_architecture }}"
+          ansible.builtin.assert:
+            that:
+              - >-
+                quarto_downloaded_package_metadata.stdout.split() ==
+                quarto_expected_package_metadata
+            fail_msg: >-
+              The downloaded Quarto CLI package metadata does not match the
+              expected package name, version, and architecture.
+
         - name: Install verified Quarto CLI package
           ansible.builtin.apt:
             deb: >-

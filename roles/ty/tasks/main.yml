@@ -176,12 +176,6 @@
               The downloaded ty binary version does not match GitHub's
               latest release tag.
 
-        - name: Remove installed ty binary symbolic link
-          ansible.builtin.file:
-            path: "{{ ty_install_directory }}/ty"
-            state: absent
-          when: ty_installed_binary_status.stat.islnk | default(false)
-
         - name: Install verified ty binary
           ansible.builtin.copy:
             src: "{{ ty_archive_tempdir.path }}/ty"

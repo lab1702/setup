@@ -127,17 +127,81 @@
 
         - name: Install package while preserving verified MEGA repository
           block:
-            - name: Install MEGA Desktop package
-              ansible.builtin.apt:
-                name: "{{ megasync_package_name }}"
-                state: "{{ megasync_package_state }}"
-                update_cache: true
-                cache_valid_time: 0
-                lock_timeout: 120
+            - name: Resolve and install the exact MEGA repository version
               when: >-
                 not ansible_check_mode or
                 (not megasync_repository_keyring_installation.changed and
                 not megasync_repository_configuration.changed)
+              block:
+                - name: Refresh MEGA repository package metadata
+                  ansible.builtin.apt:
+                    update_cache: true
+                    cache_valid_time: 0
+                    lock_timeout: 120
+                  changed_when: false
+                  when: not ansible_check_mode
+
+                - name: Discover published MEGA Desktop repository versions
+                  ansible.builtin.command:
+                    argv:
+                      - apt-cache
+                      - madison
+                      - "{{ megasync_package_name }}"
+                  environment:
+                    LC_ALL: C
+                  register: megasync_repository_versions
+                  changed_when: false
+                  check_mode: false
+
+                - name: Select versions from the MEGA repository
+                  vars:
+                    megasync_repository_version_pattern: >-
+                      {{ '^\s*'
+                      ~ (megasync_package_name
+                      | ansible.builtin.regex_escape)
+                      ~ '\s*\|\s*\S+\s*\|\s*'
+                      ~ (megasync_repository_url
+                      | regex_replace('/+$', '')
+                      | ansible.builtin.regex_escape)
+                      ~ '/?(?:\s|$)' }}
+                  ansible.builtin.set_fact:
+                    megasync_repository_version_rows: >-
+                      {{ megasync_repository_versions.stdout_lines
+                      | select('match',
+                      megasync_repository_version_pattern) | list }}
+
+                - name: Validate available MEGA repository versions
+                  ansible.builtin.assert:
+                    that:
+                      - megasync_repository_version_rows | length > 0
+                    fail_msg: >-
+                      The verified MEGA repository does not publish a
+                      candidate for {{ megasync_package_name }} on this
+                      architecture.
+
+                - name: Select current MEGA repository version
+                  ansible.builtin.set_fact:
+                    megasync_package_candidate_version: >-
+                      {{ (megasync_repository_version_rows
+                      | first).split('|')[1] | trim }}
+
+                - name: Validate current MEGA Debian version
+                  ansible.builtin.command:
+                    argv:
+                      - dpkg
+                      - --validate-version
+                      - "{{ megasync_package_candidate_version }}"
+                  changed_when: false
+                  check_mode: false
+
+                - name: Install exact current MEGA repository version
+                  ansible.builtin.apt:
+                    name: >-
+                      {{ megasync_package_name }}={{
+                      megasync_package_candidate_version }}
+                    state: present
+                    allow_downgrade: true
+                    lock_timeout: 120
           always:
             - name: Reassert verified MEGA signing key after package operation
               ansible.builtin.copy:

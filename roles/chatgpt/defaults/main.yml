@@ -1,6 +1,5 @@
 ---
 chatgpt_package_name: chatgpt
-chatgpt_package_state: latest
 
 chatgpt_repository_url: https://persistent.oaistatic.com/codex-app-prod/linux/deb
 chatgpt_repository_suite: stable

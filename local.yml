@@ -58,22 +58,16 @@
       ansible.builtin.include_role:
         name: chatgpt
         tasks_from: repository_preflight
-      when: >-
-        graphical_desktop_sessions.matched | default(0) | int > 0
 
     - name: Preflight Claude Desktop apt repository before package refreshes
       ansible.builtin.include_role:
         name: claude_desktop
         tasks_from: repository_preflight
-      when: >-
-        graphical_desktop_sessions.matched | default(0) | int > 0
 
     - name: Preflight MEGA apt repository before package refreshes
       ansible.builtin.include_role:
         name: megasync
         tasks_from: repository_preflight
-      when: >-
-        graphical_desktop_sessions.matched | default(0) | int > 0
 
     - name: Preflight CRAN apt repository before package refreshes
       ansible.builtin.include_role:
@@ -84,18 +78,11 @@
       ansible.builtin.include_role:
         name: zoom
         tasks_from: repository_preflight
-      when:
-        - graphical_desktop_sessions.matched | default(0) | int > 0
-        - >-
-          linux_release_architecture_map[ansible_facts["architecture"]]
-          == "amd64"
 
     - name: Preflight Visual Studio Code apt repository before package refreshes
       ansible.builtin.include_role:
         name: vscode
         tasks_from: repository_preflight
-      when: >-
-        graphical_desktop_sessions.matched | default(0) | int > 0
 
   tasks:
     - name: Install base packages
@@ -215,11 +202,34 @@
       ansible.builtin.include_role:
         name: r
 
-    - name: Add user to docker group
+    - name: Inspect Docker group before managing membership
+      ansible.builtin.getent:
+        database: group
+        key: docker
+        fail_key: false
+
+    - name: Ensure Docker system group exists
+      ansible.builtin.group:
+        name: docker
+        system: true
+        state: present
+
+    - name: Add user to Docker group
       ansible.builtin.user:
         name: "{{ user_name }}"
         groups: docker
         append: true
+      when: >-
+        not ansible_check_mode or
+        ansible_facts["getent_group"]["docker"] is not none
+
+    - name: Report pending Docker group membership in check mode
+      ansible.builtin.debug:
+        msg: "The user {{ user_name }} would be added to the docker group."
+      changed_when: true
+      when:
+        - ansible_check_mode
+        - ansible_facts["getent_group"]["docker"] is none
 
     - name: Upgrade all installed APT packages
       ansible.builtin.apt:

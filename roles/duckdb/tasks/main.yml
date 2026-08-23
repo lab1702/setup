@@ -117,6 +117,7 @@
   ansible.builtin.set_fact:
     duckdb_install_required: >-
       {{ not duckdb_installed_binary_is_safe or
+      duckdb_installed_release.rc | default(1) != 0 or
       duckdb_installed_version != duckdb_release_version }}
 
 - name: Report pending DuckDB CLI installation in check mode
@@ -220,11 +221,29 @@
             fail_msg: >-
               The extracted DuckDB CLI member is not a regular executable.
 
-        - name: Remove installed DuckDB CLI binary symbolic link
-          ansible.builtin.file:
-            path: "{{ duckdb_install_directory }}/duckdb"
-            state: absent
-          when: duckdb_installed_binary_status.stat.islnk | default(false)
+        - name: Inspect downloaded DuckDB CLI version
+          ansible.builtin.command:
+            argv:
+              - "{{ duckdb_archive_tempdir.path }}/duckdb"
+              - --version
+          register: duckdb_downloaded_release
+          changed_when: false
+          failed_when: false
+
+        - name: Validate downloaded DuckDB CLI version
+          vars:
+            duckdb_release_version: >-
+              {{ duckdb_release.json.tag_name | regex_replace('^v', '') }}
+            duckdb_downloaded_version: >-
+              {{ (duckdb_downloaded_release.stdout | default('')).split()
+              | first | default('') | regex_replace('^v', '') }}
+          ansible.builtin.assert:
+            that:
+              - duckdb_downloaded_release.rc | default(1) == 0
+              - duckdb_downloaded_version == duckdb_release_version
+            fail_msg: >-
+              The downloaded DuckDB CLI binary version does not match
+              GitHub's latest release tag.
 
         - name: Install verified DuckDB CLI binary
           ansible.builtin.copy:

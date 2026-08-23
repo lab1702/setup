@@ -224,19 +224,6 @@
               The downloaded uv or uvx binary version does not match
               GitHub's latest release tag.
 
-        - name: Remove installed uv binary symbolic links
-          ansible.builtin.file:
-            path: "{{ item.path }}"
-            state: absent
-          loop:
-            - path: "{{ uv_install_directory }}/uv"
-              is_link: "{{ uv_installed_binary_status.stat.islnk | default(false) }}"
-            - path: "{{ uv_install_directory }}/uvx"
-              is_link: "{{ uv_installed_uvx_binary_status.stat.islnk | default(false) }}"
-          loop_control:
-            label: "{{ item.path }}"
-          when: item.is_link
-
         - name: Install verified uv binaries
           ansible.builtin.copy:
             src: "{{ uv_archive_tempdir.path }}/{{ item }}"
