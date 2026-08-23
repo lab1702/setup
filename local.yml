@@ -119,6 +119,7 @@
     - name: Install base packages
       ansible.builtin.apt:
         update_cache: true
+        lock_timeout: 120
         name:
           # Build tools and utilities
           - build-essential

@@ -7,9 +7,12 @@ ARM64 systems continue to use their baseline packages.
 Desktop packages are installed when an X11 or Wayland desktop session is
 available. Posit RStudio Desktop, Discord, and Zoom are installed only on AMD64
 systems because their configured distribution channels do not publish ARM64
-packages. Ruff, ty, uv, and uvx track the latest GitHub releases for AMD64 and
-ARM64; their release archives are verified with the SHA-256 digests published
-by GitHub before installation. Discord tracks the latest official stable AMD64
+packages. Ruff, ty, uv, uvx, the DuckDB CLI, and Quarto track the latest
+GitHub releases for AMD64 and ARM64; their release downloads are verified with
+the SHA-256 digests published by GitHub before installation. ChatGPT Desktop
+tracks the latest package from OpenAI's APT repository, verified with a signing
+key bundled in this repository. Claude Desktop tracks the latest package from
+Anthropic's signed APT repository. Discord tracks the latest official stable AMD64
 DEB and validates its HTTPS download location and package metadata before
 installation. Visual Studio Code tracks the latest stable package from
 Microsoft's signed APT repository on AMD64 and ARM64. MEGA Desktop tracks the
@@ -57,7 +60,7 @@ Reassess these decisions before using the playbook on a shared workstation, an
 untrusted network, infrastructure managed by multiple people, or a host whose
 SSH service is exposed to the internet.
 
-## Step 0: Setup up fingerprint Authentication
+## Step 0: Set up fingerprint Authentication
 
 ### If applicable do this after enrolling your fingerprint
 

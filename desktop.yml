@@ -43,3 +43,4 @@
     name: libreoffice
     state: present
     update_cache: true
+    lock_timeout: 120
