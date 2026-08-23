@@ -71,38 +71,8 @@
       directory, must not be a symbolic link, must be traversable by ordinary
       users, and must not be group- or world-writable.
 
-- name: Get latest release of {{ github_release_display_name }}
-  ansible.builtin.uri:
-    url: "{{ github_release_api_url }}"
-    return_content: true
-  register: github_release_metadata
-  changed_when: false
-  check_mode: false
-
-- name: Select release archive asset
-  ansible.builtin.set_fact:
-    github_release_asset: >-
-      {{ github_release_metadata.json.assets
-      | selectattr('name', 'equalto', github_release_archive_filename)
-      | first | default({}) }}
-    github_release_version: >-
-      {{ github_release_metadata.json.tag_name | regex_replace('^v', '') }}
-
-- name: Validate release archive asset
-  ansible.builtin.assert:
-    that:
-      - github_release_asset | length > 0
-      - github_release_asset.state | default('') == 'uploaded'
-      - >-
-        (github_release_asset.browser_download_url | default('')).startswith(
-        github_release_base_url ~ '/')
-      - >-
-        (github_release_asset.digest | default(''))
-        is match('^sha256:[0-9a-f]{64}$')
-    fail_msg: >-
-      The latest {{ github_release_display_name }} release did not contain
-      the expected uploaded Linux archive with a trusted GitHub download URL
-      and SHA-256 digest.
+- name: Resolve latest release archive asset
+  ansible.builtin.include_tasks: resolve_asset.yml
 
 - name: Inspect installed release binary paths
   ansible.builtin.stat:

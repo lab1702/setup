@@ -20,7 +20,7 @@ latest package from MEGA's signed APT repository on AMD64 and ARM64. Zoom
 Workplace tracks the latest package from Zoom's signed, AMD64-only APT
 repository. R tracks the latest release from CRAN's signed Ubuntu repository
 on AMD64 and ARM64. Posit RStudio Desktop tracks the latest stable release
-published in Posit's download metadata (`https://cdn.posit.co/rstudio/latest/downloads.json`)
+published in Posit's download metadata (`https://cdn.posit.co/downloads.json`)
 and verifies the DEB against the SHA-256 checksum published there. LibreOffice
 is installed from the Ubuntu archive on desktop systems.
 

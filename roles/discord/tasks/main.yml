@@ -100,6 +100,9 @@
 
     - name: Download, validate, and install Discord package
       block:
+        # Accepted tradeoff (README Item 8): Discord publishes no checksum,
+        # signature, or signed repository for this DEB, so its authenticity
+        # relies on TLS to the validated download host.
         - name: Download Discord package
           ansible.builtin.uri:
             url: "{{ discord_release.url }}"

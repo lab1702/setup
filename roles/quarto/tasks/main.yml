@@ -7,35 +7,17 @@
       Quarto CLI supports AMD64 and ARM64. Detected
       {{ ansible_facts["architecture"] }}.
 
-- name: Get latest Quarto CLI release
-  ansible.builtin.uri:
-    url: "{{ quarto_release_api_url }}"
-    return_content: true
-  register: quarto_release
-  changed_when: false
-  check_mode: false
-
-- name: Select Quarto CLI package asset
-  ansible.builtin.set_fact:
-    quarto_release_asset: >-
-      {{ quarto_release.json.assets
-      | selectattr('name', 'equalto', quarto_package_filename)
-      | first | default({}) }}
-
-- name: Validate Quarto CLI package asset
-  ansible.builtin.assert:
-    that:
-      - quarto_release_asset | length > 0
-      - quarto_release_asset.state | default('') == 'uploaded'
-      - >-
-        (quarto_release_asset.browser_download_url | default('')).startswith(
-        quarto_release_base_url ~ '/')
-      - >-
-        (quarto_release_asset.digest | default(''))
-        is match('^sha256:[0-9a-f]{64}$')
-    fail_msg: >-
-      The latest Quarto CLI release did not contain the expected uploaded
-      package with a trusted GitHub download URL and SHA-256 digest.
+# Fetching, selecting, and validating the release asset is shared with the
+# binary installers through the github_release role, so API and digest
+# hardening lives in one place.
+- name: Resolve latest Quarto CLI package asset
+  ansible.builtin.include_role:
+    name: github_release
+    tasks_from: resolve_asset.yml
+  vars:
+    github_release_display_name: Quarto CLI
+    github_release_repository: "{{ quarto_repository }}"
+    github_release_asset_filename: "{{ quarto_package_filename }}"
 
 - name: Determine required Quarto CLI package action
   ansible.builtin.include_role:
@@ -63,10 +45,10 @@
       block:
         - name: Download verified Quarto CLI package
           ansible.builtin.get_url:
-            url: "{{ quarto_release_asset.browser_download_url }}"
+            url: "{{ github_release_asset.browser_download_url }}"
             dest: >-
-              {{ quarto_package_tempdir.path }}/{{ quarto_release_asset.name }}
-            checksum: "{{ quarto_release_asset.digest }}"
+              {{ quarto_package_tempdir.path }}/{{ github_release_asset.name }}
+            checksum: "{{ github_release_asset.digest }}"
             mode: "0600"
 
         - name: Install or repair verified Quarto CLI package
@@ -79,7 +61,7 @@
             deb_package_architecture: "{{ workstation_architecture }}"
             deb_package_version: "{{ quarto_release_version }}"
             deb_package_path: >-
-              {{ quarto_package_tempdir.path }}/{{ quarto_release_asset.name }}
+              {{ quarto_package_tempdir.path }}/{{ github_release_asset.name }}
       always:
         - name: Remove temporary Quarto CLI package directory
           ansible.builtin.file:

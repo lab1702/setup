@@ -1,11 +1,10 @@
 ---
-quarto_release_api_url: https://api.github.com/repos/quarto-dev/quarto-cli/releases/latest
-quarto_release_base_url: https://github.com/quarto-dev/quarto-cli/releases/download
+quarto_repository: quarto-dev/quarto-cli
 quarto_package_name: quarto
 
-# Derived from the release metadata registered as quarto_release and from the
-# play-level workstation_architecture, so each is defined exactly once.
-quarto_release_version: >-
-  {{ quarto_release.json.tag_name | regex_replace('^v', '') }}
+# github_release_version is set by the github_release role's resolve_asset
+# tasks; quarto_package_filename is evaluated during asset selection, after
+# that fact exists, and workstation_architecture comes from group_vars.
+quarto_release_version: "{{ github_release_version }}"
 quarto_package_filename: >-
   quarto-{{ quarto_release_version }}-linux-{{ workstation_architecture }}.deb

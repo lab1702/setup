@@ -42,6 +42,21 @@
     mode: "0755"
   register: vendor_repository_keyring_directory_creation
 
+# In check mode the keyring directory was not really created, so the
+# configure block below cannot run; report what a real run would do so the
+# dry run does not silently under-report the repository and packages.
+- name: Report pending repository configuration in check mode
+  ansible.builtin.debug:
+    msg: >-
+      The verified {{ vendor_repository_display_name }} signing key, the apt
+      repository at {{ vendor_repository_sources_path }}, and the packages
+      {{ vendor_repository_package_names | join(', ') }} would be configured
+      and installed.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - vendor_repository_keyring_directory_creation.changed
+
 - name: Configure signed repository and install packages
   when: >-
     not ansible_check_mode or
@@ -62,6 +77,12 @@
         vendor_repository_verified_key_path: >-
           {{ vendor_repository_key_tempdir.path }}/key{{
           vendor_repository_keyring_extension }}
+        # When this run's preflight already proved the installed keyring and
+        # source file are intact, verify the installed key locally instead of
+        # fetching the key from the vendor again.
+        vendor_repository_key_is_preverified: >-
+          {{ vendor_repository_sources_path
+          in (vendor_repository_healthy_paths | default([])) }}
       block:
         - name: Download repository signing key
           ansible.builtin.get_url:
@@ -70,7 +91,9 @@
             mode: "0600"
           changed_when: false
           check_mode: false
-          when: vendor_repository_key_url | length > 0
+          when:
+            - vendor_repository_key_url | length > 0
+            - not vendor_repository_key_is_preverified
 
         - name: Stage pinned repository signing key
           ansible.builtin.copy:
@@ -80,7 +103,22 @@
             mode: "0600"
           changed_when: false
           check_mode: false
-          when: vendor_repository_key_file | length > 0
+          when:
+            - vendor_repository_key_file | length > 0
+            - not vendor_repository_key_is_preverified
+
+        # The candidate still passes the full fingerprint verification below,
+        # so a keyring tampered with since the preflight fails loudly rather
+        # than being trusted.
+        - name: Stage preverified installed signing key
+          ansible.builtin.copy:
+            src: "{{ vendor_repository_keyring_path }}"
+            dest: "{{ vendor_repository_candidate_key_path }}"
+            remote_src: true
+            mode: "0600"
+          changed_when: false
+          check_mode: false
+          when: vendor_repository_key_is_preverified
 
         - name: Inspect repository signing key
           ansible.builtin.command:
@@ -128,7 +166,10 @@
           when:
             - vendor_repository_key_url | length > 0
             - vendor_repository_keyring_extension == '.gpg'
+            - not vendor_repository_key_is_preverified
 
+        # A preverified candidate came from the installed keyring and is
+        # already in its final format, so it never needs dearmoring.
         - name: Retain verified signing key in its published format
           ansible.builtin.copy:
             src: "{{ vendor_repository_candidate_key_path }}"
@@ -138,6 +179,7 @@
           changed_when: false
           check_mode: false
           when: >-
+            vendor_repository_key_is_preverified or
             vendor_repository_key_file | length > 0 or
             vendor_repository_keyring_extension != '.gpg'
 

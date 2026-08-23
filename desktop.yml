@@ -1,11 +1,36 @@
 ---
 # Desktop-specific packages
 
+# Mirrors the docker-group handling in local.yml: minimal images without
+# udev's static kvm group must not abort the desktop phase.
+- name: Inspect kvm group before managing membership
+  ansible.builtin.getent:
+    database: group
+    key: kvm
+    fail_key: false
+
+- name: Ensure kvm system group exists
+  ansible.builtin.group:
+    name: kvm
+    system: true
+    state: present
+
 - name: Add user to kvm group
   ansible.builtin.user:
     name: "{{ user_name }}"
     groups: kvm
     append: true
+  when: >-
+    not ansible_check_mode or
+    ansible_facts["getent_group"]["kvm"] is not none
+
+- name: Report pending kvm group membership in check mode
+  ansible.builtin.debug:
+    msg: "The user {{ user_name }} would be added to the kvm group."
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - ansible_facts["getent_group"]["kvm"] is none
 
 - name: Install ChatGPT Desktop
   ansible.builtin.include_role:

@@ -186,9 +186,20 @@
     state: absent
   when: vendor_repository_quarantine_required
 
+# A path is healthy when its managed source survived the preflight intact:
+# the source file exists with the expected content and ownership and the
+# installed keyring carries the pinned fingerprint. The configure phase uses
+# this to re-verify the installed key locally instead of re-downloading it
+# from the vendor on every run.
 - name: Record completed repository preflight
   ansible.builtin.set_fact:
     vendor_repository_preflighted_paths: >-
       {{ (vendor_repository_preflighted_paths | default([]))
       + [vendor_repository_sources_path] }}
+    vendor_repository_healthy_paths: >-
+      {{ (vendor_repository_healthy_paths | default([]))
+      + ([vendor_repository_sources_path]
+      if (vendor_repository_source_status.stat.exists
+      and not vendor_repository_quarantine_required | bool)
+      else []) }}
   changed_when: false

@@ -36,6 +36,11 @@ github_release_archive_directory: >-
   }}-unknown-linux-gnu
 github_release_archive_filename: "{{ github_release_archive_directory }}.tar.gz"
 
+# The release asset that resolve_asset.yml selects and validates. The binary
+# install flow resolves its archive by default; deb-based callers (for
+# example the quarto role) override this with their package filename.
+github_release_asset_filename: "{{ github_release_archive_filename }}"
+
 # tar.gz archives may hold the binaries inside one top-level directory
 # ("directory" layout) or at the archive root ("flat" layout); zip archives
 # only support the flat layout.
