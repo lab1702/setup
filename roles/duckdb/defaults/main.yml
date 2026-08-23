@@ -2,6 +2,7 @@
 duckdb_release_api_url: https://api.github.com/repos/duckdb/duckdb/releases/latest
 duckdb_release_base_url: https://github.com/duckdb/duckdb/releases/download
 duckdb_install_directory: /usr/local/bin
+duckdb_validation_user: nobody
 
 duckdb_architecture_map:
   x86_64: amd64

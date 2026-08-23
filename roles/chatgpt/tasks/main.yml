@@ -66,6 +66,31 @@
     - name: Configure pinned OpenAI apt repository
       ansible.builtin.import_tasks: repository.yml
 
+    - name: Inspect legacy armored OpenAI repository signing key path
+      ansible.builtin.stat:
+        path: "{{ chatgpt_repository_legacy_keyring_path }}"
+        follow: false
+      register: chatgpt_repository_legacy_keyring_status
+      when: >-
+        chatgpt_repository_legacy_keyring_path !=
+        chatgpt_repository_keyring_path
+
+    - name: Validate legacy armored OpenAI signing key path type
+      ansible.builtin.assert:
+        that:
+          - >-
+            not chatgpt_repository_legacy_keyring_status.stat.exists or
+            chatgpt_repository_legacy_keyring_status.stat.isreg
+            | default(false) or
+            chatgpt_repository_legacy_keyring_status.stat.islnk
+            | default(false)
+        fail_msg: >-
+          Refusing to remove {{ chatgpt_repository_legacy_keyring_path }}
+          because it is neither a regular file nor a symbolic link.
+      when: >-
+        chatgpt_repository_legacy_keyring_path !=
+        chatgpt_repository_keyring_path
+
     - name: Remove legacy armored OpenAI repository signing key
       ansible.builtin.file:
         path: "{{ chatgpt_repository_legacy_keyring_path }}"

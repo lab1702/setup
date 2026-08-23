@@ -95,6 +95,19 @@
       {{ (discord_installed_packages | first | default({})).version
       | default('') }}
 
+- name: Inspect installed Discord dpkg state
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - --show
+      - '--showformat=${db:Status-Abbrev}'
+      - "{{ discord_package_name }}:{{ discord_package_architecture }}"
+  register: discord_installed_package_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: discord_installed_version | length > 0
+
 - name: Compare installed and stable Discord Debian versions
   ansible.builtin.command:
     argv:
@@ -109,11 +122,19 @@
   check_mode: false
   when: discord_installed_version | length > 0
 
-- name: Determine whether Discord installation is required
+- name: Determine required Discord package action
+  vars:
+    discord_installed_package_is_configured: >-
+      {{ discord_installed_package_status.rc | default(1) == 0 and
+      discord_installed_package_status.stdout | default('') | trim == 'ii' }}
   ansible.builtin.set_fact:
     discord_install_required: >-
       {{ discord_installed_version | length == 0 or
       discord_installed_version_comparison.rc | default(1) != 0 }}
+    discord_configuration_repair_required: >-
+      {{ discord_installed_version | length > 0 and
+      discord_installed_version_comparison.rc | default(1) == 0 and
+      not (discord_installed_package_is_configured | bool) }}
 
 - name: Report pending Discord installation in check mode
   ansible.builtin.debug:
@@ -122,6 +143,31 @@
   when:
     - ansible_check_mode
     - discord_install_required
+
+- name: Report pending Discord configuration repair in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Discord {{ discord_release.version }} would be configured to repair its
+      incomplete dpkg state.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - discord_configuration_repair_required
+
+- name: Repair incomplete matching Discord package configuration
+  ansible.builtin.command:
+    argv:
+      - dpkg
+      - --force-confdef
+      - --force-confold
+      - --configure
+      - "{{ discord_package_name }}"
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - discord_configuration_repair_required
 
 - name: Install latest stable Discord package
   when:

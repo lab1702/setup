@@ -25,7 +25,7 @@
       changed_when: false
       check_mode: false
 
-    - name: Download, verify, and install Claude Desktop signing key
+    - name: Configure verified Claude Desktop repository and package
       block:
         - name: Download Claude Desktop signing key
           ansible.builtin.get_url:
@@ -77,6 +77,127 @@
             group: root
             mode: "0644"
           register: claude_desktop_keyring_installation
+
+        - name: Add Claude Desktop apt repository
+          ansible.builtin.apt_repository:
+            repo: "{{ claude_desktop_repository_definition }}"
+            filename: "{{ claude_desktop_repository_filename }}"
+            mode: "0644"
+            state: present
+            update_cache: "{{ not ansible_check_mode }}"
+          register: claude_desktop_repository_configuration
+
+        - name: Install package while preserving verified Claude repository
+          block:
+            - name: Resolve and install exact Claude repository version
+              when: >-
+                not ansible_check_mode or
+                (not claude_desktop_keyring_installation.changed and
+                not claude_desktop_repository_configuration.changed)
+              block:
+                - name: Refresh Claude Desktop repository package metadata
+                  ansible.builtin.apt:
+                    update_cache: true
+                    cache_valid_time: 0
+                    lock_timeout: 120
+                  changed_when: false
+                  when: not ansible_check_mode
+
+                - name: Discover published Claude Desktop repository versions
+                  ansible.builtin.command:
+                    argv:
+                      - apt-cache
+                      - madison
+                      - "{{ claude_desktop_package_name }}"
+                  environment:
+                    LC_ALL: C
+                  register: claude_desktop_repository_versions
+                  changed_when: false
+                  check_mode: false
+
+                - name: Select versions from Claude Desktop repository
+                  vars:
+                    claude_desktop_repository_version_pattern: >-
+                      {{ '^\s*'
+                      ~ (claude_desktop_package_name
+                      | ansible.builtin.regex_escape)
+                      ~ '\s*\|\s*\S+\s*\|\s*'
+                      ~ (claude_desktop_repository_url
+                      | regex_replace('/+$', '')
+                      | ansible.builtin.regex_escape)
+                      ~ '/?(?:\s|$)' }}
+                  ansible.builtin.set_fact:
+                    claude_desktop_repository_version_rows: >-
+                      {{ claude_desktop_repository_versions.stdout_lines
+                      | select('match',
+                      claude_desktop_repository_version_pattern) | list }}
+
+                - name: Validate available Claude Desktop repository versions
+                  ansible.builtin.assert:
+                    that:
+                      - claude_desktop_repository_version_rows | length > 0
+                    fail_msg: >-
+                      The verified Claude Desktop repository does not publish
+                      a candidate for {{ claude_desktop_package_name }} on
+                      this architecture.
+
+                - name: Select current Claude Desktop repository version
+                  ansible.builtin.set_fact:
+                    claude_desktop_package_candidate_version: >-
+                      {{ (claude_desktop_repository_version_rows
+                      | first).split('|')[1] | trim }}
+
+                - name: Validate current Claude Desktop Debian version
+                  ansible.builtin.command:
+                    argv:
+                      - dpkg
+                      - --validate-version
+                      - "{{ claude_desktop_package_candidate_version }}"
+                  changed_when: false
+                  check_mode: false
+
+                - name: Install exact current Claude repository version
+                  ansible.builtin.apt:
+                    name: >-
+                      {{ claude_desktop_package_name }}={{
+                      claude_desktop_package_candidate_version }}
+                    state: present
+                    allow_downgrade: true
+                    lock_timeout: 120
+                  register: claude_desktop_package_installation
+          always:
+            - name: Reassert verified Claude key after package changes
+              ansible.builtin.copy:
+                src: "{{ claude_desktop_key_tempdir.path }}/key.asc"
+                dest: "{{ claude_desktop_keyring_path }}"
+                remote_src: true
+                owner: root
+                group: root
+                mode: "0644"
+              when:
+                - not ansible_check_mode
+                - claude_desktop_package_installation is defined
+                - >-
+                  (claude_desktop_package_installation.changed
+                  | default(false)) or
+                  (claude_desktop_package_installation.failed
+                  | default(false))
+
+            - name: Reassert managed Claude repository after package changes
+              ansible.builtin.copy:
+                dest: "{{ claude_desktop_repository_sources_path }}"
+                content: "{{ claude_desktop_repository_source_content }}"
+                owner: root
+                group: root
+                mode: "0644"
+              when:
+                - not ansible_check_mode
+                - claude_desktop_package_installation is defined
+                - >-
+                  (claude_desktop_package_installation.changed
+                  | default(false)) or
+                  (claude_desktop_package_installation.failed
+                  | default(false))
       always:
         - name: Remove temporary Claude Desktop signing key directory
           ansible.builtin.file:
@@ -84,88 +205,3 @@
             state: absent
           changed_when: false
           check_mode: false
-
-    - name: Add Claude Desktop apt repository
-      ansible.builtin.apt_repository:
-        repo: "{{ claude_desktop_repository_definition }}"
-        filename: "{{ claude_desktop_repository_filename }}"
-        mode: "0644"
-        state: present
-        update_cache: "{{ not ansible_check_mode }}"
-      register: claude_desktop_repository_configuration
-
-    - name: Resolve and install the exact Claude repository version
-      when: >-
-        not ansible_check_mode or
-        (not claude_desktop_keyring_installation.changed and
-        not claude_desktop_repository_configuration.changed)
-      block:
-        - name: Refresh Claude Desktop repository package metadata
-          ansible.builtin.apt:
-            update_cache: true
-            cache_valid_time: 0
-            lock_timeout: 120
-          changed_when: false
-          when: not ansible_check_mode
-
-        - name: Discover published Claude Desktop repository versions
-          ansible.builtin.command:
-            argv:
-              - apt-cache
-              - madison
-              - "{{ claude_desktop_package_name }}"
-          environment:
-            LC_ALL: C
-          register: claude_desktop_repository_versions
-          changed_when: false
-          check_mode: false
-
-        - name: Select versions from the Claude Desktop repository
-          vars:
-            claude_desktop_repository_version_pattern: >-
-              {{ '^\s*'
-              ~ (claude_desktop_package_name
-              | ansible.builtin.regex_escape)
-              ~ '\s*\|\s*\S+\s*\|\s*'
-              ~ (claude_desktop_repository_url
-              | regex_replace('/+$', '')
-              | ansible.builtin.regex_escape)
-              ~ '/?(?:\s|$)' }}
-          ansible.builtin.set_fact:
-            claude_desktop_repository_version_rows: >-
-              {{ claude_desktop_repository_versions.stdout_lines
-              | select('match', claude_desktop_repository_version_pattern)
-              | list }}
-
-        - name: Validate available Claude Desktop repository versions
-          ansible.builtin.assert:
-            that:
-              - claude_desktop_repository_version_rows | length > 0
-            fail_msg: >-
-              The verified Claude Desktop repository does not publish a
-              candidate for {{ claude_desktop_package_name }} on this
-              architecture.
-
-        - name: Select current Claude Desktop repository version
-          ansible.builtin.set_fact:
-            claude_desktop_package_candidate_version: >-
-              {{ (claude_desktop_repository_version_rows
-              | first).split('|')[1] | trim }}
-
-        - name: Validate current Claude Desktop Debian version
-          ansible.builtin.command:
-            argv:
-              - dpkg
-              - --validate-version
-              - "{{ claude_desktop_package_candidate_version }}"
-          changed_when: false
-          check_mode: false
-
-        - name: Install exact current Claude Desktop repository version
-          ansible.builtin.apt:
-            name: >-
-              {{ claude_desktop_package_name }}={{
-              claude_desktop_package_candidate_version }}
-            state: present
-            allow_downgrade: true
-            lock_timeout: 120

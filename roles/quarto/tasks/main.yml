@@ -58,6 +58,20 @@
   ansible.builtin.package_facts:
     manager: auto
 
+- name: Inspect Quarto CLI dpkg configuration state
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - --show
+      - '--showformat=${db:Status-Status}\n'
+      - "{{ quarto_package_name }}"
+  environment:
+    LC_ALL: C
+  register: quarto_installed_package_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 - name: Determine whether Quarto CLI installation is required
   vars:
     quarto_release_version: >-
@@ -69,7 +83,38 @@
       | default('') }}
   ansible.builtin.set_fact:
     quarto_install_required: >-
-      {{ quarto_installed_version != quarto_release_version }}
+      {{ quarto_installed_version != quarto_release_version or
+      quarto_installed_package_status.rc | default(1) != 0 }}
+    quarto_repair_required: >-
+      {{ quarto_installed_version == quarto_release_version and
+      quarto_installed_package_status.rc | default(1) == 0 and
+      quarto_installed_package_status.stdout | default('') != 'installed' }}
+
+- name: Report pending Quarto CLI package repair in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Quarto CLI {{ quarto_release.json.tag_name }} would be configured to
+      repair its incomplete dpkg state.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - quarto_repair_required
+
+- name: Repair matching Quarto CLI package configuration
+  ansible.builtin.command:
+    argv:
+      - dpkg
+      - --force-confdef
+      - --force-confold
+      - --configure
+      - "{{ quarto_package_name }}"
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    LC_ALL: C
+  when:
+    - quarto_repair_required
+    - not ansible_check_mode
+  changed_when: true
 
 - name: Report pending Quarto CLI installation in check mode
   ansible.builtin.debug:

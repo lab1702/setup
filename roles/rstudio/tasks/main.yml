@@ -60,6 +60,20 @@
   ansible.builtin.package_facts:
     manager: auto
 
+- name: Inspect Posit RStudio Desktop dpkg configuration state
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - --show
+      - '--showformat=${db:Status-Status}\n'
+      - "{{ rstudio_package_name }}"
+  environment:
+    LC_ALL: C
+  register: rstudio_installed_package_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 - name: Determine whether Posit RStudio Desktop installation is required
   vars:
     rstudio_installed_packages: >-
@@ -69,7 +83,38 @@
       | default('') }}
   ansible.builtin.set_fact:
     rstudio_install_required: >-
-      {{ rstudio_installed_version != rstudio_release.version }}
+      {{ rstudio_installed_version != rstudio_release.version or
+      rstudio_installed_package_status.rc | default(1) != 0 }}
+    rstudio_repair_required: >-
+      {{ rstudio_installed_version == rstudio_release.version and
+      rstudio_installed_package_status.rc | default(1) == 0 and
+      rstudio_installed_package_status.stdout | default('') != 'installed' }}
+
+- name: Report pending Posit RStudio Desktop package repair in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Posit RStudio Desktop {{ rstudio_release.version }} would be configured
+      to repair its incomplete dpkg state.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - rstudio_repair_required
+
+- name: Repair matching Posit RStudio Desktop package configuration
+  ansible.builtin.command:
+    argv:
+      - dpkg
+      - --force-confdef
+      - --force-confold
+      - --configure
+      - "{{ rstudio_package_name }}"
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    LC_ALL: C
+  when:
+    - rstudio_repair_required
+    - not ansible_check_mode
+  changed_when: true
 
 - name: Report pending Posit RStudio Desktop installation in check mode
   ansible.builtin.debug:

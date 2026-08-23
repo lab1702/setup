@@ -7,6 +7,26 @@
       DuckDB CLI supports AMD64 and ARM64. Detected
       {{ ansible_facts["architecture"] }}.
 
+- name: Inspect DuckDB CLI validation account
+  ansible.builtin.command:
+    argv:
+      - id
+      - -u
+      - "{{ duckdb_validation_user }}"
+  register: duckdb_validation_user_id
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Validate DuckDB CLI validation account
+  ansible.builtin.assert:
+    that:
+      - duckdb_validation_user_id.rc | default(1) == 0
+      - duckdb_validation_user_id.stdout | default('0') | int != 0
+    fail_msg: >-
+      {{ duckdb_validation_user }} must be an existing non-root account so
+      downloaded DuckDB CLI code is never executed as root.
+
 - name: Inspect DuckDB CLI install directory
   ansible.builtin.stat:
     path: "{{ duckdb_install_directory }}"
@@ -22,10 +42,11 @@
       - duckdb_install_directory_status.stat.gid | default(-1) == 0
       - >-
         (duckdb_install_directory_status.stat.mode | default(''))
-        is match('^0[0-7][0145][0145]$')
+        is match('^0[1357][0145][15]$')
     fail_msg: >-
       {{ duckdb_install_directory }} must be an existing root-owned directory,
-      must not be a symbolic link, and must not be group- or world-writable.
+      must not be a symbolic link, must be searchable by all users, and must
+      not be group- or world-writable.
 
 - name: Install DuckDB CLI archive prerequisites
   ansible.builtin.apt:
@@ -106,6 +127,8 @@
   failed_when: false
   check_mode: false
   when: duckdb_installed_binary_is_safe
+  become: true
+  become_user: "{{ duckdb_validation_user }}"
 
 - name: Determine whether DuckDB CLI installation is required
   vars:
@@ -201,6 +224,9 @@
             remote_src: true
             include:
               - duckdb
+            owner: root
+            group: root
+            mode: "0755"
           environment:
             PATH: /usr/bin:/bin
 
@@ -215,20 +241,41 @@
             that:
               - duckdb_extracted_binary.stat.isreg | default(false)
               - not duckdb_extracted_binary.stat.islnk | default(false)
+              - duckdb_extracted_binary.stat.uid | default(-1) == 0
+              - duckdb_extracted_binary.stat.gid | default(-1) == 0
               - >-
-                (duckdb_extracted_binary.stat.mode | default(''))
-                is match('^0[1357][0-7][0-7]$')
+                duckdb_extracted_binary.stat.mode | default('') == '0755'
             fail_msg: >-
-              The extracted DuckDB CLI member is not a regular executable.
+              The extracted DuckDB CLI member is not a root-owned regular
+              executable.
 
-        - name: Inspect downloaded DuckDB CLI version
-          ansible.builtin.command:
-            argv:
-              - "{{ duckdb_archive_tempdir.path }}/duckdb"
-              - --version
-          register: duckdb_downloaded_release
-          changed_when: false
-          failed_when: false
+        - name: Inspect downloaded DuckDB CLI version without root privileges
+          block:
+            - name: Grant unprivileged traversal of DuckDB temporary directory
+              ansible.builtin.file:
+                path: "{{ duckdb_archive_tempdir.path }}"
+                state: directory
+                mode: "0701"
+              changed_when: false
+
+            - name: Run downloaded DuckDB CLI version probe as validation user
+              ansible.builtin.command:
+                argv:
+                  - "{{ duckdb_archive_tempdir.path }}/duckdb"
+                  - --version
+                chdir: "{{ duckdb_archive_tempdir.path }}"
+              register: duckdb_downloaded_release
+              changed_when: false
+              failed_when: false
+              become: true
+              become_user: "{{ duckdb_validation_user }}"
+          always:
+            - name: Restore DuckDB temporary directory permissions
+              ansible.builtin.file:
+                path: "{{ duckdb_archive_tempdir.path }}"
+                state: directory
+                mode: "0700"
+              changed_when: false
 
         - name: Validate downloaded DuckDB CLI version
           vars:

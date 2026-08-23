@@ -1,8 +1,9 @@
 ---
 r_package_names:
   - r-base
+  - r-base-core
   - r-base-dev
-r_package_state: latest
+  - r-recommended
 
 r_supported_ubuntu_versions:
   - "26.04"

@@ -109,15 +109,114 @@
         mode: "0644"
       register: r_repository_configuration
 
-    - name: Install latest R packages
-      ansible.builtin.apt:
-        name: "{{ r_package_names }}"
-        state: "{{ r_package_state }}"
-        install_recommends: false
-        update_cache: true
-        cache_valid_time: 0
-        lock_timeout: 120
+    - name: Resolve and install exact current CRAN package versions
       when: >-
         not ansible_check_mode or
         (not r_repository_keyring_installation.changed and
         not r_repository_configuration.changed)
+      block:
+        - name: Refresh CRAN repository package metadata
+          ansible.builtin.apt:
+            update_cache: true
+            cache_valid_time: 0
+            lock_timeout: 120
+          changed_when: false
+          when: not ansible_check_mode
+
+        - name: Discover published CRAN package versions
+          ansible.builtin.command:
+            argv:
+              - apt-cache
+              - madison
+              - "{{ item }}"
+          environment:
+            LC_ALL: C
+          loop: "{{ r_package_names | unique | list }}"
+          loop_control:
+            label: "{{ item }}"
+          register: r_repository_package_versions
+          changed_when: false
+          check_mode: false
+
+        - name: Initialize current CRAN package versions
+          ansible.builtin.set_fact:
+            r_repository_package_candidate_versions: {}
+          changed_when: false
+
+        - name: Select current package versions from the CRAN repository
+          vars:
+            r_repository_version_pattern: >-
+              {{ '^\s*'
+              ~ (item.item | ansible.builtin.regex_escape)
+              ~ '\s*\|\s*\S+\s*\|\s*'
+              ~ (r_repository_url | regex_replace('/+$', '')
+              | ansible.builtin.regex_escape)
+              ~ '/?(?:\s|$)' }}
+            r_repository_version_rows: >-
+              {{ item.stdout_lines
+              | select('match', r_repository_version_pattern) | list }}
+            r_repository_candidate_row: >-
+              {{ r_repository_version_rows | first | default('') }}
+            r_repository_candidate_version: >-
+              {{ (r_repository_candidate_row.split('|') + ['', ''])[1]
+              | trim }}
+          ansible.builtin.set_fact:
+            r_repository_package_candidate_versions: >-
+              {{ r_repository_package_candidate_versions
+              | combine({item.item: r_repository_candidate_version}) }}
+          loop: "{{ r_repository_package_versions.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+          changed_when: false
+
+        - name: Validate available CRAN package versions
+          ansible.builtin.assert:
+            that:
+              - >-
+                r_repository_package_candidate_versions[item]
+                | default('') | length > 0
+            fail_msg: >-
+              The verified CRAN repository does not publish a candidate for
+              {{ item }} on this architecture.
+          loop: "{{ r_package_names | unique | list }}"
+          loop_control:
+            label: "{{ item }}"
+
+        - name: Validate current CRAN Debian versions
+          ansible.builtin.command:
+            argv:
+              - dpkg
+              - --validate-version
+              - "{{ r_repository_package_candidate_versions[item] }}"
+          loop: "{{ r_package_names | unique | list }}"
+          loop_control:
+            label: >-
+              {{ item }}={{ r_repository_package_candidate_versions[item] }}
+          changed_when: false
+          check_mode: false
+
+        - name: Initialize exact CRAN package specifications
+          ansible.builtin.set_fact:
+            r_repository_exact_package_names: []
+          changed_when: false
+
+        - name: Build exact CRAN package specifications
+          ansible.builtin.set_fact:
+            r_repository_exact_package_names: >-
+              {{ r_repository_exact_package_names
+              + [item ~ '=' ~
+              r_repository_package_candidate_versions[item]] }}
+          loop: "{{ r_package_names | unique | list }}"
+          loop_control:
+            label: "{{ item }}"
+          changed_when: false
+
+        - name: Install exact current CRAN package versions
+          ansible.builtin.apt:
+            name: "{{ r_repository_exact_package_names }}"
+            state: present
+            default_release: >-
+              {{ r_repository_suite | regex_replace('/+$', '') }}
+            allow_downgrade: true
+            install_recommends: false
+            lock_timeout: 120

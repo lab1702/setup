@@ -7,6 +7,24 @@
       uv supports AMD64 and ARM64. Detected
       {{ ansible_facts["architecture"] }}.
 
+- name: Resolve uv version probe account
+  ansible.builtin.getent:
+    database: passwd
+    key: nobody
+    fail_key: false
+
+- name: Validate uv version probe account
+  vars:
+    uv_version_probe_passwd: >-
+      {{ ansible_facts["getent_passwd"]["nobody"] | default([], true) }}
+  ansible.builtin.assert:
+    that:
+      - uv_version_probe_passwd | length >= 3
+      - (uv_version_probe_passwd + ['', '', ''])[1] | int > 0
+    fail_msg: >-
+      uv version probes require the unprivileged nobody account with a non-root
+      user ID.
+
 - name: Inspect uv install directory
   ansible.builtin.stat:
     path: "{{ uv_install_directory }}"
@@ -22,10 +40,11 @@
       - uv_install_directory_status.stat.gid | default(-1) == 0
       - >-
         (uv_install_directory_status.stat.mode | default(''))
-        is match('^0[0-7][0145][0145]$')
+        is match('^0[1357][0145][15]$')
     fail_msg: >-
       {{ uv_install_directory }} must be an existing root-owned directory,
-      must not be a symbolic link, and must not be group- or world-writable.
+      must not be a symbolic link, must be traversable by ordinary users, and
+      must not be group- or world-writable.
 
 - name: Get latest uv release
   ansible.builtin.uri:
@@ -107,22 +126,28 @@
       and uv_installed_uvx_binary_status.stat.gid | default(-1) == 0
       and uv_installed_uvx_binary_status.stat.mode | default('') == '0755' }}
 
-- name: Inspect installed uv version
+- name: Inspect installed uv version as nobody
   ansible.builtin.command:
     argv:
       - "{{ uv_install_directory }}/uv"
       - --version
+    chdir: "{{ uv_install_directory }}"
+  become: true
+  become_user: nobody
   register: uv_installed_release
   changed_when: false
   failed_when: false
   check_mode: false
   when: uv_installed_binary_is_safe
 
-- name: Inspect installed uvx version
+- name: Inspect installed uvx version as nobody
   ansible.builtin.command:
     argv:
       - "{{ uv_install_directory }}/uvx"
       - --version
+    chdir: "{{ uv_install_directory }}"
+  become: true
+  become_user: nobody
   register: uv_installed_uvx_release
   changed_when: false
   failed_when: false
@@ -188,23 +213,71 @@
             remote_src: true
             extra_opts:
               - --strip-components=1
+            owner: root
+            group: root
             mode: "0755"
 
-        - name: Inspect downloaded uv version
-          ansible.builtin.command:
-            argv:
-              - "{{ uv_archive_tempdir.path }}/uv"
-              - --version
-          register: uv_downloaded_release
-          changed_when: false
+        - name: Inspect extracted uv binary paths
+          ansible.builtin.stat:
+            path: "{{ uv_archive_tempdir.path }}/{{ item }}"
+            follow: false
+          loop:
+            - uv
+            - uvx
+          register: uv_downloaded_binary_statuses
 
-        - name: Inspect downloaded uvx version
-          ansible.builtin.command:
-            argv:
-              - "{{ uv_archive_tempdir.path }}/uvx"
-              - --version
-          register: uv_downloaded_uvx_release
-          changed_when: false
+        - name: Validate extracted uv binaries
+          ansible.builtin.assert:
+            that:
+              - item.stat.isreg | default(false)
+              - not item.stat.islnk | default(false)
+              - item.stat.uid | default(-1) == 0
+              - item.stat.gid | default(-1) == 0
+              - item.stat.mode | default('') == '0755'
+            fail_msg: >-
+              The extracted {{ item.item }} binary is not a root-owned regular
+              executable.
+          loop: "{{ uv_downloaded_binary_statuses.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+        - name: Inspect downloaded uv versions without root privileges
+          block:
+            - name: Grant unprivileged traversal of uv temporary directory
+              ansible.builtin.file:
+                path: "{{ uv_archive_tempdir.path }}"
+                state: directory
+                mode: "0701"
+              changed_when: false
+
+            - name: Run downloaded uv version probe as nobody
+              ansible.builtin.command:
+                argv:
+                  - "{{ uv_archive_tempdir.path }}/uv"
+                  - --version
+                chdir: "{{ uv_archive_tempdir.path }}"
+              become: true
+              become_user: nobody
+              register: uv_downloaded_release
+              changed_when: false
+
+            - name: Run downloaded uvx version probe as nobody
+              ansible.builtin.command:
+                argv:
+                  - "{{ uv_archive_tempdir.path }}/uvx"
+                  - --version
+                chdir: "{{ uv_archive_tempdir.path }}"
+              become: true
+              become_user: nobody
+              register: uv_downloaded_uvx_release
+              changed_when: false
+          always:
+            - name: Restore uv temporary directory permissions
+              ansible.builtin.file:
+                path: "{{ uv_archive_tempdir.path }}"
+                state: directory
+                mode: "0700"
+              changed_when: false
 
         - name: Validate downloaded uv and uvx versions
           vars:

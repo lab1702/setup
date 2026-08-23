@@ -7,6 +7,24 @@
       Ruff supports AMD64 and ARM64. Detected
       {{ ansible_facts["architecture"] }}.
 
+- name: Resolve Ruff version probe account
+  ansible.builtin.getent:
+    database: passwd
+    key: nobody
+    fail_key: false
+
+- name: Validate Ruff version probe account
+  vars:
+    ruff_version_probe_passwd: >-
+      {{ ansible_facts["getent_passwd"]["nobody"] | default([], true) }}
+  ansible.builtin.assert:
+    that:
+      - ruff_version_probe_passwd | length >= 3
+      - (ruff_version_probe_passwd + ['', '', ''])[1] | int > 0
+    fail_msg: >-
+      Ruff version probes require the unprivileged nobody account with a
+      non-root user ID.
+
 - name: Inspect Ruff install directory
   ansible.builtin.stat:
     path: "{{ ruff_install_directory }}"
@@ -22,10 +40,11 @@
       - ruff_install_directory_status.stat.gid | default(-1) == 0
       - >-
         (ruff_install_directory_status.stat.mode | default(''))
-        is match('^0[0-7][0145][0145]$')
+        is match('^0[1357][0145][15]$')
     fail_msg: >-
       {{ ruff_install_directory }} must be an existing root-owned directory,
-      must not be a symbolic link, and must not be group- or world-writable.
+      must not be a symbolic link, must be traversable by ordinary users, and
+      must not be group- or world-writable.
 
 - name: Get latest Ruff release
   ansible.builtin.uri:
@@ -88,11 +107,14 @@
       and ruff_installed_binary_status.stat.gid | default(-1) == 0
       and ruff_installed_binary_status.stat.mode | default('') == '0755' }}
 
-- name: Inspect installed Ruff version
+- name: Inspect installed Ruff version as nobody
   ansible.builtin.command:
     argv:
       - "{{ ruff_install_directory }}/ruff"
       - --version
+    chdir: "{{ ruff_install_directory }}"
+  become: true
+  become_user: nobody
   register: ruff_installed_release
   changed_when: false
   failed_when: false
@@ -152,15 +174,54 @@
             remote_src: true
             extra_opts:
               - --strip-components=1
+            owner: root
+            group: root
             mode: "0755"
 
-        - name: Inspect downloaded Ruff version
-          ansible.builtin.command:
-            argv:
-              - "{{ ruff_archive_tempdir.path }}/ruff"
-              - --version
-          register: ruff_downloaded_release
-          changed_when: false
+        - name: Inspect extracted Ruff binary
+          ansible.builtin.stat:
+            path: "{{ ruff_archive_tempdir.path }}/ruff"
+            follow: false
+          register: ruff_downloaded_binary_status
+
+        - name: Validate extracted Ruff binary
+          ansible.builtin.assert:
+            that:
+              - ruff_downloaded_binary_status.stat.isreg | default(false)
+              - not ruff_downloaded_binary_status.stat.islnk | default(false)
+              - ruff_downloaded_binary_status.stat.uid | default(-1) == 0
+              - ruff_downloaded_binary_status.stat.gid | default(-1) == 0
+              - >-
+                ruff_downloaded_binary_status.stat.mode | default('') == '0755'
+            fail_msg: >-
+              The extracted Ruff binary is not a root-owned regular executable.
+
+        - name: Inspect downloaded Ruff version without root privileges
+          block:
+            - name: Grant unprivileged traversal of Ruff temporary directory
+              ansible.builtin.file:
+                path: "{{ ruff_archive_tempdir.path }}"
+                state: directory
+                mode: "0701"
+              changed_when: false
+
+            - name: Run downloaded Ruff version probe as nobody
+              ansible.builtin.command:
+                argv:
+                  - "{{ ruff_archive_tempdir.path }}/ruff"
+                  - --version
+                chdir: "{{ ruff_archive_tempdir.path }}"
+              become: true
+              become_user: nobody
+              register: ruff_downloaded_release
+              changed_when: false
+          always:
+            - name: Restore Ruff temporary directory permissions
+              ansible.builtin.file:
+                path: "{{ ruff_archive_tempdir.path }}"
+                state: directory
+                mode: "0700"
+              changed_when: false
 
         - name: Validate downloaded Ruff version
           vars:
