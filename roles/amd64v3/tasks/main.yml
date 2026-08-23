@@ -1,0 +1,240 @@
+---
+- name: Validate AMD64v3 role platform support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - >-
+        ansible_facts["distribution_version"]
+        in amd64v3_supported_ubuntu_versions
+      - amd64v3_system_architecture in amd64v3_known_architectures
+      - amd64v3_cpu_probe_argv | length > 0
+      - amd64v3_cpu_probe_environment_argv | length > 0
+    fail_msg: >-
+      The AMD64v3 role supports Ubuntu 26.04 on AMD64 and ARM64.
+      Detected {{ ansible_facts["distribution"] }}
+      {{ ansible_facts["distribution_version"] }} on
+      {{ amd64v3_system_architecture }}.
+
+- name: Validate the managed apt configuration location
+  ansible.builtin.assert:
+    that:
+      - >-
+        (amd64v3_apt_config_path | dirname) ==
+        amd64v3_apt_config_parts_path
+      - >-
+        (amd64v3_apt_config_path | basename)
+        is match(amd64v3_apt_fragment_filename_pattern)
+    fail_msg: >-
+      The managed AMD64v3 file must have an APT-compatible filename directly
+      under {{ amd64v3_apt_config_parts_path }}; got
+      {{ amd64v3_apt_config_path }}.
+
+- name: Probe the AMD64 CPU feature level
+  ansible.builtin.command:
+    argv: >-
+      {{ amd64v3_cpu_probe_environment_argv + amd64v3_cpu_probe_argv }}
+  register: amd64v3_cpu_probe
+  changed_when: false
+  check_mode: false
+  when: amd64v3_system_architecture in amd64v3_candidate_architectures
+
+- name: Record AMD64v3 CPU support
+  ansible.builtin.set_fact:
+    amd64v3_cpu_supported: >-
+      {{
+        amd64v3_system_architecture in amd64v3_candidate_architectures
+        and (amd64v3_cpu_probe.stdout | default(''))
+        is search(amd64v3_cpu_support_pattern)
+      }}
+
+- name: Inspect the managed AMD64v3 apt configuration path
+  ansible.builtin.stat:
+    path: "{{ amd64v3_apt_config_path }}"
+    follow: false
+  register: amd64v3_apt_config_path_status
+
+- name: Validate the managed AMD64v3 apt configuration path
+  ansible.builtin.assert:
+    that:
+      - >-
+        not amd64v3_apt_config_path_status.stat.exists or
+        amd64v3_apt_config_path_status.stat.isreg | default(false)
+    fail_msg: >-
+      Refusing to manage {{ amd64v3_apt_config_path }} because it is not a
+      regular file.
+
+- name: Enable AMD64v3 packages for a compatible CPU
+  ansible.builtin.copy:
+    dest: "{{ amd64v3_apt_config_path }}"
+    content: "{{ amd64v3_apt_config_content }}"
+    owner: "{{ amd64v3_apt_config_owner }}"
+    group: "{{ amd64v3_apt_config_group }}"
+    mode: "{{ amd64v3_apt_config_mode }}"
+  register: amd64v3_apt_configuration
+  when: amd64v3_cpu_supported
+
+- name: Keep baseline packages when AMD64v3 is unavailable
+  ansible.builtin.file:
+    path: "{{ amd64v3_apt_config_path }}"
+    state: absent
+  register: amd64v3_apt_configuration_removal
+  when: not amd64v3_cpu_supported
+
+- name: Record a pending AMD64v3 check-mode change
+  ansible.builtin.set_fact:
+    amd64v3_apt_configuration_change_pending: >-
+      {{
+        ansible_check_mode and
+        (
+          (
+            amd64v3_cpu_supported and
+            (amd64v3_apt_configuration.changed | default(false))
+          ) or
+          (
+            not amd64v3_cpu_supported and
+            (amd64v3_apt_configuration_removal.changed | default(false))
+          )
+        )
+      }}
+
+- name: Inspect apt fragments for competing architecture-variant directives
+  ansible.builtin.find:
+    paths: "{{ amd64v3_apt_config_parts_path }}"
+    recurse: false
+    file_type: file
+    follow: true
+    patterns: "{{ amd64v3_apt_fragment_filename_pattern }}"
+    use_regex: true
+    hidden: true
+    contains: "{{ amd64v3_apt_competing_directive_pattern }}"
+    read_whole_file: false
+  register: amd64v3_apt_competing_fragment_search
+  when: amd64v3_apt_configuration_change_pending
+
+- name: Inspect indirect apt configuration fragments
+  ansible.builtin.find:
+    paths: "{{ amd64v3_apt_config_parts_path }}"
+    recurse: false
+    file_type: link
+    patterns: "{{ amd64v3_apt_fragment_filename_pattern }}"
+    use_regex: true
+    hidden: true
+  register: amd64v3_apt_indirect_fragment_search
+  when: amd64v3_apt_configuration_change_pending
+
+- name: Inspect the primary apt configuration
+  ansible.builtin.stat:
+    path: "{{ amd64v3_apt_main_config_path }}"
+    follow: true
+  register: amd64v3_apt_main_config_status
+  when: amd64v3_apt_configuration_change_pending
+
+- name: Read the primary apt configuration
+  ansible.builtin.slurp:
+    src: "{{ amd64v3_apt_main_config_path }}"
+  register: amd64v3_apt_main_config
+  when:
+    - amd64v3_apt_configuration_change_pending
+    - amd64v3_apt_main_config_status.stat.isreg | default(false)
+
+- name: Validate the projected apt architecture variant
+  vars:
+    amd64v3_apt_competing_fragment_paths: >-
+      {{
+        amd64v3_apt_competing_fragment_search.files
+        | map(attribute='path')
+        | reject('equalto', amd64v3_apt_config_path)
+        | list
+      }}
+    amd64v3_apt_main_config_has_competing_directive: >-
+      {{
+        (amd64v3_apt_main_config.content | default('') | b64decode)
+        is search(amd64v3_apt_competing_directive_pattern)
+      }}
+    amd64v3_apt_indirect_fragment_paths: >-
+      {{
+        amd64v3_apt_indirect_fragment_search.files
+        | map(attribute='path')
+        | reject('equalto', amd64v3_apt_config_path)
+        | list
+      }}
+  ansible.builtin.assert:
+    that:
+      - >-
+        not amd64v3_apt_main_config_status.stat.exists or
+        amd64v3_apt_main_config_status.stat.isreg | default(false)
+      - amd64v3_apt_competing_fragment_paths | length == 0
+      - amd64v3_apt_indirect_fragment_paths | length == 0
+      - not amd64v3_apt_main_config_has_competing_directive
+    fail_msg: >-
+      Cannot validate the projected APT architecture variant because another
+      APT configuration may set, include, or clear architecture variants:
+      fragments={{ amd64v3_apt_competing_fragment_paths | join(', ') |
+      default('(none)', true) }}, indirect_fragments={{
+      amd64v3_apt_indirect_fragment_paths | join(', ') |
+      default('(none)', true) }}, primary_config={{
+      amd64v3_apt_main_config_path if
+      amd64v3_apt_main_config_has_competing_directive else '(none)' }}.
+  when: amd64v3_apt_configuration_change_pending
+
+- name: Inspect the effective apt architecture variant
+  ansible.builtin.command:
+    argv: "{{ amd64v3_apt_config_query_argv }}"
+  environment: >-
+    {{ {'LC_ALL': 'C'} | combine(amd64v3_apt_config_environment) }}
+  register: amd64v3_active_apt_variant
+  changed_when: false
+  check_mode: false
+  when: not amd64v3_apt_configuration_change_pending
+
+- name: Validate the effective apt architecture variant
+  vars:
+    amd64v3_active_apt_variant_rows: >-
+      {{
+        amd64v3_active_apt_variant.stdout_lines
+        | select(
+          'match',
+          '^(?i:(?:[^:\s]+::)*APT::Architecture-Variants)(?:\s|::)'
+        )
+        | list
+      }}
+    amd64v3_normalized_active_apt_variant_rows: >-
+      {{
+        amd64v3_active_apt_variant_rows
+        | map(
+          'regex_replace',
+          '^(?i:APT::Architecture-Variants)',
+          'APT::Architecture-Variants'
+        )
+        | list
+      }}
+    amd64v3_expected_apt_variant_row: >-
+      APT::Architecture-Variants "{{ amd64v3_apt_variant }}";
+    amd64v3_active_apt_variant_matches: >-
+      {{
+        amd64v3_active_apt_variant_rows
+        | select(
+          'search',
+          '(?i)' ~ (amd64v3_apt_variant | ansible.builtin.regex_escape)
+        )
+        | list
+      }}
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          amd64v3_cpu_supported and
+          amd64v3_normalized_active_apt_variant_rows ==
+          [amd64v3_expected_apt_variant_row]
+        ) or
+        (
+          not amd64v3_cpu_supported and
+          amd64v3_active_apt_variant_matches | length == 0
+        )
+    fail_msg: >-
+      APT's effective architecture variant does not match CPU support.
+      Expected {{ amd64v3_apt_variant if amd64v3_cpu_supported else
+      'no amd64v3 opt-in' }}, but apt-config returned these variant rows:
+      {{ amd64v3_active_apt_variant_rows | join(', ') |
+      default('(empty)', true) }}.
+  when: not amd64v3_apt_configuration_change_pending

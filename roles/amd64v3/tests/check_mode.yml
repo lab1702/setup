@@ -1,0 +1,211 @@
+---
+- name: Exercise AMD64v3 apt configuration in check mode
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    amd64v3_test_supported_probe:
+      - /usr/bin/printf
+      - '%s\n'
+      - x86-64-v3 (supported, searched)
+    amd64v3_test_unsupported_probe:
+      - /usr/bin/printf
+      - '%s\n'
+      - x86-64-v2 (supported, searched)
+    amd64v3_system_architecture: x86_64
+    amd64v3_cpu_probe_argv: "{{ amd64v3_test_supported_probe }}"
+    amd64v3_apt_config_path: >-
+      {{ amd64v3_test_directory.path }}/parts/99enable-amd64v3
+    amd64v3_apt_config_parts_path: >-
+      {{ amd64v3_test_directory.path }}/parts
+    amd64v3_apt_main_config_path: >-
+      {{ amd64v3_test_directory.path }}/main.conf
+    amd64v3_test_variant_override_path: >-
+      {{ amd64v3_test_directory.path }}/parts/zzvariant-override.conf
+    amd64v3_test_vector_override_path: >-
+      {{ amd64v3_test_directory.path }}/parts/zzvector-override.conf
+    amd64v3_apt_config_owner: "{{ ansible_facts['user_id'] }}"
+    amd64v3_apt_config_group: "{{ ansible_facts['user_gid'] }}"
+    amd64v3_apt_config_environment:
+      APT_CONFIG: "{{ amd64v3_test_directory.path }}/apt.conf"
+  tasks:
+    - name: Create a temporary AMD64v3 check-mode directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .amd64v3-check-mode-test
+      register: amd64v3_test_directory
+      changed_when: false
+      check_mode: false
+
+    - name: Exercise AMD64v3 role check-mode behavior
+      block:
+        - name: Create an isolated apt configuration directory
+          ansible.builtin.file:
+            path: "{{ amd64v3_test_directory.path }}/parts"
+            state: directory
+            mode: "0755"
+          check_mode: false
+
+        - name: Configure the isolated apt environment
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_test_directory.path }}/apt.conf"
+            content: |
+              Dir::Etc::Parts "{{ amd64v3_test_directory.path }}/parts";
+              Dir::Etc::Main "/dev/null";
+            mode: "0644"
+          check_mode: false
+
+        - name: Predict AMD64v3 enablement on a compatible CPU
+          ansible.builtin.include_role:
+            name: amd64v3
+
+        - name: Inspect configuration after predicted enablement
+          ansible.builtin.stat:
+            path: "{{ amd64v3_apt_config_path }}"
+          register: amd64v3_test_predicted_enablement
+
+        - name: Validate AMD64v3 enablement prediction
+          ansible.builtin.assert:
+            that:
+              - amd64v3_apt_configuration.changed
+              - not amd64v3_test_predicted_enablement.stat.exists
+
+        - name: Create an existing AMD64v3 opt-in
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_apt_config_path }}"
+            content: |
+              APT::Architecture-Variants "amd64v3";
+            mode: "0644"
+          check_mode: false
+
+        - name: Predict removal when CPU support is missing
+          ansible.builtin.include_role:
+            name: amd64v3
+          vars:
+            amd64v3_cpu_probe_argv: "{{ amd64v3_test_unsupported_probe }}"
+
+        - name: Inspect configuration after predicted removal
+          ansible.builtin.stat:
+            path: "{{ amd64v3_apt_config_path }}"
+          register: amd64v3_test_predicted_removal
+
+        - name: Validate fail-closed removal prediction
+          ansible.builtin.assert:
+            that:
+              - amd64v3_apt_configuration_removal.changed
+              - amd64v3_test_predicted_removal.stat.exists
+
+        - name: Recheck an already-correct AMD64v3 opt-in
+          ansible.builtin.include_role:
+            name: amd64v3
+
+        - name: Validate unchanged AMD64v3 configuration in check mode
+          ansible.builtin.assert:
+            that:
+              - not amd64v3_apt_configuration.changed
+
+        - name: Remove the managed opt-in before conflict prediction
+          ansible.builtin.file:
+            path: "{{ amd64v3_apt_config_path }}"
+            state: absent
+          check_mode: false
+
+        - name: Add a later baseline variant override
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_test_variant_override_path }}"
+            content: |
+              APT::Architecture-Variants "baseline";
+            mode: "0644"
+          check_mode: false
+
+        - name: Record pending enablement-conflict validation
+          ansible.builtin.set_fact:
+            amd64v3_test_enablement_conflict_rejected: false
+
+        - name: Verify check mode rejects an enablement conflict
+          block:
+            - name: Predict enablement with a later variant override
+              ansible.builtin.include_role:
+                name: amd64v3
+          rescue:
+            - name: Validate enablement-conflict failure
+              ansible.builtin.assert:
+                that:
+                  - >-
+                    ansible_failed_result.msg is search(
+                      'Cannot validate the projected APT architecture variant'
+                    )
+
+            - name: Record enablement-conflict rejection
+              ansible.builtin.set_fact:
+                amd64v3_test_enablement_conflict_rejected: true
+          always:
+            - name: Remove the later baseline variant override
+              ansible.builtin.file:
+                path: "{{ amd64v3_test_variant_override_path }}"
+                state: absent
+              check_mode: false
+
+        - name: Validate enablement-conflict rejection
+          ansible.builtin.assert:
+            that:
+              - amd64v3_test_enablement_conflict_rejected
+
+        - name: Restore the managed AMD64v3 opt-in
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_apt_config_path }}"
+            content: |
+              APT::Architecture-Variants "amd64v3";
+            mode: "0644"
+          check_mode: false
+
+        - name: Add a persistent vector-form AMD64v3 opt-in
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_test_vector_override_path }}"
+            content: |
+              apt::architecture-variants { "amd64v3"; };
+            mode: "0644"
+          check_mode: false
+
+        - name: Record pending removal-conflict validation
+          ansible.builtin.set_fact:
+            amd64v3_test_removal_conflict_rejected: false
+
+        - name: Verify check mode rejects a removal conflict
+          block:
+            - name: Predict removal with a persistent AMD64v3 opt-in
+              ansible.builtin.include_role:
+                name: amd64v3
+              vars:
+                amd64v3_cpu_probe_argv: >-
+                  {{ amd64v3_test_unsupported_probe }}
+          rescue:
+            - name: Validate removal-conflict failure
+              ansible.builtin.assert:
+                that:
+                  - >-
+                    ansible_failed_result.msg is search(
+                      'Cannot validate the projected APT architecture variant'
+                    )
+
+            - name: Record removal-conflict rejection
+              ansible.builtin.set_fact:
+                amd64v3_test_removal_conflict_rejected: true
+          always:
+            - name: Remove the persistent vector-form AMD64v3 opt-in
+              ansible.builtin.file:
+                path: "{{ amd64v3_test_vector_override_path }}"
+                state: absent
+              check_mode: false
+
+        - name: Validate removal-conflict rejection
+          ansible.builtin.assert:
+            that:
+              - amd64v3_test_removal_conflict_rejected
+      always:
+        - name: Remove the temporary AMD64v3 check-mode directory
+          ansible.builtin.file:
+            path: "{{ amd64v3_test_directory.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false

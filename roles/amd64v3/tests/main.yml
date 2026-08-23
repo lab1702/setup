@@ -1,0 +1,319 @@
+---
+- name: Exercise automatic AMD64v3 apt configuration
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    amd64v3_test_supported_probe:
+      - /usr/bin/printf
+      - '%s\n'
+      - x86-64-v3 (supported, searched)
+    amd64v3_test_unsupported_probe:
+      - /usr/bin/printf
+      - '%s\n'
+      - x86-64-v2 (supported, searched)
+    amd64v3_system_architecture: x86_64
+    amd64v3_cpu_probe_argv: "{{ amd64v3_test_supported_probe }}"
+    amd64v3_apt_config_path: >-
+      {{ amd64v3_test_directory.path }}/parts/99enable-amd64v3
+    amd64v3_apt_config_parts_path: >-
+      {{ amd64v3_test_directory.path }}/parts
+    amd64v3_apt_main_config_path: >-
+      {{ amd64v3_test_directory.path }}/main.conf
+    amd64v3_apt_config_owner: "{{ ansible_facts['user_id'] }}"
+    amd64v3_apt_config_group: "{{ ansible_facts['user_gid'] }}"
+    amd64v3_apt_config_environment:
+      APT_CONFIG: "{{ amd64v3_test_directory.path }}/apt.conf"
+  tasks:
+    - name: Create a temporary AMD64v3 test directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .amd64v3-test
+      register: amd64v3_test_directory
+      changed_when: false
+      check_mode: false
+
+    - name: Exercise AMD64v3 role behavior
+      block:
+        - name: Create an isolated apt configuration directory
+          ansible.builtin.file:
+            path: "{{ amd64v3_test_directory.path }}/parts"
+            state: directory
+            mode: "0755"
+          check_mode: false
+
+        - name: Configure the isolated apt environment
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_test_directory.path }}/apt.conf"
+            content: |
+              Dir::Etc::Parts "{{ amd64v3_test_directory.path }}/parts";
+              Dir::Etc::Main "/dev/null";
+            mode: "0644"
+          check_mode: false
+
+        - name: Create an inherited-environment probe
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_test_directory.path }}/probe-environment"
+            content: |
+              #!/bin/sh
+              if [ "${GLIBC_TUNABLES+x}" = x ] ||
+                 [ "${LD_HWCAP_MASK+x}" = x ]; then
+                  exit 1
+              fi
+              printf '%s\n' 'x86-64-v3 (supported, searched)'
+            mode: "0755"
+
+        - name: Verify the CPU probe receives a clean environment
+          ansible.builtin.include_role:
+            name: amd64v3
+            apply:
+              environment:
+                GLIBC_TUNABLES: glibc.cpu.hwcaps=-AVX2
+                LD_HWCAP_MASK: "0"
+          vars:
+            amd64v3_cpu_probe_argv:
+              - "{{ amd64v3_test_directory.path }}/probe-environment"
+
+        - name: Enable AMD64v3 for simulated CPU support
+          ansible.builtin.include_role:
+            name: amd64v3
+
+        - name: Inspect the enabled AMD64v3 configuration
+          ansible.builtin.stat:
+            path: "{{ amd64v3_apt_config_path }}"
+          register: amd64v3_test_enabled_configuration
+
+        - name: Read the enabled AMD64v3 configuration
+          ansible.builtin.slurp:
+            src: "{{ amd64v3_apt_config_path }}"
+          register: amd64v3_test_enabled_content
+
+        - name: Validate the enabled AMD64v3 configuration
+          ansible.builtin.assert:
+            that:
+              - amd64v3_test_enabled_configuration.stat.isreg
+              - amd64v3_test_enabled_configuration.stat.mode == "0644"
+              - >-
+                amd64v3_test_enabled_configuration.stat.uid ==
+                ansible_facts["user_uid"] | int
+              - >-
+                amd64v3_test_enabled_configuration.stat.gid ==
+                ansible_facts["user_gid"] | int
+              - >-
+                amd64v3_test_enabled_content.content | b64decode ==
+                'APT::Architecture-Variants "amd64v3";\n'
+
+        - name: Reapply AMD64v3 configuration
+          ansible.builtin.include_role:
+            name: amd64v3
+
+        - name: Validate AMD64v3 configuration idempotence
+          ansible.builtin.assert:
+            that:
+              - not amd64v3_apt_configuration.changed
+
+        - name: Add a later conflicting apt architecture variant
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_test_directory.path }}/parts/zzvariant-override"
+            content: |
+              APT::Architecture-Variants "baseline";
+            mode: "0644"
+
+        - name: Record pending effective-value validation
+          ansible.builtin.set_fact:
+            amd64v3_test_override_rejected: false
+
+        - name: Verify an effective-value override is rejected
+          block:
+            - name: Run AMD64v3 role with a later apt override
+              ansible.builtin.include_role:
+                name: amd64v3
+          rescue:
+            - name: Record effective-value override rejection
+              ansible.builtin.set_fact:
+                amd64v3_test_override_rejected: true
+          always:
+            - name: Remove the conflicting apt architecture variant
+              ansible.builtin.file:
+                path: >-
+                  {{ amd64v3_test_directory.path }}/parts/zzvariant-override
+                state: absent
+
+        - name: Validate effective-value override rejection
+          ansible.builtin.assert:
+            that:
+              - amd64v3_test_override_rejected
+
+        - name: Remove opt-in for simulated missing CPU support
+          ansible.builtin.include_role:
+            name: amd64v3
+          vars:
+            amd64v3_cpu_probe_argv: "{{ amd64v3_test_unsupported_probe }}"
+
+        - name: Inspect removed AMD64v3 configuration
+          ansible.builtin.stat:
+            path: "{{ amd64v3_apt_config_path }}"
+          register: amd64v3_test_removed_configuration
+
+        - name: Validate fail-closed AMD64v3 removal
+          ansible.builtin.assert:
+            that:
+              - amd64v3_apt_configuration_removal.changed
+              - not amd64v3_test_removed_configuration.stat.exists
+
+        - name: Add an unsupported vector-form AMD64v3 opt-in
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_test_directory.path }}/parts/zzvector-override"
+            content: |
+              apt::architecture-variants { "amd64v3"; };
+            mode: "0644"
+
+        - name: Record pending vector-form validation
+          ansible.builtin.set_fact:
+            amd64v3_test_vector_override_rejected: false
+
+        - name: Verify vector-form opt-in is rejected without CPU support
+          block:
+            - name: Run unsupported CPU path with a vector-form opt-in
+              ansible.builtin.include_role:
+                name: amd64v3
+              vars:
+                amd64v3_cpu_probe_argv: >-
+                  {{ amd64v3_test_unsupported_probe }}
+          rescue:
+            - name: Record vector-form opt-in rejection
+              ansible.builtin.set_fact:
+                amd64v3_test_vector_override_rejected: true
+          always:
+            - name: Remove the vector-form AMD64v3 opt-in
+              ansible.builtin.file:
+                path: >-
+                  {{ amd64v3_test_directory.path }}/parts/zzvector-override
+                state: absent
+
+        - name: Validate vector-form opt-in rejection
+          ansible.builtin.assert:
+            that:
+              - amd64v3_test_vector_override_rejected
+
+        - name: Add an apt-get-specific AMD64v3 opt-in
+          ansible.builtin.copy:
+            dest: >-
+              {{ amd64v3_test_directory.path }}/parts/zzbinary-override.conf
+            content: |
+              Binary::apt-get::APT::Architecture-Variants "amd64v3";
+            mode: "0644"
+
+        - name: Record pending apt-get-specific validation
+          ansible.builtin.set_fact:
+            amd64v3_test_binary_override_rejected: false
+
+        - name: Verify an unsupported apt-get-specific opt-in is rejected
+          block:
+            - name: Run unsupported CPU path with an apt-get-specific opt-in
+              ansible.builtin.include_role:
+                name: amd64v3
+              vars:
+                amd64v3_cpu_probe_argv: >-
+                  {{ amd64v3_test_unsupported_probe }}
+          rescue:
+            - name: Record apt-get-specific opt-in rejection
+              ansible.builtin.set_fact:
+                amd64v3_test_binary_override_rejected: true
+          always:
+            - name: Remove the apt-get-specific AMD64v3 opt-in
+              ansible.builtin.file:
+                path: >-
+                  {{ amd64v3_test_directory.path }}/parts/zzbinary-override.conf
+                state: absent
+
+        - name: Validate apt-get-specific opt-in rejection
+          ansible.builtin.assert:
+            that:
+              - amd64v3_test_binary_override_rejected
+
+        - name: Verify ARM64 does not execute the AMD64 probe
+          ansible.builtin.include_role:
+            name: amd64v3
+          vars:
+            amd64v3_system_architecture: arm64
+            amd64v3_cpu_probe_argv:
+              - /usr/bin/false
+
+        - name: Validate baseline package selection on ARM64
+          ansible.builtin.assert:
+            that:
+              - not amd64v3_cpu_supported
+              - amd64v3_cpu_probe.skipped
+              - not amd64v3_apt_configuration_removal.changed
+
+        - name: Verify a failed AMD64 probe cannot enable the variant
+          block:
+            - name: Run a failing AMD64 CPU probe
+              ansible.builtin.include_role:
+                name: amd64v3
+              vars:
+                amd64v3_cpu_probe_argv:
+                  - /usr/bin/false
+
+            - name: Reject unexpected AMD64 probe success
+              ansible.builtin.fail:
+                msg: The failing AMD64 probe unexpectedly succeeded.
+          rescue:
+            - name: Inspect configuration after the failed AMD64 probe
+              ansible.builtin.stat:
+                path: "{{ amd64v3_apt_config_path }}"
+              register: amd64v3_test_failed_probe_configuration
+
+            - name: Validate failed AMD64 probe behavior
+              ansible.builtin.assert:
+                that:
+                  - not amd64v3_test_failed_probe_configuration.stat.exists
+
+        - name: Create a protected symlink target
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_test_directory.path }}/protected"
+            content: protected
+            mode: "0644"
+
+        - name: Create a symlink at the managed apt path
+          ansible.builtin.file:
+            src: "{{ amd64v3_test_directory.path }}/protected"
+            dest: "{{ amd64v3_apt_config_path }}"
+            state: link
+
+        - name: Verify the role refuses a managed-path symlink
+          block:
+            - name: Run AMD64v3 role against a symlink
+              ansible.builtin.include_role:
+                name: amd64v3
+
+            - name: Reject unexpected symlink acceptance
+              ansible.builtin.fail:
+                msg: The AMD64v3 role unexpectedly accepted a symlink.
+          rescue:
+            - name: Inspect the rejected managed-path symlink
+              ansible.builtin.stat:
+                path: "{{ amd64v3_apt_config_path }}"
+                follow: false
+              register: amd64v3_test_symlink_status
+
+            - name: Read the protected symlink target
+              ansible.builtin.slurp:
+                src: "{{ amd64v3_test_directory.path }}/protected"
+              register: amd64v3_test_protected_content
+
+            - name: Validate symlink rejection
+              ansible.builtin.assert:
+                that:
+                  - amd64v3_test_symlink_status.stat.islnk
+                  - >-
+                    amd64v3_test_protected_content.content | b64decode ==
+                    'protected'
+      always:
+        - name: Remove the temporary AMD64v3 test directory
+          ansible.builtin.file:
+            path: "{{ amd64v3_test_directory.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false

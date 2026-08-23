@@ -1,6 +1,9 @@
 # Ubuntu Developer Workstation Setup
 
 This playbook supports Ubuntu 26.04 on AMD64 and ARM64 systems.
+On compatible AMD64 CPUs, it automatically opts in to Ubuntu's AMD64v3
+package variant before the playbook's first APT refresh. Older AMD64 CPUs and
+ARM64 systems continue to use their baseline packages.
 Desktop packages are installed when an X11 or Wayland desktop session is
 available. Posit RStudio Desktop, Discord, and Zoom are installed only on AMD64
 systems because their configured distribution channels do not publish ARM64
@@ -62,23 +65,36 @@ SSH service is exposed to the internet.
 sudo pam-auth-update
 ```
 
-## Step 1: Enable AMD64v3 CPU Optimizations (AMD64 only)
+## Automatic AMD64v3 package selection
 
-Skip this step on ARM64 workstations. On AMD64, confirm that the CPU supports
-the x86-64-v3 feature level before enabling this setting.
+Early in the run, the `amd64v3` role asks glibc whether the current AMD64 CPU
+supports the complete x86-64-v3 feature level. When it does, the role manages
+`/etc/apt/apt.conf.d/99enable-amd64v3` and enables Ubuntu's `amd64v3` package
+variant. On an older AMD64 CPU or ARM64 system, the managed opt-in is removed
+and future APT package selection remains on the baseline.
 
-```bash
-echo 'APT::Architecture-Variants "amd64v3";' | sudo tee /etc/apt/apt.conf.d/99enable-amd64v3
-sudo apt update && sudo apt upgrade -y
-```
-
-## Step 2: Install Ansible
+You can inspect the same CPU capability yourself:
 
 ```bash
-sudo apt update && sudo apt upgrade -y &&  sudo apt install -y git ansible
+ld.so --help | grep -F 'x86-64-v3 (supported, searched)'
 ```
 
-## Step 3: Run ansible-pull
+Once AMD64v3 packages are installed, do not move the installation to a CPU
+without x86-64-v3 support. Newer-variant packages cannot run reliably on older
+hardware, and removing the APT opt-in does not replace packages that are already
+installed. See Ubuntu's [26.04 release notes][ubuntu-2604-amd64v3] and
+[supported-architecture documentation][ubuntu-architecture-variants].
+
+[ubuntu-2604-amd64v3]: https://documentation.ubuntu.com/release-notes/26.04/summary-for-lts-users/#architecture-variants-and-amd64v3
+[ubuntu-architecture-variants]: https://documentation.ubuntu.com/project/how-ubuntu-is-made/concepts/supported-architectures/#architecture-variants
+
+## Step 1: Install Ansible
+
+```bash
+sudo apt update && sudo apt install -y git ansible
+```
+
+## Step 2: Run ansible-pull
 
 ```bash
 sudo ansible-pull -U https://github.com/lab1702/setup.git

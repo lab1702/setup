@@ -1,0 +1,74 @@
+---
+- name: Exercise AMD64v3 detection on the current CPU
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    amd64v3_apt_config_path: >-
+      {{ amd64v3_test_directory.path }}/parts/99enable-amd64v3
+    amd64v3_apt_config_parts_path: >-
+      {{ amd64v3_test_directory.path }}/parts
+    amd64v3_apt_main_config_path: >-
+      {{ amd64v3_test_directory.path }}/main.conf
+    amd64v3_apt_config_owner: "{{ ansible_facts['user_id'] }}"
+    amd64v3_apt_config_group: "{{ ansible_facts['user_gid'] }}"
+    amd64v3_apt_config_environment:
+      APT_CONFIG: "{{ amd64v3_test_directory.path }}/apt.conf"
+  tasks:
+    - name: Create a temporary current-CPU test directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .amd64v3-current-cpu-test
+      register: amd64v3_test_directory
+      changed_when: false
+      check_mode: false
+
+    - name: Exercise current CPU detection
+      block:
+        - name: Create an isolated apt configuration directory
+          ansible.builtin.file:
+            path: "{{ amd64v3_test_directory.path }}/parts"
+            state: directory
+            mode: "0755"
+
+        - name: Configure the isolated apt environment
+          ansible.builtin.copy:
+            dest: "{{ amd64v3_test_directory.path }}/apt.conf"
+            content: |
+              Dir::Etc::Parts "{{ amd64v3_test_directory.path }}/parts";
+              Dir::Etc::Main "/dev/null";
+            mode: "0644"
+
+        - name: Configure AMD64v3 for the current CPU
+          ansible.builtin.include_role:
+            name: amd64v3
+
+        - name: Inspect current-CPU AMD64v3 configuration
+          ansible.builtin.stat:
+            path: "{{ amd64v3_apt_config_path }}"
+          register: amd64v3_test_current_cpu_configuration
+
+        - name: Validate current CPU detection and configuration
+          ansible.builtin.assert:
+            that:
+              - >-
+                amd64v3_cpu_supported ==
+                (
+                  ansible_facts["architecture"]
+                  in ["x86_64", "amd64"] and
+                  (amd64v3_cpu_probe.stdout | default(''))
+                  is search(
+                    '(?m)^\\s*x86-64-v3 '
+                    ~ '\\(supported, searched\\)\\s*$'
+                  )
+                )
+              - >-
+                amd64v3_test_current_cpu_configuration.stat.exists ==
+                amd64v3_cpu_supported
+      always:
+        - name: Remove the temporary current-CPU test directory
+          ansible.builtin.file:
+            path: "{{ amd64v3_test_directory.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false

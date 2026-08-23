@@ -43,6 +43,10 @@
           {{ ansible_facts["distribution_version"] }} on
           {{ ansible_facts["architecture"] }}.
 
+    - name: Configure AMD64v3 apt packages when supported
+      ansible.builtin.include_role:
+        name: amd64v3
+
     - name: Gather workstation user account details
       ansible.builtin.getent:
         database: passwd
