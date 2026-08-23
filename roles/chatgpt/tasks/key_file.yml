@@ -1,0 +1,5 @@
+---
+- name: Locate bundled OpenAI repository signing key
+  ansible.builtin.set_fact:
+    chatgpt_repository_key_file: >-
+      {{ role_path }}/files/chatgpt-archive-keyring.gpg

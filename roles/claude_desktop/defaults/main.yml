@@ -1,26 +1,14 @@
 ---
-claude_desktop_package_name: claude-desktop
-
-claude_desktop_key_url: https://downloads.claude.ai/claude-desktop/key.asc
-claude_desktop_keyring_path: /usr/share/keyrings/claude-desktop-archive-keyring.asc
-claude_desktop_key_fingerprint: 31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
-
-claude_desktop_repository_url: https://downloads.claude.ai/claude-desktop/apt/stable
-claude_desktop_repository_suite: stable
-claude_desktop_repository_component: main
-claude_desktop_repository_filename: claude-desktop
-claude_desktop_repository_sources_path: >-
-  /etc/apt/sources.list.d/{{ claude_desktop_repository_filename }}.list
-claude_desktop_architecture_map:
-  x86_64: amd64
-  amd64: amd64
-  aarch64: arm64
-  arm64: arm64
-claude_desktop_repository_definition: >-
-  deb [arch={{ claude_desktop_architecture_map[ansible_facts["architecture"]] }}
-  signed-by={{ claude_desktop_keyring_path }}]
-  {{ claude_desktop_repository_url }}
-  {{ claude_desktop_repository_suite }}
-  {{ claude_desktop_repository_component }}
-claude_desktop_repository_source_content: |
-  {{ claude_desktop_repository_definition }}
+claude_desktop_repository:
+  display_name: Claude Desktop
+  package_names:
+    - claude-desktop
+  url: https://downloads.claude.ai/claude-desktop/apt/stable
+  suites: stable
+  components: main
+  sources_path: /etc/apt/sources.list.d/claude-desktop.sources
+  keyring_path: /usr/share/keyrings/claude-desktop-archive-keyring.asc
+  key_fingerprint: 31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
+  key_url: https://downloads.claude.ai/claude-desktop/key.asc
+  # Earlier playbook revisions managed a one-line source at this path.
+  legacy_sources_path: /etc/apt/sources.list.d/claude-desktop.list

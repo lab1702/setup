@@ -1,0 +1,183 @@
+---
+# Remove CRAN entries from every other APT source so the managed deb822
+# source is the only origin for R packages.
+- name: Inspect APT source directory
+  ansible.builtin.stat:
+    path: "{{ r_repository_sources_directory_path }}"
+    follow: false
+  register: r_repository_sources_directory_status
+
+- name: Validate APT source directory path type
+  ansible.builtin.assert:
+    that:
+      - r_repository_sources_directory_status.stat.isdir | default(false)
+      - not r_repository_sources_directory_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to inspect APT sources because
+      {{ r_repository_sources_directory_path }} is not a real directory.
+
+- name: Discover APT repository source paths
+  ansible.builtin.find:
+    paths: "{{ r_repository_sources_directory_path }}"
+    patterns: "{{ r_repository_source_file_patterns }}"
+    file_type: any
+    follow: false
+    recurse: false
+  register: r_repository_discovered_sources
+
+- name: Inspect possible competing CRAN repository source paths
+  vars:
+    r_repository_candidate_source_paths: >-
+      {{ ([r_repository_main_sources_path] +
+      (r_repository_discovered_sources.files
+      | map(attribute='path') | list)) | unique | list }}
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop: "{{ r_repository_candidate_source_paths }}"
+  register: r_repository_candidate_source_statuses
+
+- name: Classify possible competing CRAN repository sources
+  vars:
+    r_repository_unmanaged_source_statuses: >-
+      {{ r_repository_candidate_source_statuses.results
+      | rejectattr('item', 'equalto', r_repository_sources_path)
+      | selectattr('stat.exists', 'defined')
+      | selectattr('stat.exists') | list }}
+  ansible.builtin.set_fact:
+    r_repository_regular_source_paths: >-
+      {{ r_repository_unmanaged_source_statuses
+      | selectattr('stat.isreg', 'defined')
+      | selectattr('stat.isreg') | map(attribute='item') | list }}
+    r_repository_symlink_source_paths: >-
+      {{ r_repository_unmanaged_source_statuses
+      | selectattr('stat.islnk', 'defined')
+      | selectattr('stat.islnk') | map(attribute='item') | list }}
+  changed_when: false
+
+- name: Read regular APT repository source files
+  ansible.builtin.slurp:
+    src: "{{ item }}"
+  loop: "{{ r_repository_regular_source_paths }}"
+  register: r_repository_regular_source_contents
+  no_log: true
+
+- name: Inspect symbolic-link APT repository source targets
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: true
+  loop: "{{ r_repository_symlink_source_paths }}"
+  register: r_repository_symlink_target_statuses
+
+- name: Identify inspectable symbolic-link APT repository sources
+  ansible.builtin.set_fact:
+    r_repository_inspectable_symlink_source_paths: >-
+      {{ r_repository_symlink_target_statuses.results
+      | selectattr('stat.isreg', 'defined')
+      | selectattr('stat.isreg') | map(attribute='item') | list }}
+  changed_when: false
+
+- name: Read symbolic-link APT repository sources without exposing contents
+  ansible.builtin.slurp:
+    src: "{{ item }}"
+  loop: "{{ r_repository_inspectable_symlink_source_paths }}"
+  register: r_repository_symlink_source_contents
+  no_log: true
+
+- name: Initialize competing CRAN repository migration plans
+  ansible.builtin.set_fact:
+    r_repository_regular_source_migrations: []
+    r_repository_matching_symlink_sources: []
+  changed_when: false
+
+- name: Plan regular-file CRAN repository source migrations
+  vars:
+    r_repository_candidate_migration: >-
+      {{ (item.content | b64decode)
+      | migrate_cran_apt_source(item.item, r_repository_url) }}
+    r_repository_planned_migration:
+      path: "{{ item.item }}"
+      content: "{{ r_repository_candidate_migration.content }}"
+      matching_entries: >-
+        {{ r_repository_candidate_migration.matching_entries }}
+  ansible.builtin.set_fact:
+    r_repository_regular_source_migrations: >-
+      {{ r_repository_regular_source_migrations
+      + [r_repository_planned_migration] }}
+  changed_when: false
+  loop: "{{ r_repository_regular_source_contents.results }}"
+  when: r_repository_candidate_migration.migration_required
+  no_log: true
+
+- name: Identify CRAN entries reached through symbolic links
+  vars:
+    r_repository_candidate_migration: >-
+      {{ item.content | b64decode
+      | migrate_cran_apt_source(item.item, r_repository_url, false) }}
+  ansible.builtin.set_fact:
+    r_repository_matching_symlink_sources: >-
+      {{ r_repository_matching_symlink_sources + [item.item] }}
+  changed_when: false
+  loop: "{{ r_repository_symlink_source_contents.results }}"
+  when: r_repository_candidate_migration.migration_required
+  no_log: true
+
+- name: Refuse to migrate CRAN repository entries through symbolic links
+  ansible.builtin.fail:
+    msg: >-
+      Refusing to edit CRAN repository entries reached through symbolic links:
+      {{ r_repository_matching_symlink_sources | join(', ') }}. Replace each
+      link with a regular APT source file or remove its CRAN entry, then rerun
+      this playbook. Unrelated link targets have not been changed.
+  when: r_repository_matching_symlink_sources | length > 0
+
+- name: Reinspect regular APT sources that require CRAN migration
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop: >-
+    {{ r_repository_regular_source_migrations
+    | map(attribute='path') | list }}
+  register: r_repository_migration_source_statuses
+
+- name: Validate CRAN migration target safety
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+      - not item.stat.islnk | default(false)
+      - item.stat.uid | default(-1) == 0
+      - item.stat.gid | default(-1) == 0
+      - not item.stat.wgrp | default(true)
+      - not item.stat.woth | default(true)
+    fail_msg: >-
+      Refusing to migrate CRAN entries in {{ item.item }}. A migration
+      target must remain a root-owned regular file that is not writable by its
+      group or by other users.
+  loop: "{{ r_repository_migration_source_statuses.results }}"
+
+- name: Stop check mode when competing CRAN sources require migration
+  ansible.builtin.fail:
+    msg: >-
+      Competing CRAN repository entries must be removed from
+      {{ r_repository_regular_source_migrations
+      | map(attribute='path') | join(', ') }} before APT can be checked safely.
+      Run this playbook once without --check to migrate those entries while
+      preserving unrelated APT sources.
+  when:
+    - ansible_check_mode
+    - r_repository_regular_source_migrations | length > 0
+
+- name: Migrate competing CRAN repository entries
+  vars:
+    r_repository_source_migration: >-
+      {{ r_repository_regular_source_migrations
+      | selectattr('path', 'equalto', item.item) | first }}
+  ansible.builtin.copy:
+    dest: "{{ item.item }}"
+    content: "{{ r_repository_source_migration.content }}"
+    owner: root
+    group: root
+    mode: "{{ item.stat.mode }}"
+    follow: false
+  loop: "{{ r_repository_migration_source_statuses.results }}"
+  no_log: true

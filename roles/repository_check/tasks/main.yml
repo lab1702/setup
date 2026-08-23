@@ -123,6 +123,8 @@
           - -o
           - Dir::Cache::srcpkgcache=
           - -o
+          - APT::Sandbox::User={{ repository_check_apt_user }}
+          - -o
           - Debug::NoLocking=true
           - -o
           - Acquire::Languages=none

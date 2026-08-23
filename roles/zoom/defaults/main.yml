@@ -1,31 +1,22 @@
 ---
-zoom_package_name: zoom
-
-zoom_supported_ubuntu_versions:
-  - "26.04"
-zoom_supported_architectures:
-  - x86_64
-  - amd64
-
 zoom_repository_key_version: 6-7-5
-zoom_repository_key_url: >-
-  https://zoom.us/linux/download/pubkey?version={{ zoom_repository_key_version }}
-zoom_repository_keyring_path: /usr/share/keyrings/zoom-archive-keyring.asc
-zoom_repository_key_fingerprint: 84C365D6CC9A4886CA926BCC4F2197399706AC24
 
-zoom_repository_url: https://repo.zoom.us/repo/deb
-zoom_repository_suite: release
-zoom_repository_component: main
-zoom_repository_filename: zoom
-zoom_repository_sources_path: >-
-  /etc/apt/sources.list.d/{{ zoom_repository_filename }}.list
-zoom_repository_architectures:
-  - amd64
-zoom_repository_definition: >-
-  deb [arch={{ zoom_repository_architectures | join(',') }}
-  signed-by={{ zoom_repository_keyring_path }}]
-  {{ zoom_repository_url }}
-  {{ zoom_repository_suite }}
-  {{ zoom_repository_component }}
-zoom_repository_source_content: |
-  {{ zoom_repository_definition }}
+zoom_repository:
+  display_name: Zoom Workplace
+  package_names:
+    - zoom
+  url: https://repo.zoom.us/repo/deb
+  suites: release
+  components: main
+  architectures:
+    - amd64
+  sources_path: /etc/apt/sources.list.d/zoom.sources
+  keyring_path: /usr/share/keyrings/zoom-archive-keyring.asc
+  key_fingerprint: 84C365D6CC9A4886CA926BCC4F2197399706AC24
+  key_url: >-
+    https://zoom.us/linux/download/pubkey?version={{ zoom_repository_key_version }}
+  # Earlier playbook revisions managed a one-line source at this path.
+  legacy_sources_path: /etc/apt/sources.list.d/zoom.list
+  supported_architectures:
+    - x86_64
+    - amd64

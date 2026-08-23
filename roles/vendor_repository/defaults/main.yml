@@ -1,0 +1,91 @@
+---
+# Installs the current version of one or more packages from a vendor's signed
+# APT repository. Callers pass a specification dictionary as
+# vendor_repository_spec with these keys:
+#
+#   display_name          name used in task messages
+#   package_names         packages to resolve and install from the repository
+#   url                   repository URI
+#   suites                deb822 Suites value ("./" for a flat repository)
+#   components            deb822 Components value (omit for a flat repository)
+#   architectures         deb822 Architectures list (default: host
+#                         architecture; [] omits the field)
+#   sources_path          managed deb822 source file path
+#   source_prefix         text written before the generated deb822 stanza
+#   keyring_path          managed signing keyring path (.gpg binary or .asc)
+#   key_fingerprint       expected primary key fingerprint
+#   key_url               armored signing key download URL, or
+#   key_file              absolute path of a pinned signing key shipped locally
+#   legacy_sources_path   one-line source file whose matching entries are removed
+#   legacy_entry_regexp   regexp selecting those entries (default: repository URL)
+#   legacy_keyring_path   superseded keyring file to remove
+#   supported_architectures   host architectures allowed to use the repository
+#   prerequisite_packages     packages installed before the repository is used
+#   install_recommends        apt install_recommends setting (default: apt's)
+vendor_repository_spec: {}
+
+vendor_repository_display_name: "{{ vendor_repository_spec.display_name }}"
+vendor_repository_package_names: >-
+  {{ vendor_repository_spec.package_names | unique | list }}
+vendor_repository_url: "{{ vendor_repository_spec.url }}"
+vendor_repository_suites: "{{ vendor_repository_spec.suites }}"
+vendor_repository_components: "{{ vendor_repository_spec.components | default('') }}"
+vendor_repository_architectures: >-
+  {{ vendor_repository_spec.architectures
+  | default([vendor_repository_architecture_map[ansible_facts['architecture']]]) }}
+vendor_repository_sources_path: "{{ vendor_repository_spec.sources_path }}"
+vendor_repository_source_prefix: "{{ vendor_repository_spec.source_prefix | default('') }}"
+vendor_repository_keyring_path: "{{ vendor_repository_spec.keyring_path }}"
+vendor_repository_key_fingerprint: "{{ vendor_repository_spec.key_fingerprint }}"
+vendor_repository_key_url: "{{ vendor_repository_spec.key_url | default('') }}"
+vendor_repository_key_file: "{{ vendor_repository_spec.key_file | default('') }}"
+vendor_repository_legacy_sources_path: >-
+  {{ vendor_repository_spec.legacy_sources_path | default('') }}
+vendor_repository_legacy_entry_regexp: >-
+  {{ vendor_repository_spec.legacy_entry_regexp
+  | default('(?i)^[ \t]*deb(?:-src)?[ \t]+(?:\[[^]]*\][ \t]+)?'
+  ~ (vendor_repository_url | regex_replace('/+$', '')
+  | ansible.builtin.regex_escape) ~ '/?(?:[ \t]|$)') }}
+vendor_repository_legacy_keyring_path: >-
+  {{ vendor_repository_spec.legacy_keyring_path | default('') }}
+vendor_repository_supported_architectures: >-
+  {{ vendor_repository_spec.supported_architectures
+  | default(vendor_repository_architecture_map.keys() | list) }}
+vendor_repository_prerequisite_packages: >-
+  {{ vendor_repository_spec.prerequisite_packages
+  | default(['ca-certificates', 'gpg']) }}
+vendor_repository_install_recommends: >-
+  {{ vendor_repository_spec.install_recommends | default(omit) }}
+
+vendor_repository_supported_ubuntu_versions:
+  - "26.04"
+vendor_repository_architecture_map:
+  x86_64: amd64
+  amd64: amd64
+  aarch64: arm64
+  arm64: arm64
+
+# Binary keyrings use a .gpg suffix; armored keyrings keep .asc.
+vendor_repository_keyring_extension: >-
+  {{ '.gpg' if vendor_repository_keyring_path.endswith('.gpg') else '.asc' }}
+vendor_repository_expected_fingerprint_record: >-
+  fpr:::::::::{{ vendor_repository_key_fingerprint }}:
+
+vendor_repository_source_content: |
+  {{ vendor_repository_source_prefix }}Types: deb
+  URIs: {{ vendor_repository_url }}
+  Suites: {{ vendor_repository_suites }}
+  {% if vendor_repository_components %}
+  Components: {{ vendor_repository_components }}
+  {% endif %}
+  {% if vendor_repository_architectures | length > 0 %}
+  Architectures: {{ vendor_repository_architectures | join(' ') }}
+  {% endif %}
+  Signed-By: {{ vendor_repository_keyring_path }}
+
+# Regex matching one apt-cache madison row for a package from this repository.
+vendor_repository_origin_pattern_suffix: >-
+  {{ '\s*\|\s*\S+\s*\|\s*'
+  ~ (vendor_repository_url | regex_replace('/+$', '')
+  | ansible.builtin.regex_escape)
+  ~ '/?(?:\s|$)' }}

@@ -1,0 +1,396 @@
+---
+- name: Validate repository specification for {{ vendor_repository_display_name }}
+  ansible.builtin.assert:
+    that:
+      - vendor_repository_package_names | length > 0
+      - vendor_repository_key_fingerprint is match('^[0-9A-F]{40}$')
+      - (vendor_repository_key_url | length > 0) != (vendor_repository_key_file | length > 0)
+      - vendor_repository_sources_path.endswith('.sources')
+    fail_msg: >-
+      The {{ vendor_repository_display_name }} repository specification needs
+      package names, a 40-hex-digit key fingerprint, exactly one of key_url or
+      key_file, and a deb822 .sources path.
+
+- name: Validate platform support for {{ vendor_repository_display_name }}
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - >-
+        ansible_facts["distribution_version"]
+        in vendor_repository_supported_ubuntu_versions
+      - ansible_facts["architecture"] in vendor_repository_supported_architectures
+    fail_msg: >-
+      {{ vendor_repository_display_name }} supports Ubuntu
+      {{ vendor_repository_supported_ubuntu_versions | join(', ') }} on
+      {{ vendor_repository_supported_architectures | join(', ') }}. Detected
+      {{ ansible_facts["distribution"] }}
+      {{ ansible_facts["distribution_version"] }} on
+      {{ ansible_facts["architecture"] }}.
+
+- name: Preflight apt repository for {{ vendor_repository_display_name }}
+  ansible.builtin.import_tasks: preflight.yml
+
+- name: Install repository prerequisites
+  ansible.builtin.apt:
+    name: "{{ vendor_repository_prerequisite_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 120
+  register: vendor_repository_prerequisite_installation
+
+- name: Create repository keyring directory
+  ansible.builtin.file:
+    path: "{{ vendor_repository_keyring_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  register: vendor_repository_keyring_directory_creation
+
+- name: Configure signed repository and install packages
+  when: >-
+    not ansible_check_mode or
+    (not vendor_repository_prerequisite_installation.changed and
+    not vendor_repository_keyring_directory_creation.changed)
+  block:
+    - name: Create temporary directory for repository signing key
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .vendor-repository
+      register: vendor_repository_key_tempdir
+      changed_when: false
+      check_mode: false
+
+    - name: Verify signing key, configure repository, and install packages
+      vars:
+        vendor_repository_candidate_key_path: >-
+          {{ vendor_repository_key_tempdir.path }}/candidate-key
+        vendor_repository_verified_key_path: >-
+          {{ vendor_repository_key_tempdir.path }}/key{{
+          vendor_repository_keyring_extension }}
+      block:
+        - name: Download repository signing key
+          ansible.builtin.get_url:
+            url: "{{ vendor_repository_key_url }}"
+            dest: "{{ vendor_repository_candidate_key_path }}"
+            mode: "0600"
+          changed_when: false
+          check_mode: false
+          when: vendor_repository_key_url | length > 0
+
+        - name: Stage pinned repository signing key
+          ansible.builtin.copy:
+            src: "{{ vendor_repository_key_file }}"
+            dest: "{{ vendor_repository_candidate_key_path }}"
+            remote_src: true
+            mode: "0600"
+          changed_when: false
+          check_mode: false
+          when: vendor_repository_key_file | length > 0
+
+        - name: Inspect repository signing key
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --show-keys
+              - --with-colons
+              - "{{ vendor_repository_candidate_key_path }}"
+          register: vendor_repository_key
+          changed_when: false
+          check_mode: false
+
+        - name: Verify repository signing key fingerprint
+          vars:
+            vendor_repository_public_key_records: >-
+              {{ vendor_repository_key.stdout_lines
+              | select('match', '^pub:') | list }}
+            vendor_repository_fingerprint_records: >-
+              {{ vendor_repository_key.stdout_lines
+              | select('match', '^fpr:') | list }}
+          ansible.builtin.assert:
+            that:
+              - vendor_repository_public_key_records | length == 1
+              - >-
+                (vendor_repository_fingerprint_records | first | default(''))
+                == vendor_repository_expected_fingerprint_record
+            fail_msg: >-
+              The {{ vendor_repository_display_name }} signing key does not
+              contain exactly one primary key with fingerprint
+              {{ vendor_repository_key_fingerprint }}.
+
+        - name: Convert verified signing key to binary keyring
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --yes
+              - --dearmor
+              - --output
+              - "{{ vendor_repository_verified_key_path }}"
+              - "{{ vendor_repository_candidate_key_path }}"
+          changed_when: false
+          check_mode: false
+          when:
+            - vendor_repository_key_url | length > 0
+            - vendor_repository_keyring_extension == '.gpg'
+
+        - name: Retain verified signing key in its published format
+          ansible.builtin.copy:
+            src: "{{ vendor_repository_candidate_key_path }}"
+            dest: "{{ vendor_repository_verified_key_path }}"
+            remote_src: true
+            mode: "0600"
+          changed_when: false
+          check_mode: false
+          when: >-
+            vendor_repository_key_file | length > 0 or
+            vendor_repository_keyring_extension != '.gpg'
+
+        - name: Install verified repository signing key
+          ansible.builtin.copy:
+            src: "{{ vendor_repository_verified_key_path }}"
+            dest: "{{ vendor_repository_keyring_path }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Configure apt repository
+          ansible.builtin.copy:
+            dest: "{{ vendor_repository_sources_path }}"
+            content: "{{ vendor_repository_source_content }}"
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Remove superseded repository signing key
+          when:
+            - vendor_repository_legacy_keyring_path | length > 0
+            - vendor_repository_legacy_keyring_path != vendor_repository_keyring_path
+          block:
+            - name: Inspect superseded repository signing key path
+              ansible.builtin.stat:
+                path: "{{ vendor_repository_legacy_keyring_path }}"
+                follow: false
+              register: vendor_repository_legacy_keyring_status
+
+            - name: Validate superseded repository signing key path type
+              ansible.builtin.assert:
+                that:
+                  - >-
+                    not vendor_repository_legacy_keyring_status.stat.exists or
+                    vendor_repository_legacy_keyring_status.stat.isreg
+                    | default(false) or
+                    vendor_repository_legacy_keyring_status.stat.islnk
+                    | default(false)
+                fail_msg: >-
+                  Refusing to remove {{ vendor_repository_legacy_keyring_path }}
+                  because it is neither a regular file nor a symbolic link.
+
+            - name: Remove superseded repository signing key file
+              ansible.builtin.file:
+                path: "{{ vendor_repository_legacy_keyring_path }}"
+                state: absent
+
+        - name: Install packages while preserving the verified repository
+          block:
+            - name: Refresh repository package metadata
+              ansible.builtin.apt:
+                update_cache: true
+                cache_valid_time: 0
+                lock_timeout: 120
+              changed_when: false
+              when: not ansible_check_mode
+
+            - name: Refresh isolated repository metadata in check mode
+              ansible.builtin.include_role:
+                name: repository_check
+              vars:
+                repository_check_key_source: >-
+                  {{ vendor_repository_verified_key_path }}
+                repository_check_key_remote_src: true
+                repository_check_keyring_filename: >-
+                  repository-keyring{{ vendor_repository_keyring_extension }}
+                repository_check_source_content: >-
+                  {{ vendor_repository_source_content }}
+                repository_check_system_keyring_path: >-
+                  {{ vendor_repository_keyring_path }}
+                repository_check_source_filename: repository.sources
+                repository_check_package_names: >-
+                  {{ vendor_repository_package_names }}
+              when: ansible_check_mode
+
+            - name: Discover published package versions
+              ansible.builtin.command:
+                argv:
+                  - apt-cache
+                  - madison
+                  - "{{ item }}"
+              environment:
+                LC_ALL: C
+              loop: "{{ vendor_repository_package_names }}"
+              register: vendor_repository_package_versions
+              changed_when: false
+              check_mode: false
+              when: not ansible_check_mode
+
+            - name: Select package version output
+              ansible.builtin.set_fact:
+                vendor_repository_package_version_results: >-
+                  {{ repository_check_package_versions.results
+                  if ansible_check_mode
+                  else vendor_repository_package_versions.results }}
+                vendor_repository_candidate_versions: {}
+                vendor_repository_installation_required: false
+
+            - name: Select current package versions from the repository
+              vars:
+                vendor_repository_version_rows: >-
+                  {{ item.stdout_lines
+                  | select('match', '^\s*'
+                  ~ (item.item | ansible.builtin.regex_escape)
+                  ~ vendor_repository_origin_pattern_suffix) | list }}
+                vendor_repository_candidate_row: >-
+                  {{ vendor_repository_version_rows | first | default('') }}
+              ansible.builtin.set_fact:
+                vendor_repository_candidate_versions: >-
+                  {{ vendor_repository_candidate_versions
+                  | combine({item.item:
+                  (vendor_repository_candidate_row.split('|') + ['', ''])[1]
+                  | trim}) }}
+              loop: "{{ vendor_repository_package_version_results }}"
+              loop_control:
+                label: "{{ item.item }}"
+
+            - name: Validate available package versions
+              ansible.builtin.assert:
+                that:
+                  - vendor_repository_candidate_versions[item] | length > 0
+                fail_msg: >-
+                  The verified {{ vendor_repository_display_name }} repository
+                  does not publish a candidate for {{ item }} on this
+                  architecture.
+              loop: "{{ vendor_repository_package_names }}"
+
+            - name: Validate current Debian versions
+              ansible.builtin.command:
+                argv:
+                  - dpkg
+                  - --validate-version
+                  - "{{ vendor_repository_candidate_versions[item] }}"
+              loop: "{{ vendor_repository_package_names }}"
+              loop_control:
+                label: >-
+                  {{ item }}={{ vendor_repository_candidate_versions[item]
+                  | default('') }}
+              changed_when: false
+              check_mode: false
+
+            - name: Reject ambiguous package origins
+              vars:
+                vendor_repository_candidate_version_rows: >-
+                  {{ item.stdout_lines
+                  | select('match', '^\s*'
+                  ~ (item.item | ansible.builtin.regex_escape)
+                  ~ '\s*\|\s*'
+                  ~ (vendor_repository_candidate_versions[item.item]
+                  | ansible.builtin.regex_escape)
+                  ~ '\s*\|') | list }}
+                vendor_repository_origin_version_rows: >-
+                  {{ item.stdout_lines
+                  | select('match', '^\s*'
+                  ~ (item.item | ansible.builtin.regex_escape)
+                  ~ vendor_repository_origin_pattern_suffix) | list }}
+              ansible.builtin.assert:
+                that:
+                  - vendor_repository_candidate_version_rows | length > 0
+                  - >-
+                    vendor_repository_candidate_version_rows
+                    | difference(vendor_repository_origin_version_rows)
+                    | length == 0
+                fail_msg: >-
+                  Refusing to install {{ item.item }}={{
+                  vendor_repository_candidate_versions[item.item] }} because
+                  the same version is available from a repository other than
+                  {{ vendor_repository_display_name }}.
+              loop: "{{ vendor_repository_package_version_results }}"
+              loop_control:
+                label: "{{ item.item }}"
+              when: not ansible_check_mode
+
+            - name: Inspect installed package versions
+              ansible.builtin.command:
+                argv:
+                  - dpkg-query
+                  - --show
+                  - --showformat=${Version}\t${db:Status-Status}\n
+                  - "{{ item }}"
+              loop: "{{ vendor_repository_package_names }}"
+              register: vendor_repository_installed_packages
+              changed_when: false
+              failed_when: false
+              check_mode: false
+
+            - name: Determine whether packages need installation
+              vars:
+                vendor_repository_expected_installed_state: >-
+                  {{ vendor_repository_candidate_versions[item.item]
+                  ~ '\tinstalled' }}
+              ansible.builtin.set_fact:
+                vendor_repository_installation_required: >-
+                  {{ vendor_repository_installation_required | bool or
+                  item.rc != 0 or
+                  vendor_repository_expected_installed_state
+                  not in item.stdout_lines }}
+              loop: "{{ vendor_repository_installed_packages.results }}"
+              loop_control:
+                label: "{{ item.item }}"
+
+            - name: Report pending installation of {{ vendor_repository_display_name }}
+              ansible.builtin.debug:
+                msg: >-
+                  {{ vendor_repository_candidate_versions.items()
+                  | map('join', '=') | join(', ') }} would be installed from
+                  the verified {{ vendor_repository_display_name }}
+                  repository.
+              changed_when: vendor_repository_installation_required
+              when: ansible_check_mode
+
+            - name: Install exact current package versions
+              ansible.builtin.apt:
+                name: >-
+                  {{ vendor_repository_candidate_versions.items()
+                  | map('join', '=') | list }}
+                state: present
+                allow_downgrade: true
+                install_recommends: "{{ vendor_repository_install_recommends }}"
+                lock_timeout: 120
+              when: not ansible_check_mode
+          always:
+            - name: Reassert verified repository signing key after package task
+              ansible.builtin.copy:
+                src: "{{ vendor_repository_verified_key_path }}"
+                dest: "{{ vendor_repository_keyring_path }}"
+                remote_src: true
+                owner: root
+                group: root
+                mode: "0644"
+              when: not ansible_check_mode
+
+            - name: Reassert managed apt repository after package task
+              ansible.builtin.copy:
+                dest: "{{ vendor_repository_sources_path }}"
+                content: "{{ vendor_repository_source_content }}"
+                owner: root
+                group: root
+                mode: "0644"
+              when: not ansible_check_mode
+      always:
+        - name: Remove temporary repository signing key directory
+          ansible.builtin.file:
+            path: "{{ vendor_repository_key_tempdir.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false

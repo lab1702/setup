@@ -1,0 +1,187 @@
+---
+# Repairs the managed repository before any system-wide APT refresh so a
+# stale, tampered, or superseded vendor source cannot break apt-get update.
+
+- name: Migrate legacy one-line repository source
+  when: vendor_repository_legacy_sources_path | length > 0
+  block:
+    - name: Inspect legacy apt repository source
+      ansible.builtin.stat:
+        path: "{{ vendor_repository_legacy_sources_path }}"
+      register: vendor_repository_legacy_source_status
+
+    - name: Validate legacy apt repository source path type
+      ansible.builtin.assert:
+        that:
+          - >-
+            not vendor_repository_legacy_source_status.stat.exists or
+            vendor_repository_legacy_source_status.stat.isreg
+            | default(false) or
+            vendor_repository_legacy_source_status.stat.islnk
+            | default(false)
+        fail_msg: >-
+          Refusing to edit {{ vendor_repository_legacy_sources_path }}
+          because it is neither a regular file nor a symbolic link.
+
+    - name: Read legacy apt repository source
+      ansible.builtin.slurp:
+        src: "{{ vendor_repository_legacy_sources_path }}"
+      register: vendor_repository_legacy_source
+      failed_when: false
+      when: vendor_repository_legacy_source_status.stat.exists
+
+    - name: Validate legacy apt repository source readability
+      ansible.builtin.assert:
+        that:
+          - not vendor_repository_legacy_source.failed | default(true)
+        fail_msg: >-
+          Refusing to migrate {{ vendor_repository_legacy_sources_path }}
+          because its contents cannot be inspected safely.
+      when: vendor_repository_legacy_source_status.stat.exists
+
+    - name: Detect legacy repository entries
+      ansible.builtin.set_fact:
+        vendor_repository_legacy_migration_required: >-
+          {{ (vendor_repository_legacy_source.content
+          | default('') | b64decode).splitlines()
+          | select('match', vendor_repository_legacy_entry_regexp)
+          | list | length > 0 }}
+      changed_when: false
+
+    - name: Refuse to edit legacy entries through a symbolic link
+      ansible.builtin.fail:
+        msg: >-
+          {{ vendor_repository_legacy_sources_path }} is a symbolic link whose
+          target contains {{ vendor_repository_display_name }} entries.
+          Replace it with a regular source file or migrate those entries
+          manually; unrelated target entries will not be deleted.
+      when:
+        - vendor_repository_legacy_source_status.stat.islnk | default(false)
+        - vendor_repository_legacy_migration_required
+
+    - name: Stop check mode when legacy entries require migration
+      ansible.builtin.fail:
+        msg: >-
+          {{ vendor_repository_display_name }} entries in
+          {{ vendor_repository_legacy_sources_path }} must be removed before
+          APT can be checked safely. Run this playbook once without --check
+          to migrate only those entries.
+      when:
+        - ansible_check_mode
+        - vendor_repository_legacy_migration_required
+
+    - name: Remove legacy repository entries
+      ansible.builtin.lineinfile:
+        path: "{{ vendor_repository_legacy_sources_path }}"
+        regexp: "{{ vendor_repository_legacy_entry_regexp }}"
+        state: absent
+      when:
+        - not ansible_check_mode
+        - vendor_repository_legacy_source_status.stat.isreg | default(false)
+        - vendor_repository_legacy_migration_required
+
+- name: Inspect managed apt repository source
+  ansible.builtin.stat:
+    path: "{{ vendor_repository_sources_path }}"
+  register: vendor_repository_source_status
+
+- name: Validate managed apt repository source path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not vendor_repository_source_status.stat.exists or
+        vendor_repository_source_status.stat.isreg | default(false) or
+        vendor_repository_source_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to quarantine {{ vendor_repository_sources_path }} because it
+      is neither a regular file nor a symbolic link.
+
+- name: Read managed apt repository source
+  ansible.builtin.slurp:
+    src: "{{ vendor_repository_sources_path }}"
+  register: vendor_repository_source
+  failed_when: false
+  when:
+    - vendor_repository_source_status.stat.exists
+    - vendor_repository_source_status.stat.isreg | default(false)
+
+- name: Inspect installed repository signing key file
+  ansible.builtin.stat:
+    path: "{{ vendor_repository_keyring_path }}"
+  register: vendor_repository_installed_key_status
+
+- name: Validate installed repository signing key path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not vendor_repository_installed_key_status.stat.exists or
+        vendor_repository_installed_key_status.stat.isreg | default(false) or
+        vendor_repository_installed_key_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to replace {{ vendor_repository_keyring_path }} because it is
+      neither a regular file nor a symbolic link.
+
+- name: Read installed repository signing key
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --batch
+      - --show-keys
+      - --with-colons
+      - "{{ vendor_repository_keyring_path }}"
+  register: vendor_repository_installed_key
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - vendor_repository_source_status.stat.exists
+    - vendor_repository_installed_key_status.stat.isreg | default(false)
+
+- name: Determine whether the managed repository needs quarantine
+  vars:
+    vendor_repository_source_is_usable: >-
+      {{ vendor_repository_source_status.stat.isreg | default(false)
+      and vendor_repository_source_status.stat.uid | default(-1) == 0
+      and vendor_repository_source_status.stat.gid | default(-1) == 0
+      and vendor_repository_source_status.stat.mode | default('') == '0644'
+      and not vendor_repository_source.failed | default(true)
+      and (vendor_repository_source.content | default('') | b64decode)
+      == vendor_repository_source_content }}
+    vendor_repository_installed_public_key_records: >-
+      {{ vendor_repository_installed_key.stdout_lines | default([])
+      | select('match', '^pub:') | list }}
+    vendor_repository_installed_fingerprint_records: >-
+      {{ vendor_repository_installed_key.stdout_lines | default([])
+      | select('match', '^fpr:') | list }}
+    vendor_repository_installed_key_is_usable: >-
+      {{ vendor_repository_installed_key_status.stat.isreg | default(false)
+      and vendor_repository_installed_key_status.stat.uid | default(-1) == 0
+      and vendor_repository_installed_key_status.stat.gid | default(-1) == 0
+      and vendor_repository_installed_key_status.stat.mode
+      | default('') == '0644'
+      and vendor_repository_installed_key.rc | default(1) == 0
+      and vendor_repository_installed_public_key_records | length == 1
+      and (vendor_repository_installed_fingerprint_records
+      | first | default('')) == vendor_repository_expected_fingerprint_record }}
+  ansible.builtin.set_fact:
+    vendor_repository_quarantine_required: >-
+      {{ vendor_repository_source_status.stat.exists and
+      (not vendor_repository_source_is_usable | bool or
+      not vendor_repository_installed_key_is_usable | bool) }}
+  changed_when: false
+
+- name: Stop check mode when the managed repository requires repair
+  ansible.builtin.fail:
+    msg: >-
+      {{ vendor_repository_sources_path }} must be quarantined before APT can
+      be checked safely. Run this playbook once without --check to repair the
+      managed {{ vendor_repository_display_name }} repository.
+  when:
+    - ansible_check_mode
+    - vendor_repository_quarantine_required
+
+- name: Remove unusable managed apt repository source
+  ansible.builtin.file:
+    path: "{{ vendor_repository_sources_path }}"
+    state: absent
+  when: vendor_repository_quarantine_required

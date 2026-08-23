@@ -1,30 +1,13 @@
 ---
-vscode_package_name: code
-
-vscode_supported_ubuntu_versions:
-  - "26.04"
-vscode_architecture_map:
-  x86_64: amd64
-  amd64: amd64
-  aarch64: arm64
-  arm64: arm64
-
-vscode_repository_key_url: https://packages.microsoft.com/keys/microsoft.asc
-vscode_repository_keyring_path: /usr/share/keyrings/microsoft-vscode.gpg
-vscode_repository_key_fingerprint: BC528686B50D79E339D3721CEB3E94ADBE1229CF
-
-vscode_repository_url: https://packages.microsoft.com/repos/code
-vscode_repository_suite: stable
-vscode_repository_component: main
-vscode_repository_sources_path: /etc/apt/sources.list.d/vscode.sources
-vscode_repository_legacy_sources_path: /etc/apt/sources.list.d/vscode.list
-vscode_repository_legacy_entry_regexp: >-
-  (?ix)^[ \t]*deb(?:-src)?[ \t]+(?:\[[^]]*\][ \t]+)?
-  https://packages[.]microsoft[.]com/repos/code/?([ \t]|$)
-vscode_repository_source_content: |
-  Types: deb
-  URIs: {{ vscode_repository_url }}
-  Suites: {{ vscode_repository_suite }}
-  Components: {{ vscode_repository_component }}
-  Architectures: {{ vscode_architecture_map[ansible_facts["architecture"]] }}
-  Signed-By: {{ vscode_repository_keyring_path }}
+vscode_repository:
+  display_name: Visual Studio Code
+  package_names:
+    - code
+  url: https://packages.microsoft.com/repos/code
+  suites: stable
+  components: main
+  sources_path: /etc/apt/sources.list.d/vscode.sources
+  keyring_path: /usr/share/keyrings/microsoft-vscode.gpg
+  key_fingerprint: BC528686B50D79E339D3721CEB3E94ADBE1229CF
+  key_url: https://packages.microsoft.com/keys/microsoft.asc
+  legacy_sources_path: /etc/apt/sources.list.d/vscode.list
