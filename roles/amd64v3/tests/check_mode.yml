@@ -3,6 +3,8 @@
   hosts: localhost
   connection: local
   gather_facts: true
+  vars_files:
+    - ../../../group_vars/all.yml
   vars:
     amd64v3_test_supported_probe:
       - /usr/bin/printf

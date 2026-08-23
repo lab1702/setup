@@ -1,6 +1,10 @@
 ---
 # Remove CRAN entries from every other APT source so the managed deb822
-# source is the only origin for R packages.
+# source is the only origin for R packages. An entry competes when it points
+# at the configured repository URL or at any CRAN mirror, recognised on any
+# host by the configured URL's distinctive path layout (for example
+# cran.r-project.org/bin/linux/ubuntu or
+# mirror.example.edu/CRAN/bin/linux/ubuntu).
 - name: Inspect APT source directory
   ansible.builtin.stat:
     path: "{{ r_repository_sources_directory_path }}"

@@ -1,12 +1,10 @@
 ---
-amd64v3_supported_ubuntu_versions:
-  - "26.04"
+# Sourced from group_vars/all.yml so platform support is defined once for
+# the playbook and every role.
+amd64v3_supported_ubuntu_versions: "{{ supported_ubuntu_versions }}"
 
-amd64v3_known_architectures:
-  - x86_64
-  - amd64
-  - aarch64
-  - arm64
+amd64v3_known_architectures: >-
+  {{ linux_release_architecture_map.keys() | list }}
 amd64v3_candidate_architectures:
   - x86_64
   - amd64

@@ -1,17 +1,16 @@
 ---
-- name: Exercise isolated one-line Claude repository metadata
+# Exercises the production deb822 source and armored .asc keyring pairing
+# with the specification and derived values sourced from the role defaults,
+# mirroring what the vendor_repository role passes to repository_check.
+- name: Exercise isolated deb822 Claude repository metadata
   hosts: localhost
   connection: local
   gather_facts: true
+  vars_files:
+    - ../../../group_vars/all.yml
+    - ../defaults/main.yml
+    - ../../vendor_repository/defaults/main.yml
   vars:
-    claude_desktop_test_architecture_map:
-      x86_64: amd64
-      amd64: amd64
-      aarch64: arm64
-      arm64: arm64
-    repository_test_architecture: >-
-      {{ claude_desktop_test_architecture_map[
-      ansible_facts["architecture"]] }}
     repository_check_owner: "{{ ansible_facts['user_id'] }}"
     repository_check_group: "{{ ansible_facts['user_gid'] }}"
     repository_check_apt_user: "{{ ansible_facts['user_id'] }}"
@@ -21,7 +20,7 @@
         that:
           - >-
             ansible_facts["architecture"]
-            in claude_desktop_test_architecture_map
+            in linux_release_architecture_map
 
     - name: Create temporary Claude test key directory
       ansible.builtin.tempfile:
@@ -31,11 +30,19 @@
       changed_when: false
 
     - name: Exercise verified Claude repository metadata
+      vars:
+        # Overrides the empty specification placeholder loaded from the
+        # shared defaults so the derived variables template from the same
+        # specification production passes to the vendor_repository role.
+        vendor_repository_spec: "{{ claude_desktop_repository }}"
+        claude_desktop_test_key_path: >-
+          {{ claude_desktop_test_key_tempdir.path }}/key{{
+          vendor_repository_keyring_extension }}
       block:
         - name: Download Claude signing key
           ansible.builtin.get_url:
-            url: https://downloads.claude.ai/claude-desktop/key.asc
-            dest: "{{ claude_desktop_test_key_tempdir.path }}/key.asc"
+            url: "{{ vendor_repository_key_url }}"
+            dest: "{{ claude_desktop_test_key_path }}"
             mode: "0600"
           changed_when: false
 
@@ -46,7 +53,7 @@
               - --batch
               - --show-keys
               - --with-colons
-              - "{{ claude_desktop_test_key_tempdir.path }}/key.asc"
+              - "{{ claude_desktop_test_key_path }}"
           register: claude_desktop_test_repository_key
           changed_when: false
 
@@ -56,34 +63,33 @@
               - >-
                 claude_desktop_test_repository_key.stdout_lines
                 | select('equalto',
-                'fpr:::::::::31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE:')
+                vendor_repository_expected_fingerprint_record)
                 | list | length == 1
 
-        - name: Refresh isolated one-line Claude metadata
-          ansible.builtin.include_tasks: >-
-            {{ playbook_dir }}/../../repository_check/tasks/main.yml
+        - name: Refresh isolated deb822 Claude metadata
+          ansible.builtin.include_role:
+            name: repository_check
           vars:
             repository_check_key_source: >-
-              {{ claude_desktop_test_key_tempdir.path }}/key.asc
+              {{ claude_desktop_test_key_path }}
             repository_check_key_remote_src: true
-            repository_check_keyring_filename: repository-keyring.asc
+            repository_check_keyring_filename: >-
+              repository-keyring{{ vendor_repository_keyring_extension }}
             repository_check_source_content: >-
-              deb [arch={{ repository_test_architecture }}
-              signed-by=/tmp/claude-desktop-test-keyring]
-              https://downloads.claude.ai/claude-desktop/apt/stable
-              stable main
+              {{ vendor_repository_source_content }}
             repository_check_system_keyring_path: >-
-              /tmp/claude-desktop-test-keyring
-            repository_check_source_filename: repository.list
-            repository_check_package_names:
-              - claude-desktop
+              {{ vendor_repository_keyring_path }}
+            repository_check_source_filename: repository.sources
+            repository_check_package_names: >-
+              {{ vendor_repository_package_names }}
 
         - name: Validate isolated Claude package metadata
           ansible.builtin.assert:
             that:
               - >-
                 (repository_check_package_versions.results
-                | first).stdout is search('claude-desktop')
+                | first).stdout
+                is search(vendor_repository_package_names | first)
       always:
         - name: Remove temporary Claude test key directory
           ansible.builtin.file:

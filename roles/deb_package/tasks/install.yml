@@ -1,0 +1,99 @@
+---
+- name: Validate installation inputs for {{ deb_package_display_name }}
+  ansible.builtin.assert:
+    that:
+      - deb_package_path is match('^/.+[.]deb$')
+      - deb_package_install_required is defined
+      - deb_package_repair_required is defined
+      - not ansible_check_mode
+    fail_msg: >-
+      The {{ deb_package_display_name }} package installation needs an
+      absolute .deb archive path, a preceding status.yml inclusion, and a
+      run outside check mode.
+
+- name: Inspect downloaded package metadata for {{ deb_package_display_name }}
+  ansible.builtin.command:
+    argv:
+      - dpkg-deb
+      - --show
+      - '--showformat=${Package}\t${Version}\t${Architecture}\n'
+      - "{{ deb_package_path }}"
+  register: deb_package_downloaded_metadata
+  changed_when: false
+
+- name: Validate downloaded package metadata for {{ deb_package_display_name }}
+  vars:
+    deb_package_expected_metadata:
+      - "{{ deb_package_name }}"
+      - "{{ deb_package_version }}"
+      - "{{ deb_package_architecture }}"
+  ansible.builtin.assert:
+    that:
+      - >-
+        deb_package_downloaded_metadata.stdout.split() ==
+        deb_package_expected_metadata
+    fail_msg: >-
+      The downloaded {{ deb_package_display_name }} package metadata does
+      not match the expected package name, version, and architecture.
+
+- name: Install verified package of {{ deb_package_display_name }}
+  ansible.builtin.apt:
+    deb: "{{ deb_package_path }}"
+    state: present
+    allow_downgrade: true
+    lock_timeout: 120
+  when: deb_package_install_required
+
+- name: Repair installed package through APT for {{ deb_package_display_name }}
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/apt-get
+      - --yes
+      - --fix-broken
+      - --no-remove
+      - --reinstall
+      - -o
+      - DPkg::Lock::Timeout=120
+      - -o
+      - Dpkg::Options::=--force-confdef
+      - -o
+      - Dpkg::Options::=--force-confold
+      - install
+      - "{{ deb_package_path }}"
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    LC_ALL: C
+  changed_when: true
+  when: deb_package_repair_required
+
+- name: Inspect repaired package state for {{ deb_package_display_name }}
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - --show
+      - >-
+        --showformat=${Version}\t${Architecture}\t${db:Status-Status}\n
+      - "{{ deb_package_name }}:{{ deb_package_architecture }}"
+  environment:
+    LC_ALL: C
+  register: deb_package_repaired_status
+  changed_when: false
+  failed_when: false
+  when: deb_package_repair_required
+
+- name: Validate repaired package state for {{ deb_package_display_name }}
+  vars:
+    deb_package_expected_repaired_status:
+      - "{{ deb_package_version }}"
+      - "{{ deb_package_architecture }}"
+      - installed
+  ansible.builtin.assert:
+    that:
+      - deb_package_repaired_status.rc | default(1) == 0
+      - >-
+        deb_package_repaired_status.stdout.split() ==
+        deb_package_expected_repaired_status
+    fail_msg: >-
+      APT did not leave the expected {{ deb_package_display_name }} package
+      version and architecture fully configured.
+  when: deb_package_repair_required

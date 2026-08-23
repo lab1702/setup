@@ -149,6 +149,7 @@
             owner: root
             group: root
             mode: "0644"
+          register: vendor_repository_keyring_installation
 
         - name: Configure apt repository
           ansible.builtin.copy:
@@ -157,6 +158,7 @@
             owner: root
             group: root
             mode: "0644"
+          register: vendor_repository_sources_configuration
 
         - name: Remove superseded repository signing key
           when:
@@ -189,13 +191,21 @@
 
         - name: Install packages while preserving the verified repository
           block:
+            # When neither the keyring nor the source file changed in this
+            # run, the play-level cache refresh already indexed this
+            # repository, so a full apt-get update per vendor would be
+            # wasted work.
             - name: Refresh repository package metadata
               ansible.builtin.apt:
                 update_cache: true
                 cache_valid_time: 0
                 lock_timeout: 120
               changed_when: false
-              when: not ansible_check_mode
+              when:
+                - not ansible_check_mode
+                - >-
+                  vendor_repository_keyring_installation.changed or
+                  vendor_repository_sources_configuration.changed
 
             - name: Refresh isolated repository metadata in check mode
               ansible.builtin.include_role:
@@ -307,7 +317,10 @@
                   Refusing to install {{ item.item }}={{
                   vendor_repository_candidate_versions[item.item] }} because
                   the same version is available from a repository other than
-                  {{ vendor_repository_display_name }}.
+                  {{ vendor_repository_display_name }}. Remove the competing
+                  apt source providing {{ vendor_repository_candidate_version_rows
+                  | difference(vendor_repository_origin_version_rows)
+                  | join('; ') }} and rerun the playbook.
               loop: "{{ vendor_repository_package_version_results }}"
               loop_control:
                 label: "{{ item.item }}"

@@ -10,22 +10,12 @@
 
   vars:
     user_name: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
-    supported_ubuntu_versions:
-      - "26.04"
+    # supported_ubuntu_versions, linux_release_architecture_map, and
+    # workstation_architecture are shared with role defaults via
+    # group_vars/all.yml.
     desktop_session_directories:
       - /usr/share/xsessions
       - /usr/share/wayland-sessions
-    linux_release_architecture_map:
-      x86_64: amd64
-      amd64: amd64
-      aarch64: arm64
-      arm64: arm64
-    workstation_architecture: >-
-      {{ linux_release_architecture_map[ansible_facts["architecture"]] }}
-    workstation_user_home: >-
-      {{ ansible_facts["getent_passwd"][user_name][4] }}
-    workstation_user_primary_gid: >-
-      {{ ansible_facts["getent_passwd"][user_name][2] }}
     workstation_user_configuration_entries:
       - path: "{{ workstation_user_home }}/.npmrc"
         regexp: '^\s*prefix\s*='
@@ -50,7 +40,8 @@
           - ansible_facts["distribution_version"] in supported_ubuntu_versions
           - ansible_facts["architecture"] in linux_release_architecture_map
         fail_msg: >-
-          This playbook supports Ubuntu 26.04 on AMD64 and ARM64.
+          This playbook supports Ubuntu
+          {{ supported_ubuntu_versions | join(', ') }} on AMD64 and ARM64.
           Detected {{ ansible_facts["distribution"] }}
           {{ ansible_facts["distribution_version"] }} on
           {{ ansible_facts["architecture"] }}.
@@ -63,6 +54,16 @@
       ansible.builtin.getent:
         database: passwd
         key: "{{ user_name }}"
+
+    # Resolved eagerly because later getent calls (for example the
+    # github_release probe-account lookup) replace the getent_passwd fact
+    # wholesale, which would break lazy references to this entry.
+    - name: Resolve workstation user home directory and primary group
+      ansible.builtin.set_fact:
+        workstation_user_home: >-
+          {{ ansible_facts["getent_passwd"][user_name][4] }}
+        workstation_user_primary_gid: >-
+          {{ ansible_facts["getent_passwd"][user_name][2] }}
 
     - name: Inspect graphical desktop session directories
       ansible.builtin.stat:
@@ -85,20 +86,27 @@
       register: graphical_desktop_sessions
       when: existing_desktop_session_directories | length > 0
 
+    # Each preflight is gated on the same conditions as its install role so
+    # hosts that never manage a vendor's repository (headless systems, or
+    # architectures the vendor does not publish for) do not have that
+    # vendor's apt sources rewritten, quarantined, or failed in check mode.
     - name: Preflight OpenAI apt repository before package refreshes
       ansible.builtin.include_role:
         name: chatgpt
         tasks_from: repository_preflight
+      when: graphical_desktop_sessions.matched | default(0) | int > 0
 
     - name: Preflight Claude Desktop apt repository before package refreshes
       ansible.builtin.include_role:
         name: claude_desktop
         tasks_from: repository_preflight
+      when: graphical_desktop_sessions.matched | default(0) | int > 0
 
     - name: Preflight MEGA apt repository before package refreshes
       ansible.builtin.include_role:
         name: megasync
         tasks_from: repository_preflight
+      when: graphical_desktop_sessions.matched | default(0) | int > 0
 
     - name: Preflight CRAN apt repository before package refreshes
       ansible.builtin.include_role:
@@ -109,11 +117,15 @@
       ansible.builtin.include_role:
         name: zoom
         tasks_from: repository_preflight
+      when:
+        - graphical_desktop_sessions.matched | default(0) | int > 0
+        - workstation_architecture == "amd64"
 
     - name: Preflight Visual Studio Code apt repository before package refreshes
       ansible.builtin.include_role:
         name: vscode
         tasks_from: repository_preflight
+      when: graphical_desktop_sessions.matched | default(0) | int > 0
 
   tasks:
     - name: Install base packages
@@ -224,16 +236,18 @@
           - dos2unix
           - htop
           - btop
-          # Accepted Finding 5: retain the distribution-default service and
-          # privilege behavior for glances on this trusted single-user host.
-          # This playbook does not deliberately expose the service remotely.
+          # Accepted tradeoff (README Item 9): retain the
+          # distribution-default service and privilege behavior for glances
+          # on this trusted single-user host. This playbook does not
+          # deliberately expose the service remotely.
           - glances
           - nvtop
           - jnettop
           - ffmpeg
-          # Accepted Finding 5: retain the distribution-default service and
-          # privilege behavior for ttyd on this trusted single-user host.
-          # This playbook does not deliberately expose the service remotely.
+          # Accepted tradeoff (README Item 9): retain the
+          # distribution-default service and privilege behavior for ttyd on
+          # this trusted single-user host. This playbook does not
+          # deliberately expose the service remotely.
           - ttyd
         state: present
 
@@ -319,6 +333,9 @@
     - name: Upgrade all installed APT packages
       ansible.builtin.apt:
         update_cache: true
+        # The base-package task refreshed the cache earlier in this run, so
+        # only refresh again when that was over an hour ago.
+        cache_valid_time: 3600
         upgrade: dist
         lock_timeout: 120
 

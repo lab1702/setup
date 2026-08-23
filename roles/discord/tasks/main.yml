@@ -76,85 +76,19 @@
   changed_when: false
   check_mode: false
 
-- name: Gather installed package facts for Discord
-  ansible.builtin.package_facts:
-    manager: auto
-
-- name: Select installed Discord package version
-  vars:
-    discord_installed_packages: >-
-      {{ ansible_facts.packages[discord_package_name] | default([])
-      | selectattr('arch', 'defined')
-      | selectattr('arch', 'equalto', discord_package_architecture) | list }}
-  ansible.builtin.set_fact:
-    discord_installed_version: >-
-      {{ (discord_installed_packages | first | default({})).version
-      | default('') }}
-
-- name: Inspect installed Discord dpkg state
-  ansible.builtin.command:
-    argv:
-      - dpkg-query
-      - --show
-      - '--showformat=${db:Status-Abbrev}'
-      - "{{ discord_package_name }}:{{ discord_package_architecture }}"
-  register: discord_installed_package_status
-  changed_when: false
-  failed_when: false
-  check_mode: false
-  when: discord_installed_version | length > 0
-
-- name: Compare installed and stable Discord Debian versions
-  ansible.builtin.command:
-    argv:
-      - dpkg
-      - --compare-versions
-      - "{{ discord_installed_version }}"
-      - eq
-      - "{{ discord_release.version }}"
-  register: discord_installed_version_comparison
-  changed_when: false
-  failed_when: discord_installed_version_comparison.rc not in [0, 1]
-  check_mode: false
-  when: discord_installed_version | length > 0
-
 - name: Determine required Discord package action
+  ansible.builtin.include_role:
+    name: deb_package
+    tasks_from: status.yml
   vars:
-    discord_installed_package_is_configured: >-
-      {{ discord_installed_package_status.rc | default(1) == 0 and
-      discord_installed_package_status.stdout | default('') | trim == 'ii' }}
-  ansible.builtin.set_fact:
-    discord_install_required: >-
-      {{ discord_installed_version | length == 0 or
-      discord_installed_version_comparison.rc | default(1) != 0 }}
-    discord_configuration_repair_required: >-
-      {{ discord_installed_version | length > 0 and
-      discord_installed_version_comparison.rc | default(1) == 0 and
-      not (discord_installed_package_is_configured | bool) }}
-
-- name: Report pending Discord installation in check mode
-  ansible.builtin.debug:
-    msg: Discord {{ discord_release.version }} would be installed.
-  changed_when: true
-  when:
-    - ansible_check_mode
-    - discord_install_required
-
-- name: Report pending Discord configuration repair in check mode
-  ansible.builtin.debug:
-    msg: >-
-      Discord {{ discord_release.version }} would be configured to repair its
-      incomplete dpkg state.
-  changed_when: true
-  when:
-    - ansible_check_mode
-    - discord_configuration_repair_required
+    deb_package_display_name: Discord
+    deb_package_name: "{{ discord_package_name }}"
+    deb_package_architecture: "{{ discord_package_architecture }}"
+    deb_package_version: "{{ discord_release.version }}"
 
 - name: Install latest stable Discord package
   when:
-    - >-
-      discord_install_required or
-      discord_configuration_repair_required
+    - deb_package_install_required or deb_package_repair_required
     - not ansible_check_mode
   block:
     - name: Create temporary directory for Discord package
@@ -176,96 +110,17 @@
             status_code: 200
             mode: "0600"
 
-        - name: Inspect downloaded Discord package metadata
-          ansible.builtin.command:
-            argv:
-              - dpkg-deb
-              - --show
-              - '--showformat=${Package}\t${Version}\t${Architecture}\n'
-              - >-
-                {{ discord_package_tempdir.path }}/{{ discord_release.filename }}
-          register: discord_downloaded_package_metadata
-          changed_when: false
-
-        - name: Validate downloaded Discord package metadata
+        - name: Install or repair validated Discord package
+          ansible.builtin.include_role:
+            name: deb_package
+            tasks_from: install.yml
           vars:
-            discord_expected_package_metadata:
-              - "{{ discord_package_name }}"
-              - "{{ discord_release.version }}"
-              - "{{ discord_package_architecture }}"
-          ansible.builtin.assert:
-            that:
-              - >-
-                discord_downloaded_package_metadata.stdout.split() ==
-                discord_expected_package_metadata
-            fail_msg: >-
-              The downloaded Discord package metadata does not match the
-              expected package name, version, and AMD64 architecture.
-
-        - name: Install validated Discord package
-          ansible.builtin.apt:
-            deb: >-
+            deb_package_display_name: Discord
+            deb_package_name: "{{ discord_package_name }}"
+            deb_package_architecture: "{{ discord_package_architecture }}"
+            deb_package_version: "{{ discord_release.version }}"
+            deb_package_path: >-
               {{ discord_package_tempdir.path }}/{{ discord_release.filename }}
-            state: present
-            allow_downgrade: true
-            lock_timeout: 120
-          when: discord_install_required
-
-        - name: Repair matching Discord package through APT
-          ansible.builtin.command:
-            argv:
-              - /usr/bin/apt-get
-              - --yes
-              - --fix-broken
-              - --no-remove
-              - --reinstall
-              - -o
-              - DPkg::Lock::Timeout=120
-              - -o
-              - Dpkg::Options::=--force-confdef
-              - -o
-              - Dpkg::Options::=--force-confold
-              - install
-              - >-
-                {{ discord_package_tempdir.path }}/{{
-                discord_release.filename }}
-          environment:
-            DEBIAN_FRONTEND: noninteractive
-            LC_ALL: C
-          changed_when: true
-          when: discord_configuration_repair_required
-
-        - name: Inspect repaired Discord package state
-          ansible.builtin.command:
-            argv:
-              - dpkg-query
-              - --show
-              - >-
-                --showformat=${Version}\t${Architecture}\t${db:Status-Abbrev}\n
-              - "{{ discord_package_name }}:{{ discord_package_architecture }}"
-          environment:
-            LC_ALL: C
-          register: discord_repaired_package_status
-          changed_when: false
-          failed_when: false
-          when: discord_configuration_repair_required
-
-        - name: Validate repaired Discord package state
-          vars:
-            discord_expected_repaired_package_status:
-              - "{{ discord_release.version }}"
-              - "{{ discord_package_architecture }}"
-              - ii
-          ansible.builtin.assert:
-            that:
-              - discord_repaired_package_status.rc | default(1) == 0
-              - >-
-                discord_repaired_package_status.stdout.split() ==
-                discord_expected_repaired_package_status
-            fail_msg: >-
-              APT did not leave the expected Discord package version and
-              architecture fully configured.
-          when: discord_configuration_repair_required
       always:
         - name: Remove temporary Discord package directory
           ansible.builtin.file:

@@ -1,4 +1,9 @@
-"""Filters for migrating duplicate CRAN APT source entries."""
+"""Filters for migrating duplicate CRAN APT source entries.
+
+An entry competes with the managed source when it points at the configured
+repository itself or at any CRAN mirror, which serves the same Ubuntu
+repository under the configured URL's distinctive path layout.
+"""
 
 from __future__ import annotations
 
@@ -50,18 +55,26 @@ def _is_matching_repository_uri(candidate: str, expected: str) -> bool:
     if candidate_parts is None or expected_parts is None:
         return False
 
-    candidate_scheme, candidate_host, candidate_port, candidate_path = candidate_parts
-    expected_scheme, expected_host, expected_port, expected_path = expected_parts
+    # _normalise_repository_uri only accepts HTTP(S) URIs, and CRAN has
+    # historically documented both forms, so schemes need no further
+    # comparison: an old HTTP entry is not left behind.
+    _, candidate_host, candidate_port, candidate_path = candidate_parts
+    _, expected_host, expected_port, expected_path = expected_parts
 
-    # CRAN has historically documented both HTTP and HTTPS forms. Treat them
-    # as the same repository so an old HTTP entry is not left behind.
-    return (
-        candidate_scheme in {"http", "https"}
-        and expected_scheme in {"http", "https"}
-        and candidate_host == expected_host
+    if (
+        candidate_host == expected_host
         and candidate_port == expected_port
         and candidate_path == expected_path
-    )
+    ):
+        return True
+
+    # Every CRAN mirror serves the Ubuntu repository under the configured
+    # URL's distinctive path layout (cran.r-project.org/bin/linux/ubuntu,
+    # mirror.example.edu/CRAN/bin/linux/ubuntu, ...), so an entry on any host
+    # whose path ends with that layout also competes with the managed source.
+    # The suffix's leading "/" keeps the comparison on full path-segment
+    # boundaries, and a root expected path never matches by suffix.
+    return expected_path != "/" and candidate_path.endswith(expected_path)
 
 
 def _migrate_one_line_sources(content: str, repository_url: str) -> tuple[str, int]:

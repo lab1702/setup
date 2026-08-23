@@ -1,17 +1,16 @@
 ---
+# Exercises the production deb822 source and binary .gpg keyring pairing
+# with the specification and derived values sourced from the role defaults,
+# mirroring what the vendor_repository role passes to repository_check.
 - name: Exercise isolated deb822 OpenAI repository metadata
   hosts: localhost
   connection: local
   gather_facts: true
+  vars_files:
+    - ../../../group_vars/all.yml
+    - ../defaults/main.yml
+    - ../../vendor_repository/defaults/main.yml
   vars:
-    chatgpt_test_architecture_map:
-      x86_64: amd64
-      amd64: amd64
-      aarch64: arm64
-      arm64: arm64
-    repository_test_architecture: >-
-      {{ chatgpt_test_architecture_map[
-      ansible_facts["architecture"]] }}
     repository_check_owner: "{{ ansible_facts['user_id'] }}"
     repository_check_group: "{{ ansible_facts['user_gid'] }}"
     repository_check_apt_user: "{{ ansible_facts['user_id'] }}"
@@ -19,51 +18,63 @@
     - name: Validate test architecture support
       ansible.builtin.assert:
         that:
-          - ansible_facts["architecture"] in chatgpt_test_architecture_map
-
-    - name: Inspect bundled OpenAI signing key
-      ansible.builtin.command:
-        argv:
-          - gpg
-          - --batch
-          - --show-keys
-          - --with-colons
-          - "{{ playbook_dir }}/../files/chatgpt-archive-keyring.gpg"
-      register: chatgpt_test_repository_key
-      changed_when: false
-
-    - name: Validate bundled OpenAI signing key
-      ansible.builtin.assert:
-        that:
           - >-
-            chatgpt_test_repository_key.stdout_lines
-            | select('equalto',
-            'fpr:::::::::3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4:')
-            | list | length == 1
+            ansible_facts["architecture"]
+            in linux_release_architecture_map
 
-    - name: Refresh isolated deb822 OpenAI metadata
-      ansible.builtin.include_tasks: >-
-        {{ playbook_dir }}/../../repository_check/tasks/main.yml
-      vars:
-        repository_check_key_source: >-
+    - name: Locate bundled OpenAI repository signing key
+      ansible.builtin.set_fact:
+        chatgpt_repository_key_file: >-
           {{ playbook_dir }}/../files/chatgpt-archive-keyring.gpg
-        repository_check_key_remote_src: true
-        repository_check_keyring_filename: repository-keyring.gpg
-        repository_check_source_content: |
-          Types: deb
-          URIs: https://persistent.oaistatic.com/codex-app-prod/linux/deb
-          Suites: stable
-          Components: main
-          Architectures: {{ repository_test_architecture }}
-          Signed-By: /tmp/chatgpt-test-keyring
-        repository_check_system_keyring_path: /tmp/chatgpt-test-keyring
-        repository_check_source_filename: repository.sources
-        repository_check_package_names:
-          - chatgpt
 
-    - name: Validate isolated OpenAI package metadata
-      ansible.builtin.assert:
-        that:
-          - >-
-            (repository_check_package_versions.results
-            | first).stdout is search('chatgpt')
+    - name: Exercise verified OpenAI repository metadata
+      vars:
+        # Overrides the empty specification placeholder loaded from the
+        # shared defaults so the derived variables template from the same
+        # specification production passes to the vendor_repository role.
+        vendor_repository_spec: "{{ chatgpt_repository }}"
+      block:
+        - name: Inspect bundled OpenAI signing key
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --show-keys
+              - --with-colons
+              - "{{ vendor_repository_key_file }}"
+          register: chatgpt_test_repository_key
+          changed_when: false
+
+        - name: Validate bundled OpenAI signing key
+          ansible.builtin.assert:
+            that:
+              - >-
+                chatgpt_test_repository_key.stdout_lines
+                | select('equalto',
+                vendor_repository_expected_fingerprint_record)
+                | list | length == 1
+
+        - name: Refresh isolated deb822 OpenAI metadata
+          ansible.builtin.include_role:
+            name: repository_check
+          vars:
+            repository_check_key_source: >-
+              {{ vendor_repository_key_file }}
+            repository_check_key_remote_src: true
+            repository_check_keyring_filename: >-
+              repository-keyring{{ vendor_repository_keyring_extension }}
+            repository_check_source_content: >-
+              {{ vendor_repository_source_content }}
+            repository_check_system_keyring_path: >-
+              {{ vendor_repository_keyring_path }}
+            repository_check_source_filename: repository.sources
+            repository_check_package_names: >-
+              {{ vendor_repository_package_names }}
+
+        - name: Validate isolated OpenAI package metadata
+          ansible.builtin.assert:
+            that:
+              - >-
+                (repository_check_package_versions.results
+                | first).stdout
+                is search(vendor_repository_package_names | first)

@@ -53,13 +53,10 @@ vendor_repository_supported_architectures: >-
 vendor_repository_install_recommends: >-
   {{ vendor_repository_spec.install_recommends | default(omit) }}
 
-vendor_repository_supported_ubuntu_versions:
-  - "26.04"
-vendor_repository_architecture_map:
-  x86_64: amd64
-  amd64: amd64
-  aarch64: arm64
-  arm64: arm64
+# Sourced from group_vars/all.yml so platform support is defined once for
+# the playbook and every role.
+vendor_repository_supported_ubuntu_versions: "{{ supported_ubuntu_versions }}"
+vendor_repository_architecture_map: "{{ linux_release_architecture_map }}"
 
 # Binary keyrings use a .gpg suffix; armored keyrings keep .asc.
 vendor_repository_keyring_extension: >-

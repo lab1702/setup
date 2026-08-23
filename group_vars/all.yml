@@ -1,0 +1,12 @@
+---
+# Platform support values shared by the playbook and role defaults so a new
+# Ubuntu release or architecture only needs registering in one place.
+supported_ubuntu_versions:
+  - "26.04"
+linux_release_architecture_map:
+  x86_64: amd64
+  amd64: amd64
+  aarch64: arm64
+  arm64: arm64
+workstation_architecture: >-
+  {{ linux_release_architecture_map[ansible_facts["architecture"]] }}

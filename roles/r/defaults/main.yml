@@ -1,7 +1,8 @@
 ---
 r_repository_url: https://cloud.r-project.org/bin/linux/ubuntu
-r_repository_suite_map:
-  "26.04": resolute-cran40/
+# CRAN names each Ubuntu suite after the release codename; the play-level
+# supported-version assert gates which releases reach this role.
+r_repository_suite: "{{ ansible_facts['distribution_release'] ~ '-cran40/' }}"
 r_repository_sources_path: /etc/apt/sources.list.d/cran-r.sources
 
 # Locations scanned for competing CRAN entries before the managed source is
@@ -20,7 +21,7 @@ r_repository:
     - r-base-dev
     - r-recommended
   url: "{{ r_repository_url }}"
-  suites: "{{ r_repository_suite_map[ansible_facts['distribution_version']] }}"
+  suites: "{{ r_repository_suite }}"
   sources_path: "{{ r_repository_sources_path }}"
   keyring_path: /usr/share/keyrings/cran-r-archive-keyring.asc
   key_fingerprint: E298A3A825C0D65DFD57CBB651716619E084DAB9

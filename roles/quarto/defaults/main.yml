@@ -3,8 +3,9 @@ quarto_release_api_url: https://api.github.com/repos/quarto-dev/quarto-cli/relea
 quarto_release_base_url: https://github.com/quarto-dev/quarto-cli/releases/download
 quarto_package_name: quarto
 
-quarto_architecture_map:
-  x86_64: amd64
-  amd64: amd64
-  aarch64: arm64
-  arm64: arm64
+# Derived from the release metadata registered as quarto_release and from the
+# play-level workstation_architecture, so each is defined exactly once.
+quarto_release_version: >-
+  {{ quarto_release.json.tag_name | regex_replace('^v', '') }}
+quarto_package_filename: >-
+  quarto-{{ quarto_release_version }}-linux-{{ workstation_architecture }}.deb

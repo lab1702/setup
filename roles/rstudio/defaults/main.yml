@@ -3,8 +3,9 @@ rstudio_package_name: rstudio
 rstudio_package_architecture: amd64
 rstudio_downloads_metadata_url: https://cdn.posit.co/downloads.json
 
-rstudio_platform_map:
-  "26.04": resolute
+# Posit publishes installer metadata per Ubuntu release codename; the
+# play-level platform assertion already gates the supported releases.
+rstudio_platform: "{{ ansible_facts['distribution_release'] }}"
 
 rstudio_supported_architectures:
   - x86_64

@@ -10,9 +10,18 @@
       - >-
         github_release_binaries | select('match', '^[A-Za-z0-9_.-]+$')
         | list | length == github_release_binaries | length
+      - github_release_archive_format in ['tar.gz', 'zip']
+      - github_release_archive_layout in ['directory', 'flat']
+      - >-
+        github_release_archive_format == 'tar.gz'
+        or github_release_archive_layout == 'flat'
+      - github_release_version_token_index | int(-1) >= 0
     fail_msg: >-
-      The github_release role needs a GitHub owner/name repository and a
-      non-empty list of distinct binary names.
+      The github_release role needs a GitHub owner/name repository, a
+      non-empty list of distinct binary names, a supported archive format
+      (tar.gz or zip, where zip archives must use the flat layout), a
+      supported archive layout (directory or flat), and a non-negative
+      version token index.
 
 - name: Validate architecture support for {{ github_release_display_name }}
   ansible.builtin.assert:
@@ -154,7 +163,9 @@
 - name: Determine whether release installation is required
   vars:
     github_release_installed_version: >-
-      {{ ((item.stdout | default('')).split() + ['', ''])[1]
+      {{ ((item.stdout | default('')).split() + ['']
+      * (github_release_version_token_index | int
+      + 1))[github_release_version_token_index | int]
       | regex_replace('^v', '') }}
   ansible.builtin.set_fact:
     github_release_install_required: >-
@@ -196,14 +207,20 @@
           github_release_asset.name }}
         github_release_staging_path: >-
           {{ github_release_archive_tempdir.path }}/staging
-        github_release_expected_archive_members: >-
-          {{ [github_release_archive_directory ~ '/']
-          + (github_release_binaries
+        github_release_archive_binary_members: >-
+          {{ github_release_binaries
+          if github_release_archive_layout == 'flat'
+          else github_release_binaries
           | map('regex_replace', '^', github_release_archive_directory ~ '/')
-          | list) }}
+          | list }}
+        github_release_expected_archive_members: >-
+          {{ ([github_release_archive_directory ~ '/']
+          if github_release_archive_layout == 'directory' else [])
+          + github_release_archive_binary_members }}
         github_release_expected_archive_member_type_pairs: >-
           {{ github_release_expected_archive_members
-          | zip(['d'] + (['-'] * (github_release_binaries | length)))
+          | zip((['d'] if github_release_archive_layout == 'directory'
+          else []) + ['-'] * (github_release_binaries | length))
           | map('list') | list | sort }}
       block:
         - name: Download verified release archive
@@ -229,6 +246,7 @@
             TAR_OPTIONS: ""
           register: github_release_archive_member_names
           changed_when: false
+          when: github_release_archive_format == 'tar.gz'
 
         - name: Inspect release archive member metadata
           ansible.builtin.command:
@@ -247,6 +265,7 @@
             TAR_OPTIONS: ""
           register: github_release_archive_member_metadata
           changed_when: false
+          when: github_release_archive_format == 'tar.gz'
 
         - name: Validate release archive members
           vars:
@@ -277,6 +296,73 @@
               contain exactly one top-level target directory and the regular
               binaries {{ github_release_binaries | join(', ') }}, without
               duplicate or unexpected members.
+          when: github_release_archive_format == 'tar.gz'
+
+        - name: Inspect release zip archive member names
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/unzip
+              - -Z
+              - "-1"
+              - "{{ github_release_archive_path }}"
+          environment:
+            LC_ALL: C
+            PATH: /usr/bin:/bin
+            UNZIP: ""
+            ZIPINFO: ""
+          register: github_release_zip_member_names
+          changed_when: false
+          when: github_release_archive_format == 'zip'
+
+        - name: Inspect release zip archive member metadata
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/unzip
+              - -Z
+              - -s
+              - "{{ github_release_archive_path }}"
+          environment:
+            LC_ALL: C
+            PATH: /usr/bin:/bin
+            UNZIP: ""
+            ZIPINFO: ""
+          register: github_release_zip_member_metadata
+          changed_when: false
+          when: github_release_archive_format == 'zip'
+
+        - name: Validate release zip archive members
+          vars:
+            github_release_zip_member_records: >-
+              {{ github_release_zip_member_metadata.stdout_lines
+              | select('match', '^[bcdlps-]') | list }}
+            github_release_zip_member_modes: >-
+              {{ github_release_zip_member_records
+              | map('regex_search', '^\S+') | list }}
+          ansible.builtin.assert:
+            that:
+              - >-
+                github_release_zip_member_names.stdout_lines | length ==
+                github_release_expected_archive_members | length
+              - >-
+                github_release_zip_member_names.stdout_lines | unique
+                | list | length ==
+                github_release_zip_member_names.stdout_lines | length
+              - >-
+                github_release_zip_member_names.stdout_lines | sort ==
+                github_release_expected_archive_members | sort
+              - >-
+                github_release_zip_member_records | length ==
+                github_release_expected_archive_members | length
+              - >-
+                github_release_zip_member_modes
+                | select('match', '^-.{2}x.{6}$') | list | length ==
+                github_release_expected_archive_members | length
+            fail_msg: >-
+              The verified {{ github_release_display_name }} zip archive must
+              contain exactly the safe regular executables
+              {{ github_release_binaries | join(', ') }}, without duplicate
+              or unexpected members.
+          when: github_release_archive_format == 'zip'
 
         - name: Create vetted release binary staging directory
           ansible.builtin.file:
@@ -292,10 +378,10 @@
             src: "{{ github_release_archive_path }}"
             dest: "{{ github_release_staging_path }}"
             remote_src: true
-            include: >-
-              {{ github_release_expected_archive_members[1:] }}
-            extra_opts:
-              - --strip-components=1
+            include: "{{ github_release_archive_binary_members }}"
+            extra_opts: >-
+              {{ ['--strip-components=1']
+              if github_release_archive_layout == 'directory' else [] }}
             owner: root
             group: root
             mode: "0755"
@@ -303,6 +389,8 @@
             GZIP: ""
             PATH: /usr/bin:/bin
             TAR_OPTIONS: ""
+            UNZIP: ""
+            ZIPINFO: ""
 
         - name: Inspect extracted release binaries
           ansible.builtin.stat:
@@ -363,7 +451,9 @@
         - name: Validate downloaded release versions
           vars:
             github_release_downloaded_version: >-
-              {{ (item.stdout.split() + ['', ''])[1]
+              {{ (item.stdout.split() + ['']
+              * (github_release_version_token_index | int
+              + 1))[github_release_version_token_index | int]
               | regex_replace('^v', '') }}
           ansible.builtin.assert:
             that:

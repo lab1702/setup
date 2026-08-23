@@ -2,7 +2,7 @@
 - name: Validate Quarto CLI architecture support
   ansible.builtin.assert:
     that:
-      - ansible_facts["architecture"] in quarto_architecture_map
+      - ansible_facts["architecture"] in linux_release_architecture_map
     fail_msg: >-
       Quarto CLI supports AMD64 and ARM64. Detected
       {{ ansible_facts["architecture"] }}.
@@ -16,15 +16,6 @@
   check_mode: false
 
 - name: Select Quarto CLI package asset
-  vars:
-    quarto_release_tag: "{{ quarto_release.json.tag_name }}"
-    quarto_release_version: >-
-      {{ quarto_release_tag | regex_replace('^v', '') }}
-    quarto_release_architecture: >-
-      {{ quarto_architecture_map[ansible_facts["architecture"]] }}
-    quarto_package_filename: >-
-      quarto-{{ quarto_release_version }}-linux-{{
-      quarto_release_architecture }}.deb
   ansible.builtin.set_fact:
     quarto_release_asset: >-
       {{ quarto_release.json.assets
@@ -46,70 +37,19 @@
       The latest Quarto CLI release did not contain the expected uploaded
       package with a trusted GitHub download URL and SHA-256 digest.
 
-- name: Gather installed package facts for Quarto CLI
-  ansible.builtin.package_facts:
-    manager: auto
-
-- name: Inspect Quarto CLI dpkg configuration state
-  ansible.builtin.command:
-    argv:
-      - dpkg-query
-      - --show
-      - '--showformat=${db:Status-Status}\n'
-      - >-
-        {{ quarto_package_name }}:{{
-        quarto_architecture_map[ansible_facts['architecture']] }}
-  environment:
-    LC_ALL: C
-  register: quarto_installed_package_status
-  changed_when: false
-  failed_when: false
-  check_mode: false
-
-- name: Determine whether Quarto CLI installation is required
+- name: Determine required Quarto CLI package action
+  ansible.builtin.include_role:
+    name: deb_package
+    tasks_from: status.yml
   vars:
-    quarto_release_version: >-
-      {{ quarto_release.json.tag_name | regex_replace('^v', '') }}
-    quarto_release_architecture: >-
-      {{ quarto_architecture_map[ansible_facts["architecture"]] }}
-    quarto_installed_packages: >-
-      {{ ansible_facts.packages[quarto_package_name] | default([])
-      | selectattr('arch', 'defined')
-      | selectattr('arch', 'equalto', quarto_release_architecture) | list }}
-    quarto_installed_version: >-
-      {{ (quarto_installed_packages | first | default({})).version
-      | default('') }}
-  ansible.builtin.set_fact:
-    quarto_install_required: >-
-      {{ quarto_installed_version != quarto_release_version or
-      quarto_installed_package_status.rc | default(1) != 0 }}
-    quarto_repair_required: >-
-      {{ quarto_installed_version == quarto_release_version and
-      quarto_installed_package_status.rc | default(1) == 0 and
-      quarto_installed_package_status.stdout | default('') != 'installed' }}
-
-- name: Report pending Quarto CLI package repair in check mode
-  ansible.builtin.debug:
-    msg: >-
-      Quarto CLI {{ quarto_release.json.tag_name }} would be configured to
-      repair its incomplete dpkg state.
-  changed_when: true
-  when:
-    - ansible_check_mode
-    - quarto_repair_required
-
-- name: Report pending Quarto CLI installation in check mode
-  ansible.builtin.debug:
-    msg: >-
-      Quarto CLI {{ quarto_release.json.tag_name }} would be installed.
-  changed_when: true
-  when:
-    - ansible_check_mode
-    - quarto_install_required
+    deb_package_display_name: Quarto CLI
+    deb_package_name: "{{ quarto_package_name }}"
+    deb_package_architecture: "{{ workstation_architecture }}"
+    deb_package_version: "{{ quarto_release_version }}"
 
 - name: Download, verify, and install required Quarto CLI release
   when:
-    - quarto_install_required or quarto_repair_required
+    - deb_package_install_required or deb_package_repair_required
     - not ansible_check_mode
   block:
     - name: Create temporary directory for Quarto CLI package
@@ -129,106 +69,17 @@
             checksum: "{{ quarto_release_asset.digest }}"
             mode: "0600"
 
-        - name: Inspect downloaded Quarto CLI package metadata
-          ansible.builtin.command:
-            argv:
-              - dpkg-deb
-              - --show
-              - '--showformat=${Package}\t${Version}\t${Architecture}\n'
-              - >-
-                {{ quarto_package_tempdir.path }}/{{ quarto_release_asset.name }}
-          register: quarto_downloaded_package_metadata
-          changed_when: false
-
-        - name: Validate downloaded Quarto CLI package metadata
+        - name: Install or repair verified Quarto CLI package
+          ansible.builtin.include_role:
+            name: deb_package
+            tasks_from: install.yml
           vars:
-            quarto_release_version: >-
-              {{ quarto_release.json.tag_name | regex_replace('^v', '') }}
-            quarto_release_architecture: >-
-              {{ quarto_architecture_map[ansible_facts["architecture"]] }}
-            quarto_expected_package_metadata:
-              - "{{ quarto_package_name }}"
-              - "{{ quarto_release_version }}"
-              - "{{ quarto_release_architecture }}"
-          ansible.builtin.assert:
-            that:
-              - >-
-                quarto_downloaded_package_metadata.stdout.split() ==
-                quarto_expected_package_metadata
-            fail_msg: >-
-              The downloaded Quarto CLI package metadata does not match the
-              expected package name, version, and architecture.
-
-        - name: Install verified Quarto CLI package
-          ansible.builtin.apt:
-            deb: >-
+            deb_package_display_name: Quarto CLI
+            deb_package_name: "{{ quarto_package_name }}"
+            deb_package_architecture: "{{ workstation_architecture }}"
+            deb_package_version: "{{ quarto_release_version }}"
+            deb_package_path: >-
               {{ quarto_package_tempdir.path }}/{{ quarto_release_asset.name }}
-            state: present
-            allow_downgrade: true
-            lock_timeout: 120
-          when: quarto_install_required
-
-        - name: Repair matching Quarto CLI package through APT
-          ansible.builtin.command:
-            argv:
-              - /usr/bin/apt-get
-              - --yes
-              - --fix-broken
-              - --no-remove
-              - --reinstall
-              - -o
-              - DPkg::Lock::Timeout=120
-              - -o
-              - Dpkg::Options::=--force-confdef
-              - -o
-              - Dpkg::Options::=--force-confold
-              - install
-              - >-
-                {{ quarto_package_tempdir.path }}/{{
-                quarto_release_asset.name }}
-          environment:
-            DEBIAN_FRONTEND: noninteractive
-            LC_ALL: C
-          changed_when: true
-          when: quarto_repair_required
-
-        - name: Inspect repaired Quarto CLI package state
-          ansible.builtin.command:
-            argv:
-              - dpkg-query
-              - --show
-              - >-
-                --showformat=${Version}\t${Architecture}\t${db:Status-Status}\n
-              - >-
-                {{ quarto_package_name }}:{{
-                quarto_architecture_map[ansible_facts['architecture']] }}
-          environment:
-            LC_ALL: C
-          register: quarto_repaired_package_status
-          changed_when: false
-          failed_when: false
-          when: quarto_repair_required
-
-        - name: Validate repaired Quarto CLI package state
-          vars:
-            quarto_release_version: >-
-              {{ quarto_release.json.tag_name | regex_replace('^v', '') }}
-            quarto_release_architecture: >-
-              {{ quarto_architecture_map[ansible_facts["architecture"]] }}
-            quarto_expected_repaired_package_status:
-              - "{{ quarto_release_version }}"
-              - "{{ quarto_release_architecture }}"
-              - installed
-          ansible.builtin.assert:
-            that:
-              - quarto_repaired_package_status.rc | default(1) == 0
-              - >-
-                quarto_repaired_package_status.stdout.split() ==
-                quarto_expected_repaired_package_status
-            fail_msg: >-
-              APT did not leave the expected Quarto CLI package version and
-              architecture fully configured.
-          when: quarto_repair_required
       always:
         - name: Remove temporary Quarto CLI package directory
           ansible.builtin.file:

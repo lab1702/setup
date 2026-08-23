@@ -43,4 +43,7 @@
     name: libreoffice
     state: present
     update_cache: true
+    # The cache was refreshed earlier in this run, so only refresh again
+    # when that was over an hour ago.
+    cache_valid_time: 3600
     lock_timeout: 120

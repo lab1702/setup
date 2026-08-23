@@ -3,12 +3,10 @@
   ansible.builtin.assert:
     that:
       - ansible_facts["distribution"] == "Ubuntu"
-      - ansible_facts["distribution_version"] in rstudio_platform_map
       - ansible_facts["architecture"] in rstudio_supported_architectures
     fail_msg: >-
-      Posit's stable RStudio Desktop installer metadata supports Ubuntu
-      {{ rstudio_platform_map.keys() | join(', ') }} on AMD64. Detected
-      {{ ansible_facts["distribution"] }}
+      Posit's stable RStudio Desktop installer metadata supports Ubuntu on
+      AMD64. Detected {{ ansible_facts["distribution"] }}
       {{ ansible_facts["distribution_version"] }} on
       {{ ansible_facts["architecture"] }}.
 
@@ -22,8 +20,6 @@
 
 - name: Select Posit RStudio Desktop package metadata
   vars:
-    rstudio_platform: >-
-      {{ rstudio_platform_map[ansible_facts["distribution_version"]] }}
     rstudio_stable_desktop_installers: >-
       {{ rstudio_downloads_metadata.json.rstudio.open_source.stable.desktop.installer }}
   ansible.builtin.set_fact:
@@ -45,80 +41,22 @@
         is match('^[0-9a-f]{64}$')
     fail_msg: >-
       Posit's download metadata did not contain a valid stable RStudio
-      Desktop package URL, filename, version, and SHA-256 checksum.
+      Desktop package URL, filename, version, and SHA-256 checksum for
+      Ubuntu {{ rstudio_platform }}.
 
-- name: Gather installed package facts for Posit RStudio Desktop
-  ansible.builtin.package_facts:
-    manager: auto
-
-- name: Inspect Posit RStudio Desktop dpkg configuration state
-  ansible.builtin.command:
-    argv:
-      - dpkg-query
-      - --show
-      - '--showformat=${db:Status-Status}\n'
-      - "{{ rstudio_package_name }}"
-  environment:
-    LC_ALL: C
-  register: rstudio_installed_package_status
-  changed_when: false
-  failed_when: false
-  check_mode: false
-
-- name: Determine whether Posit RStudio Desktop installation is required
+- name: Determine required Posit RStudio Desktop package action
+  ansible.builtin.include_role:
+    name: deb_package
+    tasks_from: status.yml
   vars:
-    rstudio_installed_packages: >-
-      {{ ansible_facts.packages[rstudio_package_name] | default([]) }}
-    rstudio_installed_version: >-
-      {{ (rstudio_installed_packages | first | default({})).version
-      | default('') }}
-  ansible.builtin.set_fact:
-    rstudio_install_required: >-
-      {{ rstudio_installed_version != rstudio_release.version or
-      rstudio_installed_package_status.rc | default(1) != 0 }}
-    rstudio_repair_required: >-
-      {{ rstudio_installed_version == rstudio_release.version and
-      rstudio_installed_package_status.rc | default(1) == 0 and
-      rstudio_installed_package_status.stdout | default('') != 'installed' }}
-
-- name: Report pending Posit RStudio Desktop package repair in check mode
-  ansible.builtin.debug:
-    msg: >-
-      Posit RStudio Desktop {{ rstudio_release.version }} would be configured
-      to repair its incomplete dpkg state.
-  changed_when: true
-  when:
-    - ansible_check_mode
-    - rstudio_repair_required
-
-- name: Repair matching Posit RStudio Desktop package configuration
-  ansible.builtin.command:
-    argv:
-      - dpkg
-      - --force-confdef
-      - --force-confold
-      - --configure
-      - "{{ rstudio_package_name }}"
-  environment:
-    DEBIAN_FRONTEND: noninteractive
-    LC_ALL: C
-  when:
-    - rstudio_repair_required
-    - not ansible_check_mode
-  changed_when: true
-
-- name: Report pending Posit RStudio Desktop installation in check mode
-  ansible.builtin.debug:
-    msg: >-
-      Posit RStudio Desktop {{ rstudio_release.version }} would be installed.
-  changed_when: true
-  when:
-    - ansible_check_mode
-    - rstudio_install_required
+    deb_package_display_name: Posit RStudio Desktop
+    deb_package_name: "{{ rstudio_package_name }}"
+    deb_package_architecture: "{{ rstudio_package_architecture }}"
+    deb_package_version: "{{ rstudio_release.version }}"
 
 - name: Install latest stable Posit RStudio Desktop release
   when:
-    - rstudio_install_required
+    - deb_package_install_required or deb_package_repair_required
     - not ansible_check_mode
   block:
     - name: Create temporary directory for Posit RStudio Desktop package
@@ -137,39 +75,17 @@
             checksum: "sha256:{{ rstudio_release.sha256 }}"
             mode: "0600"
 
-        - name: Inspect downloaded Posit RStudio Desktop package metadata
-          ansible.builtin.command:
-            argv:
-              - dpkg-deb
-              - --show
-              - '--showformat=${Package}\t${Version}\t${Architecture}\n'
-              - >-
-                {{ rstudio_package_tempdir.path }}/{{ rstudio_release.basename }}
-          register: rstudio_downloaded_package_metadata
-          changed_when: false
-
-        - name: Validate downloaded Posit RStudio Desktop package metadata
+        - name: Install or repair verified Posit RStudio Desktop package
+          ansible.builtin.include_role:
+            name: deb_package
+            tasks_from: install.yml
           vars:
-            rstudio_expected_package_metadata:
-              - "{{ rstudio_package_name }}"
-              - "{{ rstudio_release.version }}"
-              - "{{ rstudio_package_architecture }}"
-          ansible.builtin.assert:
-            that:
-              - >-
-                rstudio_downloaded_package_metadata.stdout.split() ==
-                rstudio_expected_package_metadata
-            fail_msg: >-
-              The downloaded Posit RStudio Desktop package metadata does not
-              match the expected package name, version, and architecture.
-
-        - name: Install Posit RStudio Desktop package
-          ansible.builtin.apt:
-            deb: >-
+            deb_package_display_name: Posit RStudio Desktop
+            deb_package_name: "{{ rstudio_package_name }}"
+            deb_package_architecture: "{{ rstudio_package_architecture }}"
+            deb_package_version: "{{ rstudio_release.version }}"
+            deb_package_path: >-
               {{ rstudio_package_tempdir.path }}/{{ rstudio_release.basename }}
-            state: present
-            allow_downgrade: true
-            lock_timeout: 120
       always:
         - name: Remove temporary Posit RStudio Desktop package directory
           ansible.builtin.file:

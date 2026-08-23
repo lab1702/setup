@@ -1,0 +1,65 @@
+---
+- name: Validate package specification for {{ deb_package_display_name }}
+  ansible.builtin.assert:
+    that:
+      - deb_package_display_name | length > 0
+      - deb_package_name is match('^[a-z0-9][a-z0-9.+-]+$')
+      - deb_package_architecture in ['amd64', 'arm64']
+      - deb_package_version | length > 0
+    fail_msg: >-
+      The {{ deb_package_display_name }} package specification needs a
+      display name, a valid Debian package name, an amd64 or arm64
+      architecture, and a target version.
+
+- name: Inspect installed package state for {{ deb_package_display_name }}
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - --show
+      - '--showformat=${Version}\t${db:Status-Status}\n'
+      - "{{ deb_package_name }}:{{ deb_package_architecture }}"
+  environment:
+    LC_ALL: C
+  register: deb_package_installed_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Determine required package action for {{ deb_package_display_name }}
+  vars:
+    deb_package_installed_fields: >-
+      {{ deb_package_installed_query.stdout.split()
+      if deb_package_installed_query.rc | default(1) == 0 else [] }}
+    deb_package_installed_status: >-
+      {{ deb_package_installed_fields | last | default('')
+      if deb_package_installed_fields | length == 2 else '' }}
+  ansible.builtin.set_fact:
+    deb_package_installed_version: >-
+      {{ deb_package_installed_fields | first | default('') }}
+    deb_package_install_required: >-
+      {{ (deb_package_installed_fields | first | default(''))
+      != deb_package_version }}
+    deb_package_repair_required: >-
+      {{ (deb_package_installed_fields | first | default(''))
+      == deb_package_version and
+      deb_package_installed_status != 'installed' }}
+
+- name: Report pending check-mode installation of {{ deb_package_display_name }}
+  ansible.builtin.debug:
+    msg: >-
+      {{ deb_package_display_name }} {{ deb_package_version }} would be
+      installed.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - deb_package_install_required
+
+- name: Report pending check-mode package repair of {{ deb_package_display_name }}
+  ansible.builtin.debug:
+    msg: >-
+      {{ deb_package_display_name }} {{ deb_package_version }} would be
+      configured to repair its incomplete dpkg state.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - deb_package_repair_required

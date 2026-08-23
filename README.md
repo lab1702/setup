@@ -19,13 +19,17 @@ Microsoft's signed APT repository on AMD64 and ARM64. MEGA Desktop tracks the
 latest package from MEGA's signed APT repository on AMD64 and ARM64. Zoom
 Workplace tracks the latest package from Zoom's signed, AMD64-only APT
 repository. R tracks the latest release from CRAN's signed Ubuntu repository
-on AMD64 and ARM64.
+on AMD64 and ARM64. Posit RStudio Desktop tracks the latest stable release
+published in Posit's download metadata (`https://cdn.posit.co/rstudio/latest/downloads.json`)
+and verifies the DEB against the SHA-256 checksum published there. LibreOffice
+is installed from the Ubuntu archive on desktop systems.
 
 ## Accepted Security Tradeoffs
 
 This repository is intended for a personally managed, single-user workstation
 on a trusted home network. The following security review items are accepted for
-that use case:
+that use case (items 3 and 4 from the original review were remediated rather
+than accepted, so their numbers are unused):
 
 - **Item 1 — Mutable root checkout:** `ansible-pull` follows the repository's
   mutable default branch and executes the checked-out playbook as root. This is
@@ -55,6 +59,12 @@ that use case:
   version, and architecture, but package authenticity ultimately relies on TLS
   and Discord's download infrastructure. This is acceptable for this
   personally managed workstation.
+- **Item 9 — Local service packages:** The playbook installs `glances` and
+  `ttyd` with their distribution-default service and privilege behavior, and
+  both can expose a local network service (a monitoring web UI and a
+  shell-over-HTTP terminal) if their services are enabled. This is acceptable
+  on this trusted single-user host because the playbook does not deliberately
+  expose either service remotely.
 
 Reassess these decisions before using the playbook on a shared workstation, an
 untrusted network, infrastructure managed by multiple people, or a host whose
@@ -114,8 +124,31 @@ KVM so the new login session receives those memberships. For Docker, running
 
 The playbook uses idempotent Ansible tasks to require a virtual environment for
 user-level pip installations, configure `~/.npm-global` as the user's NPM
-prefix, and add its `bin` directory to `PATH`. Existing matching entries in
-`.bashrc` and `.npmrc` are updated, and duplicate legacy entries are collapsed.
+prefix, and add its `bin` directory and `~/go/bin` (for Go-installed tools) to
+`PATH`. Existing matching entries in `.bashrc` and `.npmrc` are updated, and
+duplicate legacy entries are collapsed.
+
+## Running the test playbooks
+
+The repository tracks check-mode regression tests for the shared repository
+sandbox (one per keyring format: `chatgpt` covers a deb822 source with a
+binary `.gpg` keyring, `claude_desktop` covers a deb822 source with an
+armored `.asc` keyring) and for the `amd64v3` role. The tests source their
+repository URLs, fingerprints, and platform values from the role defaults, so
+they follow key rotations and support changes automatically. Run them from
+the repository root, where `ansible.cfg` resolves the roles:
+
+```bash
+ansible-playbook roles/chatgpt/tests/check_mode_repository_metadata.yml
+```
+
+```bash
+ansible-playbook roles/claude_desktop/tests/check_mode_repository_metadata.yml
+```
+
+```bash
+ansible-playbook roles/amd64v3/tests/main.yml
+```
 
 ## Optional: Setup Git Authentication
 

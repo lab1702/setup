@@ -1,0 +1,31 @@
+---
+# Shared building blocks for roles that install a standalone vendor .deb
+# package. Callers resolve the release themselves (version, download URL,
+# and transport validation stay role-specific) and include the entry points
+# below through include_role with tasks_from, passing these variables:
+#
+#   deb_package_display_name   name used in task messages
+#   deb_package_name           Debian package name inside the archive
+#   deb_package_architecture   Debian architecture of the package
+#   deb_package_version        target version the caller resolved
+#   deb_package_path           absolute path of the downloaded .deb archive
+#                              (install.yml only)
+#
+# Entry points:
+#
+#   status.yml    inspects the installed package with one dpkg-query probe
+#                 of deb_package_name:deb_package_architecture, sets the
+#                 deb_package_installed_version, deb_package_install_required,
+#                 and deb_package_repair_required facts, and reports pending
+#                 work in check mode
+#   install.yml   validates the downloaded archive metadata with dpkg-deb,
+#                 installs it when installation is required, repairs an
+#                 incomplete dpkg state through APT when repair is required,
+#                 and validates the repaired package state afterwards; it
+#                 requires the facts set by a preceding status.yml inclusion
+#                 and never runs in check mode
+deb_package_display_name: ""
+deb_package_name: ""
+deb_package_architecture: ""
+deb_package_version: ""
+deb_package_path: ""
