@@ -127,7 +127,8 @@
           when: not ansible_check_mode
 
         - name: Refresh isolated Zoom metadata in check mode
-          ansible.builtin.include_tasks: check_mode_repository_metadata.yml
+          ansible.builtin.include_role:
+            name: repository_check
           vars:
             repository_check_key_content: >-
               {{ zoom_verified_repository_key.content | b64decode }}
@@ -157,7 +158,7 @@
         - name: Select isolated Zoom output in check mode
           ansible.builtin.set_fact:
             zoom_repository_version_lines: >-
-              {{ (zoom_repository_check_package_versions.results
+              {{ (repository_check_package_versions.results
               | first).stdout_lines }}
           when: ansible_check_mode
 

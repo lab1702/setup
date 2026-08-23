@@ -127,7 +127,8 @@
           when: not ansible_check_mode
 
         - name: Refresh isolated CRAN metadata in check mode
-          ansible.builtin.include_tasks: check_mode_repository_metadata.yml
+          ansible.builtin.include_role:
+            name: repository_check
           vars:
             repository_check_key_content: >-
               {{ r_verified_repository_key.content | b64decode }}
@@ -160,7 +161,7 @@
         - name: Select isolated CRAN output in check mode
           ansible.builtin.set_fact:
             r_repository_package_version_results: >-
-              {{ r_repository_check_package_versions.results }}
+              {{ repository_check_package_versions.results }}
           when: ansible_check_mode
 
         - name: Select complete CRAN output in normal mode

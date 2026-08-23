@@ -1,0 +1,16 @@
+---
+# Shared check-mode helper: resolves packages from one vendor repository
+# using an isolated, authenticated APT metadata directory without touching
+# the system APT configuration. Callers provide:
+#   repository_check_source_content       deb822 or one-line source text
+#   repository_check_source_filename      repository.sources or repository.list
+#   repository_check_system_keyring_path  keyring path named in the source
+#   repository_check_keyring_filename     keyring filename in the sandbox
+#   repository_check_package_names        packages to resolve with madison
+# and exactly one of:
+#   repository_check_key_source (+ repository_check_key_remote_src)
+#   repository_check_key_content
+# Results are registered as repository_check_package_versions.
+repository_check_owner: root
+repository_check_group: root
+repository_check_apt_user: _apt

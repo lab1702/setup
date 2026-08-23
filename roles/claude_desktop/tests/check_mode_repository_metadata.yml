@@ -61,7 +61,7 @@
 
         - name: Refresh isolated one-line Claude metadata
           ansible.builtin.include_tasks: >-
-            {{ playbook_dir }}/../tasks/check_mode_repository_metadata.yml
+            {{ playbook_dir }}/../../repository_check/tasks/main.yml
           vars:
             repository_check_key_source: >-
               {{ claude_desktop_test_key_tempdir.path }}/key.asc
@@ -82,7 +82,7 @@
           ansible.builtin.assert:
             that:
               - >-
-                (claude_desktop_repository_check_package_versions.results
+                (repository_check_package_versions.results
                 | first).stdout is search('claude-desktop')
       always:
         - name: Remove temporary Claude test key directory

@@ -30,6 +30,11 @@
     not ansible_check_mode or
     not chatgpt_repository_prerequisite_installation.changed
   block:
+    - name: Locate bundled OpenAI repository signing key
+      ansible.builtin.set_fact:
+        chatgpt_repository_key_file: >-
+          {{ role_path }}/files/chatgpt-archive-keyring.gpg
+
     - name: Inspect bundled OpenAI repository signing key
       ansible.builtin.command:
         argv:
@@ -37,7 +42,7 @@
           - --batch
           - --show-keys
           - --with-colons
-          - "{{ role_path }}/files/chatgpt-archive-keyring.gpg"
+          - "{{ chatgpt_repository_key_file }}"
       register: chatgpt_repository_key
       changed_when: false
       check_mode: false
@@ -112,10 +117,12 @@
               when: not ansible_check_mode
 
             - name: Refresh isolated authenticated OpenAI metadata in check mode
-              ansible.builtin.include_tasks: check_mode_repository_metadata.yml
+              ansible.builtin.include_role:
+                name: repository_check
               vars:
-                repository_check_key_source: chatgpt-archive-keyring.gpg
-                repository_check_key_remote_src: false
+                repository_check_key_source: >-
+                  {{ chatgpt_repository_key_file }}
+                repository_check_key_remote_src: true
                 repository_check_keyring_filename: repository-keyring.gpg
                 repository_check_source_content: >-
                   {{ chatgpt_repository_source_content }}
@@ -142,7 +149,7 @@
             - name: Select isolated OpenAI repository output in check mode
               ansible.builtin.set_fact:
                 chatgpt_repository_version_lines: >-
-                  {{ (chatgpt_repository_check_package_versions.results
+                  {{ (repository_check_package_versions.results
                   | first).stdout_lines }}
               when: ansible_check_mode
 

@@ -138,8 +138,8 @@
                   when: not ansible_check_mode
 
                 - name: Refresh isolated MEGA metadata in check mode
-                  ansible.builtin.include_tasks: >-
-                    check_mode_repository_metadata.yml
+                  ansible.builtin.include_role:
+                    name: repository_check
                   vars:
                     repository_check_key_source: >-
                       {{ megasync_repository_key_tempdir.path }}/key.gpg
@@ -170,7 +170,7 @@
                 - name: Select isolated MEGA output in check mode
                   ansible.builtin.set_fact:
                     megasync_repository_version_lines: >-
-                      {{ (megasync_repository_check_package_versions.results
+                      {{ (repository_check_package_versions.results
                       | first).stdout_lines }}
                   when: ansible_check_mode
 

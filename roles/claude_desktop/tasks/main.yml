@@ -108,8 +108,8 @@
                   when: not ansible_check_mode
 
                 - name: Refresh isolated Claude metadata in check mode
-                  ansible.builtin.include_tasks: >-
-                    check_mode_repository_metadata.yml
+                  ansible.builtin.include_role:
+                    name: repository_check
                   vars:
                     repository_check_key_source: >-
                       {{ claude_desktop_key_tempdir.path }}/key.asc
@@ -140,7 +140,7 @@
                 - name: Select isolated Claude repository output in check mode
                   vars:
                     claude_desktop_repository_check_data: >-
-                      {{ claude_desktop_repository_check_package_versions }}
+                      {{ repository_check_package_versions }}
                   ansible.builtin.set_fact:
                     claude_desktop_repository_version_lines: >-
                       {{ (claude_desktop_repository_check_data.results

@@ -364,15 +364,31 @@
 
     - name: Install latest Ruff release from GitHub
       ansible.builtin.include_role:
-        name: ruff
+        name: github_release
+      vars:
+        github_release_display_name: Ruff
+        github_release_repository: astral-sh/ruff
+        github_release_binaries:
+          - ruff
 
     - name: Install latest ty release from GitHub
       ansible.builtin.include_role:
-        name: ty
+        name: github_release
+      vars:
+        github_release_display_name: ty
+        github_release_repository: astral-sh/ty
+        github_release_binaries:
+          - ty
 
     - name: Install latest uv release from GitHub
       ansible.builtin.include_role:
-        name: uv
+        name: github_release
+      vars:
+        github_release_display_name: uv
+        github_release_repository: astral-sh/uv
+        github_release_binaries:
+          - uv
+          - uvx
 
     - name: Install DuckDB CLI
       ansible.builtin.include_role:

@@ -43,7 +43,7 @@
 
     - name: Refresh isolated deb822 OpenAI metadata
       ansible.builtin.include_tasks: >-
-        {{ playbook_dir }}/../tasks/check_mode_repository_metadata.yml
+        {{ playbook_dir }}/../../repository_check/tasks/main.yml
       vars:
         repository_check_key_source: >-
           {{ playbook_dir }}/../files/chatgpt-archive-keyring.gpg
@@ -65,5 +65,5 @@
       ansible.builtin.assert:
         that:
           - >-
-            (chatgpt_repository_check_package_versions.results
+            (repository_check_package_versions.results
             | first).stdout is search('chatgpt')

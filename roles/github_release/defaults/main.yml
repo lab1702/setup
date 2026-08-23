@@ -1,0 +1,32 @@
+---
+# Installs the latest GitHub release of one or more statically linked Linux
+# binaries shipped in a tar.gz archive. Callers set:
+#   github_release_display_name   human-readable name used in messages
+#   github_release_repository     GitHub "owner/name" repository
+#   github_release_binaries       binaries inside the archive's top directory
+# The archive is expected to be named
+#   <first binary>-<arch>-unknown-linux-gnu.tar.gz
+# and to contain exactly one top-level directory of the same name holding the
+# listed binaries. Override github_release_archive_directory when an upstream
+# project uses a different layout.
+github_release_display_name: "{{ github_release_binaries | first }}"
+github_release_binaries: []
+
+github_release_api_url: >-
+  https://api.github.com/repos/{{ github_release_repository }}/releases/latest
+github_release_base_url: >-
+  https://github.com/{{ github_release_repository }}/releases/download
+github_release_install_directory: /usr/local/bin
+github_release_probe_user: nobody
+
+github_release_architecture_map:
+  x86_64: x86_64
+  amd64: x86_64
+  aarch64: aarch64
+  arm64: aarch64
+github_release_architecture: >-
+  {{ github_release_architecture_map[ansible_facts["architecture"]] }}
+github_release_archive_directory: >-
+  {{ github_release_binaries | first }}-{{ github_release_architecture
+  }}-unknown-linux-gnu
+github_release_archive_filename: "{{ github_release_archive_directory }}.tar.gz"
