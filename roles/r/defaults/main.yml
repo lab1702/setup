@@ -1,0 +1,31 @@
+---
+r_package_names:
+  - r-base
+  - r-base-dev
+r_package_state: latest
+
+r_supported_ubuntu_versions:
+  - "26.04"
+r_repository_suite_map:
+  "26.04": resolute-cran40/
+r_architecture_map:
+  x86_64: amd64
+  amd64: amd64
+  aarch64: arm64
+  arm64: arm64
+
+r_repository_key_url: >-
+  https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc
+r_repository_keyring_path: /usr/share/keyrings/cran-r-archive-keyring.asc
+r_repository_key_fingerprint: E298A3A825C0D65DFD57CBB651716619E084DAB9
+
+r_repository_url: https://cloud.r-project.org/bin/linux/ubuntu
+r_repository_suite: >-
+  {{ r_repository_suite_map[ansible_facts["distribution_version"]] }}
+r_repository_sources_path: /etc/apt/sources.list.d/cran-r.sources
+r_repository_source_content: |
+  Types: deb
+  URIs: {{ r_repository_url }}
+  Suites: {{ r_repository_suite }}
+  Architectures: {{ r_architecture_map[ansible_facts["architecture"]] }}
+  Signed-By: {{ r_repository_keyring_path }}

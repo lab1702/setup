@@ -1,0 +1,107 @@
+---
+- name: Inspect managed CRAN apt repository source
+  ansible.builtin.stat:
+    path: "{{ r_repository_sources_path }}"
+  register: r_repository_source_status
+
+- name: Validate managed CRAN apt repository source path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not r_repository_source_status.stat.exists or
+        r_repository_source_status.stat.isreg | default(false) or
+        r_repository_source_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to quarantine {{ r_repository_sources_path }} because it is
+      neither a regular file nor a symbolic link.
+
+- name: Read managed CRAN apt repository source
+  ansible.builtin.slurp:
+    src: "{{ r_repository_sources_path }}"
+  register: r_repository_source
+  failed_when: false
+  when:
+    - r_repository_source_status.stat.exists
+    - r_repository_source_status.stat.isreg | default(false)
+
+- name: Inspect installed CRAN repository signing key file
+  ansible.builtin.stat:
+    path: "{{ r_repository_keyring_path }}"
+  register: r_installed_repository_key_status
+
+- name: Validate installed CRAN repository signing key path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not r_installed_repository_key_status.stat.exists or
+        r_installed_repository_key_status.stat.isreg | default(false) or
+        r_installed_repository_key_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to replace {{ r_repository_keyring_path }} because it is
+      neither a regular file nor a symbolic link.
+
+- name: Read installed CRAN repository signing key
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --batch
+      - --show-keys
+      - --with-colons
+      - "{{ r_repository_keyring_path }}"
+  register: r_installed_repository_key
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - r_repository_source_status.stat.exists
+    - r_installed_repository_key_status.stat.isreg | default(false)
+
+- name: Determine whether the managed CRAN apt repository requires quarantine
+  vars:
+    r_repository_source_is_usable: >-
+      {{ r_repository_source_status.stat.isreg | default(false)
+      and r_repository_source_status.stat.uid | default(-1) == 0
+      and r_repository_source_status.stat.gid | default(-1) == 0
+      and r_repository_source_status.stat.mode | default('') == '0644'
+      and not r_repository_source.failed | default(true)
+      and (r_repository_source.content | default('') | b64decode)
+      == r_repository_source_content }}
+    r_installed_public_key_records: >-
+      {{ r_installed_repository_key.stdout_lines | default([])
+      | select('match', '^pub:') | list }}
+    r_installed_fingerprint_records: >-
+      {{ r_installed_repository_key.stdout_lines | default([])
+      | select('match', '^fpr:') | list }}
+    r_expected_fingerprint_record: >-
+      fpr:::::::::{{ r_repository_key_fingerprint }}:
+    r_installed_repository_key_is_usable: >-
+      {{ r_installed_repository_key_status.stat.isreg | default(false)
+      and r_installed_repository_key_status.stat.uid | default(-1) == 0
+      and r_installed_repository_key_status.stat.gid | default(-1) == 0
+      and r_installed_repository_key_status.stat.mode | default('') == '0644'
+      and r_installed_repository_key.rc | default(1) == 0
+      and r_installed_public_key_records | length == 1
+      and (r_installed_fingerprint_records | first | default('')) ==
+      r_expected_fingerprint_record }}
+  ansible.builtin.set_fact:
+    r_repository_quarantine_required: >-
+      {{ r_repository_source_status.stat.exists and
+      (not r_repository_source_is_usable | bool or
+      not r_installed_repository_key_is_usable | bool) }}
+  changed_when: false
+
+- name: Stop check mode when the CRAN repository requires repair
+  ansible.builtin.fail:
+    msg: >-
+      {{ r_repository_sources_path }} must be quarantined before APT can be
+      checked safely. Run this playbook once without --check to repair the
+      managed CRAN repository.
+  when:
+    - ansible_check_mode
+    - r_repository_quarantine_required
+
+- name: Remove unusable managed CRAN apt repository source
+  ansible.builtin.file:
+    path: "{{ r_repository_sources_path }}"
+    state: absent
+  when: r_repository_quarantine_required

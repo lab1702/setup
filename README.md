@@ -12,7 +12,8 @@ installation. Visual Studio Code tracks the latest stable package from
 Microsoft's signed APT repository on AMD64 and ARM64. MEGA Desktop tracks the
 latest package from MEGA's signed APT repository on AMD64 and ARM64. Zoom
 Workplace tracks the latest package from Zoom's signed, AMD64-only APT
-repository.
+repository. R tracks the latest release from CRAN's signed Ubuntu repository
+on AMD64 and ARM64.
 
 ## Accepted Security Tradeoffs
 

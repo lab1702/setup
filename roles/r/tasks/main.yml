@@ -1,0 +1,123 @@
+---
+- name: Validate CRAN R platform support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - >-
+        ansible_facts["distribution_version"]
+        in r_supported_ubuntu_versions
+      - ansible_facts["architecture"] in r_architecture_map
+    fail_msg: >-
+      CRAN supports R on Ubuntu 26.04 for AMD64 and ARM64. Detected
+      {{ ansible_facts["distribution"] }}
+      {{ ansible_facts["distribution_version"] }} on
+      {{ ansible_facts["architecture"] }}.
+
+- name: Preflight CRAN apt repository
+  ansible.builtin.import_tasks: repository_preflight.yml
+
+- name: Install CRAN repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gpg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 120
+  register: r_repository_prerequisite_installation
+
+- name: Configure signed CRAN repository and install R
+  when: >-
+    not ansible_check_mode or
+    not r_repository_prerequisite_installation.changed
+  block:
+    - name: Create temporary directory for CRAN signing key
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .cran-r
+      register: r_repository_key_tempdir
+      changed_when: false
+      check_mode: false
+
+    - name: Download, verify, and install CRAN signing key
+      block:
+        - name: Download CRAN signing key
+          ansible.builtin.get_url:
+            url: "{{ r_repository_key_url }}"
+            dest: "{{ r_repository_key_tempdir.path }}/key.asc"
+            mode: "0600"
+          changed_when: false
+          check_mode: false
+
+        - name: Inspect CRAN signing key
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --show-keys
+              - --with-colons
+              - "{{ r_repository_key_tempdir.path }}/key.asc"
+          register: r_repository_key
+          changed_when: false
+          check_mode: false
+
+        - name: Verify CRAN signing key fingerprint
+          vars:
+            r_repository_public_key_records: >-
+              {{ r_repository_key.stdout_lines
+              | select('match', '^pub:') | list }}
+            r_repository_fingerprint_records: >-
+              {{ r_repository_key.stdout_lines
+              | select('match', '^fpr:') | list }}
+            r_repository_expected_fingerprint_record: >-
+              fpr:::::::::{{ r_repository_key_fingerprint }}:
+          ansible.builtin.assert:
+            that:
+              - r_repository_public_key_records | length == 1
+              - >-
+                (r_repository_fingerprint_records | first | default('')) ==
+                r_repository_expected_fingerprint_record
+            fail_msg: >-
+              The downloaded CRAN signing key does not contain exactly one
+              primary key with fingerprint
+              {{ r_repository_key_fingerprint }}.
+
+        - name: Install verified CRAN signing key
+          ansible.builtin.copy:
+            src: "{{ r_repository_key_tempdir.path }}/key.asc"
+            dest: "{{ r_repository_keyring_path }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0644"
+          register: r_repository_keyring_installation
+      always:
+        - name: Remove temporary CRAN signing key directory
+          ansible.builtin.file:
+            path: "{{ r_repository_key_tempdir.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false
+
+    - name: Configure CRAN apt repository
+      ansible.builtin.copy:
+        dest: "{{ r_repository_sources_path }}"
+        content: "{{ r_repository_source_content }}"
+        owner: root
+        group: root
+        mode: "0644"
+      register: r_repository_configuration
+
+    - name: Install latest R packages
+      ansible.builtin.apt:
+        name: "{{ r_package_names }}"
+        state: "{{ r_package_state }}"
+        install_recommends: false
+        update_cache: true
+        cache_valid_time: 0
+        lock_timeout: 120
+      when: >-
+        not ansible_check_mode or
+        (not r_repository_keyring_installation.changed and
+        not r_repository_configuration.changed)

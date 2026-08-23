@@ -48,6 +48,11 @@
         name: megasync
         tasks_from: repository_preflight
 
+    - name: Preflight CRAN apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: r
+        tasks_from: repository_preflight
+
     - name: Preflight Zoom apt repository before package refreshes
       ansible.builtin.include_role:
         name: zoom
@@ -158,8 +163,6 @@
           - sqlite3-tools
           # Programming languages and runtimes
           - libopenblas-dev
-          - r-base
-          - r-base-dev
           - python-is-python3
           - python3-venv
           - python3-virtualenv
@@ -197,6 +200,10 @@
           - ffmpeg
           - ttyd
         state: present
+
+    - name: Install latest R release from CRAN
+      ansible.builtin.include_role:
+        name: r
 
     - name: Add user to docker group
       ansible.builtin.user:
