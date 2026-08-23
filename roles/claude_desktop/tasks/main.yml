@@ -10,92 +10,98 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+  register: claude_desktop_repository_prerequisite_installation
 
-- name: Create temporary directory for Claude Desktop signing key
-  ansible.builtin.tempfile:
-    state: directory
-    suffix: .claude-desktop
-  register: claude_desktop_key_tempdir
-  changed_when: false
-  check_mode: false
-
-- name: Download, verify, and install Claude Desktop signing key
-  block:
-    - name: Download Claude Desktop signing key
-      ansible.builtin.get_url:
-        url: "{{ claude_desktop_key_url }}"
-        dest: "{{ claude_desktop_key_tempdir.path }}/key.asc"
-        mode: "0600"
-      changed_when: false
-      check_mode: false
-
-    - name: Inspect Claude Desktop signing key
-      ansible.builtin.command:
-        argv:
-          - gpg
-          - --batch
-          - --show-keys
-          - --with-colons
-          - "{{ claude_desktop_key_tempdir.path }}/key.asc"
-      register: claude_desktop_key
-      changed_when: false
-      check_mode: false
-
-    - name: Verify Claude Desktop signing key fingerprint
-      vars:
-        claude_desktop_public_key_records: >-
-          {{ claude_desktop_key.stdout_lines
-          | select('match', '^pub:') | list }}
-        claude_desktop_fingerprint_records: >-
-          {{ claude_desktop_key.stdout_lines
-          | select('match', '^fpr:') | list }}
-        claude_desktop_expected_fingerprint_record: >-
-          fpr:::::::::{{ claude_desktop_key_fingerprint }}:
-      ansible.builtin.assert:
-        that:
-          - claude_desktop_public_key_records | length == 1
-          - >-
-            (claude_desktop_fingerprint_records | first | default('')) ==
-            claude_desktop_expected_fingerprint_record
-        fail_msg: >-
-          The downloaded Claude Desktop signing key does not contain exactly
-          one primary key with fingerprint
-          {{ claude_desktop_key_fingerprint }}.
-
-    - name: Install verified Claude Desktop signing key
-      ansible.builtin.copy:
-        src: "{{ claude_desktop_key_tempdir.path }}/key.asc"
-        dest: "{{ claude_desktop_keyring_path }}"
-        remote_src: true
-        owner: root
-        group: root
-        mode: "0644"
-      register: claude_desktop_keyring_installation
-  always:
-    - name: Remove temporary Claude Desktop signing key directory
-      ansible.builtin.file:
-        path: "{{ claude_desktop_key_tempdir.path }}"
-        state: absent
-      changed_when: false
-      check_mode: false
-
-- name: Add Claude Desktop apt repository
-  ansible.builtin.apt_repository:
-    repo: "{{ claude_desktop_repository_definition }}"
-    filename: "{{ claude_desktop_repository_filename }}"
-    mode: "0644"
-    state: present
-    update_cache: "{{ not ansible_check_mode }}"
-  register: claude_desktop_repository_configuration
-
-- name: Install Claude Desktop package
-  ansible.builtin.apt:
-    name: "{{ claude_desktop_package_name }}"
-    state: "{{ claude_desktop_package_state }}"
-    update_cache: true
-    cache_valid_time: 3600
-    lock_timeout: 120
+- name: Configure signed Claude repository and install Claude Desktop
   when: >-
     not ansible_check_mode or
-    (not claude_desktop_keyring_installation.changed and
-    not claude_desktop_repository_configuration.changed)
+    not claude_desktop_repository_prerequisite_installation.changed
+  block:
+    - name: Create temporary directory for Claude Desktop signing key
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .claude-desktop
+      register: claude_desktop_key_tempdir
+      changed_when: false
+      check_mode: false
+
+    - name: Download, verify, and install Claude Desktop signing key
+      block:
+        - name: Download Claude Desktop signing key
+          ansible.builtin.get_url:
+            url: "{{ claude_desktop_key_url }}"
+            dest: "{{ claude_desktop_key_tempdir.path }}/key.asc"
+            mode: "0600"
+          changed_when: false
+          check_mode: false
+
+        - name: Inspect Claude Desktop signing key
+          ansible.builtin.command:
+            argv:
+              - gpg
+              - --batch
+              - --show-keys
+              - --with-colons
+              - "{{ claude_desktop_key_tempdir.path }}/key.asc"
+          register: claude_desktop_key
+          changed_when: false
+          check_mode: false
+
+        - name: Verify Claude Desktop signing key fingerprint
+          vars:
+            claude_desktop_public_key_records: >-
+              {{ claude_desktop_key.stdout_lines
+              | select('match', '^pub:') | list }}
+            claude_desktop_fingerprint_records: >-
+              {{ claude_desktop_key.stdout_lines
+              | select('match', '^fpr:') | list }}
+            claude_desktop_expected_fingerprint_record: >-
+              fpr:::::::::{{ claude_desktop_key_fingerprint }}:
+          ansible.builtin.assert:
+            that:
+              - claude_desktop_public_key_records | length == 1
+              - >-
+                (claude_desktop_fingerprint_records | first | default('')) ==
+                claude_desktop_expected_fingerprint_record
+            fail_msg: >-
+              The downloaded Claude Desktop signing key does not contain
+              exactly one primary key with fingerprint
+              {{ claude_desktop_key_fingerprint }}.
+
+        - name: Install verified Claude Desktop signing key
+          ansible.builtin.copy:
+            src: "{{ claude_desktop_key_tempdir.path }}/key.asc"
+            dest: "{{ claude_desktop_keyring_path }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0644"
+          register: claude_desktop_keyring_installation
+      always:
+        - name: Remove temporary Claude Desktop signing key directory
+          ansible.builtin.file:
+            path: "{{ claude_desktop_key_tempdir.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false
+
+    - name: Add Claude Desktop apt repository
+      ansible.builtin.apt_repository:
+        repo: "{{ claude_desktop_repository_definition }}"
+        filename: "{{ claude_desktop_repository_filename }}"
+        mode: "0644"
+        state: present
+        update_cache: "{{ not ansible_check_mode }}"
+      register: claude_desktop_repository_configuration
+
+    - name: Install Claude Desktop package
+      ansible.builtin.apt:
+        name: "{{ claude_desktop_package_name }}"
+        state: "{{ claude_desktop_package_state }}"
+        update_cache: true
+        cache_valid_time: 3600
+        lock_timeout: 120
+      when: >-
+        not ansible_check_mode or
+        (not claude_desktop_keyring_installation.changed and
+        not claude_desktop_repository_configuration.changed)

@@ -33,39 +33,6 @@
           {{ ansible_facts["distribution_version"] }} on
           {{ ansible_facts["architecture"] }}.
 
-    - name: Preflight OpenAI apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: chatgpt
-        tasks_from: repository_preflight
-
-    - name: Preflight Claude Desktop apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: claude_desktop
-        tasks_from: repository_preflight
-
-    - name: Preflight MEGA apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: megasync
-        tasks_from: repository_preflight
-
-    - name: Preflight CRAN apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: r
-        tasks_from: repository_preflight
-
-    - name: Preflight Zoom apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: zoom
-        tasks_from: repository_preflight
-      when: >-
-        linux_release_architecture_map[ansible_facts["architecture"]]
-        == "amd64"
-
-    - name: Preflight Visual Studio Code apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: vscode
-        tasks_from: repository_preflight
-
     - name: Inspect graphical desktop session directories
       ansible.builtin.stat:
         path: "{{ item }}"
@@ -86,6 +53,49 @@
         recurse: false
       register: graphical_desktop_sessions
       when: existing_desktop_session_directories | length > 0
+
+    - name: Preflight OpenAI apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: chatgpt
+        tasks_from: repository_preflight
+      when: >-
+        graphical_desktop_sessions.matched | default(0) | int > 0
+
+    - name: Preflight Claude Desktop apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: claude_desktop
+        tasks_from: repository_preflight
+      when: >-
+        graphical_desktop_sessions.matched | default(0) | int > 0
+
+    - name: Preflight MEGA apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: megasync
+        tasks_from: repository_preflight
+      when: >-
+        graphical_desktop_sessions.matched | default(0) | int > 0
+
+    - name: Preflight CRAN apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: r
+        tasks_from: repository_preflight
+
+    - name: Preflight Zoom apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: zoom
+        tasks_from: repository_preflight
+      when:
+        - graphical_desktop_sessions.matched | default(0) | int > 0
+        - >-
+          linux_release_architecture_map[ansible_facts["architecture"]]
+          == "amd64"
+
+    - name: Preflight Visual Studio Code apt repository before package refreshes
+      ansible.builtin.include_role:
+        name: vscode
+        tasks_from: repository_preflight
+      when: >-
+        graphical_desktop_sessions.matched | default(0) | int > 0
 
   tasks:
     - name: Install base packages
@@ -211,6 +221,12 @@
         groups: docker
         append: true
 
+    - name: Upgrade all installed APT packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        lock_timeout: 120
+
     - name: Include desktop setup
       ansible.builtin.include_tasks: desktop.yml
       when: graphical_desktop_sessions.matched | default(0) | int > 0
@@ -234,9 +250,3 @@
     - name: Install Quarto CLI
       ansible.builtin.include_role:
         name: quarto
-
-    - name: Upgrade all installed APT packages
-      ansible.builtin.apt:
-        update_cache: true
-        upgrade: dist
-        lock_timeout: 120

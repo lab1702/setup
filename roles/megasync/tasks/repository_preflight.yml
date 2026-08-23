@@ -56,7 +56,7 @@
     - megasync_repository_source_status.stat.exists
     - megasync_installed_repository_key_status.stat.isreg | default(false)
 
-- name: Remove unusable managed MEGA apt repository source
+- name: Determine whether the managed MEGA repository needs quarantine
   vars:
     megasync_repository_source_is_usable: >-
       {{ megasync_repository_source_status.stat.isreg | default(false)
@@ -87,14 +87,28 @@
       and megasync_installed_public_key_records | length == 1
       and (megasync_installed_fingerprint_records | first | default('')) ==
       megasync_expected_fingerprint_record }}
+  ansible.builtin.set_fact:
+    megasync_repository_quarantine_required: >-
+      {{ megasync_repository_source_status.stat.exists and
+      (not megasync_repository_source_is_usable | bool or
+      not megasync_installed_repository_key_is_usable | bool) }}
+  changed_when: false
+
+- name: Stop check mode when the MEGA repository requires repair
+  ansible.builtin.fail:
+    msg: >-
+      {{ megasync_repository_sources_path }} must be quarantined before APT can
+      be checked safely. Run this playbook once without --check to repair the
+      managed MEGA repository.
+  when:
+    - ansible_check_mode
+    - megasync_repository_quarantine_required
+
+- name: Remove unusable managed MEGA apt repository source
   ansible.builtin.file:
     path: "{{ megasync_repository_sources_path }}"
     state: absent
-  when:
-    - megasync_repository_source_status.stat.exists
-    - >-
-      not megasync_repository_source_is_usable | bool or
-      not megasync_installed_repository_key_is_usable | bool
+  when: megasync_repository_quarantine_required
 
 - name: Inspect legacy MEGA apt repository source
   ansible.builtin.stat:
@@ -111,6 +125,16 @@
     fail_msg: >-
       Refusing to remove {{ megasync_repository_legacy_sources_path }} because
       it is neither a regular file nor a symbolic link.
+
+- name: Stop check mode when the legacy MEGA repository requires removal
+  ansible.builtin.fail:
+    msg: >-
+      {{ megasync_repository_legacy_sources_path }} must be removed before APT
+      can be checked safely. Run this playbook once without --check to migrate
+      the legacy MEGA repository source.
+  when:
+    - ansible_check_mode
+    - megasync_repository_legacy_source_status.stat.exists
 
 - name: Remove legacy MEGA apt repository source
   ansible.builtin.file:

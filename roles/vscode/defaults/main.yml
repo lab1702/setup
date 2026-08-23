@@ -18,6 +18,10 @@ vscode_repository_url: https://packages.microsoft.com/repos/code
 vscode_repository_suite: stable
 vscode_repository_component: main
 vscode_repository_sources_path: /etc/apt/sources.list.d/vscode.sources
+vscode_repository_legacy_sources_path: /etc/apt/sources.list.d/vscode.list
+vscode_repository_legacy_entry_regexp: >-
+  (?ix)^[ \t]*deb(?:-src)?[ \t]+(?:\[[^]]*\][ \t]+)?
+  https://packages[.]microsoft[.]com/repos/code/?([ \t]|$)
 vscode_repository_architectures:
   - amd64
   - arm64

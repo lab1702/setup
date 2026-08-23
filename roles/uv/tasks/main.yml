@@ -7,6 +7,26 @@
       uv supports AMD64 and ARM64. Detected
       {{ ansible_facts["architecture"] }}.
 
+- name: Inspect uv install directory
+  ansible.builtin.stat:
+    path: "{{ uv_install_directory }}"
+    follow: false
+  register: uv_install_directory_status
+
+- name: Validate uv install directory security
+  ansible.builtin.assert:
+    that:
+      - uv_install_directory_status.stat.isdir | default(false)
+      - not uv_install_directory_status.stat.islnk | default(false)
+      - uv_install_directory_status.stat.uid | default(-1) == 0
+      - uv_install_directory_status.stat.gid | default(-1) == 0
+      - >-
+        (uv_install_directory_status.stat.mode | default(''))
+        is match('^0[0-7][0145][0145]$')
+    fail_msg: >-
+      {{ uv_install_directory }} must be an existing root-owned directory,
+      must not be a symbolic link, and must not be group- or world-writable.
+
 - name: Get latest uv release
   ansible.builtin.uri:
     url: "{{ uv_release_api_url }}"
@@ -42,6 +62,51 @@
       The latest uv release did not contain the expected uploaded Linux
       archive with a trusted GitHub download URL and SHA-256 digest.
 
+- name: Inspect installed uv binary path
+  ansible.builtin.stat:
+    path: "{{ uv_install_directory }}/uv"
+    follow: false
+  register: uv_installed_binary_status
+
+- name: Inspect installed uvx binary path
+  ansible.builtin.stat:
+    path: "{{ uv_install_directory }}/uvx"
+    follow: false
+  register: uv_installed_uvx_binary_status
+
+- name: Validate installed uv binary path types
+  ansible.builtin.assert:
+    that:
+      - >-
+        not item.stat.exists or
+        item.stat.isreg | default(false) or
+        item.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to replace {{ item.item }} because it is neither a regular
+      file nor a symbolic link.
+  loop:
+    - stat: "{{ uv_installed_binary_status.stat }}"
+      item: "{{ uv_install_directory }}/uv"
+    - stat: "{{ uv_installed_uvx_binary_status.stat }}"
+      item: "{{ uv_install_directory }}/uvx"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Determine whether installed uv binaries are safe to execute
+  ansible.builtin.set_fact:
+    uv_installed_binary_is_safe: >-
+      {{ uv_installed_binary_status.stat.isreg | default(false)
+      and not uv_installed_binary_status.stat.islnk | default(false)
+      and uv_installed_binary_status.stat.uid | default(-1) == 0
+      and uv_installed_binary_status.stat.gid | default(-1) == 0
+      and uv_installed_binary_status.stat.mode | default('') == '0755' }}
+    uv_installed_uvx_binary_is_safe: >-
+      {{ uv_installed_uvx_binary_status.stat.isreg | default(false)
+      and not uv_installed_uvx_binary_status.stat.islnk | default(false)
+      and uv_installed_uvx_binary_status.stat.uid | default(-1) == 0
+      and uv_installed_uvx_binary_status.stat.gid | default(-1) == 0
+      and uv_installed_uvx_binary_status.stat.mode | default('') == '0755' }}
+
 - name: Inspect installed uv version
   ansible.builtin.command:
     argv:
@@ -51,6 +116,7 @@
   changed_when: false
   failed_when: false
   check_mode: false
+  when: uv_installed_binary_is_safe
 
 - name: Inspect installed uvx version
   ansible.builtin.command:
@@ -61,6 +127,7 @@
   changed_when: false
   failed_when: false
   check_mode: false
+  when: uv_installed_uvx_binary_is_safe
 
 - name: Determine whether uv installation is required
   vars:
@@ -74,7 +141,9 @@
       + ['', ''])[1] | regex_replace('^v', '') }}
   ansible.builtin.set_fact:
     uv_install_required: >-
-      {{ uv_installed_release.rc | default(1) != 0 or
+      {{ not uv_installed_binary_is_safe or
+      not uv_installed_uvx_binary_is_safe or
+      uv_installed_release.rc | default(1) != 0 or
       uv_installed_uvx_release.rc | default(1) != 0 or
       uv_installed_version != uv_release_version or
       uv_installed_uvx_version != uv_release_version }}
@@ -155,6 +224,19 @@
               The downloaded uv or uvx binary version does not match
               GitHub's latest release tag.
 
+        - name: Remove installed uv binary symbolic links
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: absent
+          loop:
+            - path: "{{ uv_install_directory }}/uv"
+              is_link: "{{ uv_installed_binary_status.stat.islnk | default(false) }}"
+            - path: "{{ uv_install_directory }}/uvx"
+              is_link: "{{ uv_installed_uvx_binary_status.stat.islnk | default(false) }}"
+          loop_control:
+            label: "{{ item.path }}"
+          when: item.is_link
+
         - name: Install verified uv binaries
           ansible.builtin.copy:
             src: "{{ uv_archive_tempdir.path }}/{{ item }}"
@@ -163,6 +245,7 @@
             owner: root
             group: root
             mode: "0755"
+            follow: false
           loop:
             - uv
             - uvx

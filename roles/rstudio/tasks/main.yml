@@ -14,6 +14,16 @@
       {{ ansible_facts["distribution_version"] }} on
       {{ ansible_facts["architecture"] }}.
 
+- name: Install Posit RStudio Desktop package prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - xz-utils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 120
+
 - name: Get latest stable Posit RStudio Desktop release metadata
   ansible.builtin.uri:
     url: "{{ rstudio_downloads_metadata_url }}"
@@ -96,6 +106,7 @@
             deb: >-
               {{ rstudio_package_tempdir.path }}/{{ rstudio_release.basename }}
             state: present
+            allow_downgrade: true
             lock_timeout: 120
       always:
         - name: Remove temporary Posit RStudio Desktop package directory

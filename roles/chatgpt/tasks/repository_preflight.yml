@@ -28,7 +28,17 @@
   ansible.builtin.stat:
     path: "{{ chatgpt_repository_keyring_path }}"
   register: chatgpt_installed_repository_key_status
-  when: chatgpt_repository_source_status.stat.exists
+
+- name: Validate installed OpenAI repository signing key path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not chatgpt_installed_repository_key_status.stat.exists or
+        chatgpt_installed_repository_key_status.stat.isreg | default(false) or
+        chatgpt_installed_repository_key_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to replace {{ chatgpt_repository_keyring_path }} because it is
+      neither a regular file nor a symbolic link.
 
 - name: Read installed OpenAI repository signing key
   ansible.builtin.command:
@@ -46,7 +56,7 @@
     - chatgpt_repository_source_status.stat.exists
     - chatgpt_installed_repository_key_status.stat.isreg | default(false)
 
-- name: Remove unusable managed OpenAI apt repository source
+- name: Determine whether the managed OpenAI apt repository needs quarantine
   vars:
     chatgpt_repository_source_is_usable: >-
       {{ chatgpt_repository_source_status.stat.isreg | default(false)
@@ -74,11 +84,25 @@
       and chatgpt_installed_public_key_records | length == 1
       and (chatgpt_installed_fingerprint_records | first | default(''))
       == chatgpt_expected_fingerprint_record }}
+  ansible.builtin.set_fact:
+    chatgpt_repository_quarantine_required: >-
+      {{ chatgpt_repository_source_status.stat.exists and
+      (not chatgpt_repository_source_is_usable | bool or
+      not chatgpt_installed_repository_key_is_usable | bool) }}
+  changed_when: false
+
+- name: Stop check mode when the OpenAI repository requires repair
+  ansible.builtin.fail:
+    msg: >-
+      {{ chatgpt_repository_sources_path }} must be quarantined before APT can
+      be checked safely. Run this playbook once without --check to repair the
+      managed OpenAI repository.
+  when:
+    - ansible_check_mode
+    - chatgpt_repository_quarantine_required
+
+- name: Remove unusable managed OpenAI apt repository source
   ansible.builtin.file:
     path: "{{ chatgpt_repository_sources_path }}"
     state: absent
-  when:
-    - chatgpt_repository_source_status.stat.exists
-    - >-
-      not chatgpt_repository_source_is_usable | bool or
-      not chatgpt_installed_repository_key_is_usable | bool
+  when: chatgpt_repository_quarantine_required

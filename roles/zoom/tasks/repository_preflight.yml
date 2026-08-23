@@ -28,7 +28,17 @@
   ansible.builtin.stat:
     path: "{{ zoom_repository_keyring_path }}"
   register: zoom_installed_repository_key_status
-  when: zoom_repository_source_status.stat.exists
+
+- name: Validate installed Zoom repository signing key path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not zoom_installed_repository_key_status.stat.exists or
+        zoom_installed_repository_key_status.stat.isreg | default(false) or
+        zoom_installed_repository_key_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to replace {{ zoom_repository_keyring_path }} because it is
+      neither a regular file nor a symbolic link.
 
 - name: Read installed Zoom repository signing key
   ansible.builtin.command:
@@ -46,7 +56,7 @@
     - zoom_repository_source_status.stat.exists
     - zoom_installed_repository_key_status.stat.isreg | default(false)
 
-- name: Remove unusable managed Zoom apt repository source
+- name: Determine whether the managed Zoom repository needs quarantine
   vars:
     zoom_repository_source_is_usable: >-
       {{ zoom_repository_source_status.stat.isreg | default(false)
@@ -74,11 +84,25 @@
       and zoom_installed_public_key_records | length == 1
       and (zoom_installed_fingerprint_records | first | default('')) ==
       zoom_expected_fingerprint_record }}
+  ansible.builtin.set_fact:
+    zoom_repository_quarantine_required: >-
+      {{ zoom_repository_source_status.stat.exists and
+      (not zoom_repository_source_is_usable | bool or
+      not zoom_installed_repository_key_is_usable | bool) }}
+  changed_when: false
+
+- name: Stop check mode when the Zoom repository requires repair
+  ansible.builtin.fail:
+    msg: >-
+      {{ zoom_repository_sources_path }} must be quarantined before APT can be
+      checked safely. Run this playbook once without --check to repair the
+      managed Zoom repository.
+  when:
+    - ansible_check_mode
+    - zoom_repository_quarantine_required
+
+- name: Remove unusable managed Zoom apt repository source
   ansible.builtin.file:
     path: "{{ zoom_repository_sources_path }}"
     state: absent
-  when:
-    - zoom_repository_source_status.stat.exists
-    - >-
-      not zoom_repository_source_is_usable | bool or
-      not zoom_installed_repository_key_is_usable | bool
+  when: zoom_repository_quarantine_required

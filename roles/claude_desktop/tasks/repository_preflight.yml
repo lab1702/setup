@@ -28,7 +28,19 @@
   ansible.builtin.stat:
     path: "{{ claude_desktop_keyring_path }}"
   register: claude_desktop_installed_repository_key_status
-  when: claude_desktop_repository_source_status.stat.exists
+
+- name: Validate installed Claude Desktop signing key path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not claude_desktop_installed_repository_key_status.stat.exists or
+        claude_desktop_installed_repository_key_status.stat.isreg
+        | default(false) or
+        claude_desktop_installed_repository_key_status.stat.islnk
+        | default(false)
+    fail_msg: >-
+      Refusing to replace {{ claude_desktop_keyring_path }} because it is
+      neither a regular file nor a symbolic link.
 
 - name: Read installed Claude Desktop repository signing key
   ansible.builtin.command:
@@ -48,7 +60,7 @@
       claude_desktop_installed_repository_key_status.stat.isreg
       | default(false)
 
-- name: Remove unusable managed Claude Desktop apt repository source
+- name: Determine whether the Claude Desktop repository needs quarantine
   vars:
     claude_desktop_repository_source_is_usable: >-
       {{ claude_desktop_repository_source_status.stat.isreg | default(false)
@@ -81,11 +93,25 @@
       and (claude_desktop_installed_fingerprint_records
       | first | default('')) ==
       claude_desktop_expected_fingerprint_record }}
+  ansible.builtin.set_fact:
+    claude_desktop_repository_quarantine_required: >-
+      {{ claude_desktop_repository_source_status.stat.exists and
+      (not claude_desktop_repository_source_is_usable | bool or
+      not claude_desktop_installed_repository_key_is_usable | bool) }}
+  changed_when: false
+
+- name: Stop check mode when the Claude Desktop repository requires repair
+  ansible.builtin.fail:
+    msg: >-
+      {{ claude_desktop_repository_sources_path }} must be quarantined before
+      APT can be checked safely. Run this playbook once without --check to
+      repair the managed Claude Desktop repository.
+  when:
+    - ansible_check_mode
+    - claude_desktop_repository_quarantine_required
+
+- name: Remove unusable managed Claude Desktop apt repository source
   ansible.builtin.file:
     path: "{{ claude_desktop_repository_sources_path }}"
     state: absent
-  when:
-    - claude_desktop_repository_source_status.stat.exists
-    - >-
-      not claude_desktop_repository_source_is_usable | bool or
-      not claude_desktop_installed_repository_key_is_usable | bool
+  when: claude_desktop_repository_quarantine_required

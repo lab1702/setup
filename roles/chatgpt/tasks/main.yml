@@ -23,65 +23,71 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+  register: chatgpt_repository_prerequisite_installation
 
-- name: Inspect bundled OpenAI repository signing key
-  ansible.builtin.command:
-    argv:
-      - gpg
-      - --batch
-      - --show-keys
-      - --with-colons
-      - "{{ role_path }}/files/chatgpt-archive-keyring.gpg"
-  register: chatgpt_repository_key
-  changed_when: false
-  check_mode: false
-
-- name: Verify bundled OpenAI repository signing key fingerprint
-  vars:
-    chatgpt_public_key_records: >-
-      {{ chatgpt_repository_key.stdout_lines
-      | select('match', '^pub:') | list }}
-    chatgpt_fingerprint_records: >-
-      {{ chatgpt_repository_key.stdout_lines
-      | select('match', '^fpr:') | list }}
-    chatgpt_expected_fingerprint_record: >-
-      fpr:::::::::{{ chatgpt_repository_key_fingerprint }}:
-  ansible.builtin.assert:
-    that:
-      - chatgpt_public_key_records | length == 1
-      - >-
-        (chatgpt_fingerprint_records | first | default('')) ==
-        chatgpt_expected_fingerprint_record
-    fail_msg: >-
-      The bundled OpenAI repository signing key does not contain exactly
-      one primary key with fingerprint
-      {{ chatgpt_repository_key_fingerprint }}.
-
-- name: Configure pinned OpenAI apt repository
-  ansible.builtin.import_tasks: repository.yml
-
-- name: Remove legacy armored OpenAI repository signing key
-  ansible.builtin.file:
-    path: "{{ chatgpt_repository_legacy_keyring_path }}"
-    state: absent
-  when: >-
-    chatgpt_repository_legacy_keyring_path !=
-    chatgpt_repository_keyring_path
-
-- name: Ensure ChatGPT is installed and current
-  ansible.builtin.apt:
-    name: "{{ chatgpt_package_name }}"
-    state: "{{ chatgpt_package_state }}"
-    update_cache: true
-    lock_timeout: 120
-  register: chatgpt_package_installation
+- name: Configure pinned OpenAI repository and install ChatGPT Desktop
   when: >-
     not ansible_check_mode or
-    (not chatgpt_repository_keyring_installation.changed and
-    not chatgpt_repository_configuration.changed)
+    not chatgpt_repository_prerequisite_installation.changed
+  block:
+    - name: Inspect bundled OpenAI repository signing key
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --batch
+          - --show-keys
+          - --with-colons
+          - "{{ role_path }}/files/chatgpt-archive-keyring.gpg"
+      register: chatgpt_repository_key
+      changed_when: false
+      check_mode: false
 
-- name: Reassert pinned OpenAI apt repository after package changes
-  ansible.builtin.import_tasks: repository.yml
-  when:
-    - not ansible_check_mode
-    - chatgpt_package_installation.changed
+    - name: Verify bundled OpenAI repository signing key fingerprint
+      vars:
+        chatgpt_public_key_records: >-
+          {{ chatgpt_repository_key.stdout_lines
+          | select('match', '^pub:') | list }}
+        chatgpt_fingerprint_records: >-
+          {{ chatgpt_repository_key.stdout_lines
+          | select('match', '^fpr:') | list }}
+        chatgpt_expected_fingerprint_record: >-
+          fpr:::::::::{{ chatgpt_repository_key_fingerprint }}:
+      ansible.builtin.assert:
+        that:
+          - chatgpt_public_key_records | length == 1
+          - >-
+            (chatgpt_fingerprint_records | first | default('')) ==
+            chatgpt_expected_fingerprint_record
+        fail_msg: >-
+          The bundled OpenAI repository signing key does not contain exactly
+          one primary key with fingerprint
+          {{ chatgpt_repository_key_fingerprint }}.
+
+    - name: Configure pinned OpenAI apt repository
+      ansible.builtin.import_tasks: repository.yml
+
+    - name: Remove legacy armored OpenAI repository signing key
+      ansible.builtin.file:
+        path: "{{ chatgpt_repository_legacy_keyring_path }}"
+        state: absent
+      when: >-
+        chatgpt_repository_legacy_keyring_path !=
+        chatgpt_repository_keyring_path
+
+    - name: Ensure ChatGPT is installed and current
+      ansible.builtin.apt:
+        name: "{{ chatgpt_package_name }}"
+        state: "{{ chatgpt_package_state }}"
+        update_cache: true
+        lock_timeout: 120
+      register: chatgpt_package_installation
+      when: >-
+        not ansible_check_mode or
+        (not chatgpt_repository_keyring_installation.changed and
+        not chatgpt_repository_configuration.changed)
+
+    - name: Reassert pinned OpenAI apt repository after package changes
+      ansible.builtin.import_tasks: repository.yml
+      when:
+        - not ansible_check_mode
+        - chatgpt_package_installation.changed

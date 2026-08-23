@@ -7,6 +7,26 @@
       ty supports AMD64 and ARM64. Detected
       {{ ansible_facts["architecture"] }}.
 
+- name: Inspect ty install directory
+  ansible.builtin.stat:
+    path: "{{ ty_install_directory }}"
+    follow: false
+  register: ty_install_directory_status
+
+- name: Validate ty install directory security
+  ansible.builtin.assert:
+    that:
+      - ty_install_directory_status.stat.isdir | default(false)
+      - not ty_install_directory_status.stat.islnk | default(false)
+      - ty_install_directory_status.stat.uid | default(-1) == 0
+      - ty_install_directory_status.stat.gid | default(-1) == 0
+      - >-
+        (ty_install_directory_status.stat.mode | default(''))
+        is match('^0[0-7][0145][0145]$')
+    fail_msg: >-
+      {{ ty_install_directory }} must be an existing root-owned directory,
+      must not be a symbolic link, and must not be group- or world-writable.
+
 - name: Get latest ty release
   ansible.builtin.uri:
     url: "{{ ty_release_api_url }}"
@@ -42,6 +62,32 @@
       The latest ty release did not contain the expected uploaded Linux
       archive with a trusted GitHub download URL and SHA-256 digest.
 
+- name: Inspect installed ty binary path
+  ansible.builtin.stat:
+    path: "{{ ty_install_directory }}/ty"
+    follow: false
+  register: ty_installed_binary_status
+
+- name: Validate installed ty binary path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not ty_installed_binary_status.stat.exists or
+        ty_installed_binary_status.stat.isreg | default(false) or
+        ty_installed_binary_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to replace {{ ty_install_directory }}/ty because it is neither
+      a regular file nor a symbolic link.
+
+- name: Determine whether installed ty binary is safe to execute
+  ansible.builtin.set_fact:
+    ty_installed_binary_is_safe: >-
+      {{ ty_installed_binary_status.stat.isreg | default(false)
+      and not ty_installed_binary_status.stat.islnk | default(false)
+      and ty_installed_binary_status.stat.uid | default(-1) == 0
+      and ty_installed_binary_status.stat.gid | default(-1) == 0
+      and ty_installed_binary_status.stat.mode | default('') == '0755' }}
+
 - name: Inspect installed ty version
   ansible.builtin.command:
     argv:
@@ -51,6 +97,7 @@
   changed_when: false
   failed_when: false
   check_mode: false
+  when: ty_installed_binary_is_safe
 
 - name: Determine whether ty installation is required
   vars:
@@ -61,7 +108,8 @@
       + ['', ''])[1] | regex_replace('^v', '') }}
   ansible.builtin.set_fact:
     ty_install_required: >-
-      {{ ty_installed_release.rc | default(1) != 0 or
+      {{ not ty_installed_binary_is_safe or
+      ty_installed_release.rc | default(1) != 0 or
       ty_installed_version != ty_release_version }}
 
 - name: Report pending ty installation in check mode
@@ -128,6 +176,12 @@
               The downloaded ty binary version does not match GitHub's
               latest release tag.
 
+        - name: Remove installed ty binary symbolic link
+          ansible.builtin.file:
+            path: "{{ ty_install_directory }}/ty"
+            state: absent
+          when: ty_installed_binary_status.stat.islnk | default(false)
+
         - name: Install verified ty binary
           ansible.builtin.copy:
             src: "{{ ty_archive_tempdir.path }}/ty"
@@ -136,6 +190,7 @@
             owner: root
             group: root
             mode: "0755"
+            follow: false
       always:
         - name: Remove temporary ty archive directory
           ansible.builtin.file:

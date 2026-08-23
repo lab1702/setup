@@ -7,6 +7,26 @@
       DuckDB CLI supports AMD64 and ARM64. Detected
       {{ ansible_facts["architecture"] }}.
 
+- name: Inspect DuckDB CLI install directory
+  ansible.builtin.stat:
+    path: "{{ duckdb_install_directory }}"
+    follow: false
+  register: duckdb_install_directory_status
+
+- name: Validate DuckDB CLI install directory security
+  ansible.builtin.assert:
+    that:
+      - duckdb_install_directory_status.stat.isdir | default(false)
+      - not duckdb_install_directory_status.stat.islnk | default(false)
+      - duckdb_install_directory_status.stat.uid | default(-1) == 0
+      - duckdb_install_directory_status.stat.gid | default(-1) == 0
+      - >-
+        (duckdb_install_directory_status.stat.mode | default(''))
+        is match('^0[0-7][0145][0145]$')
+    fail_msg: >-
+      {{ duckdb_install_directory }} must be an existing root-owned directory,
+      must not be a symbolic link, and must not be group- or world-writable.
+
 - name: Install DuckDB CLI archive prerequisites
   ansible.builtin.apt:
     name: unzip
@@ -50,6 +70,32 @@
       The latest DuckDB release did not contain the expected uploaded CLI
       archive with a trusted GitHub download URL and SHA-256 digest.
 
+- name: Inspect installed DuckDB CLI binary path
+  ansible.builtin.stat:
+    path: "{{ duckdb_install_directory }}/duckdb"
+    follow: false
+  register: duckdb_installed_binary_status
+
+- name: Validate installed DuckDB CLI binary path type
+  ansible.builtin.assert:
+    that:
+      - >-
+        not duckdb_installed_binary_status.stat.exists or
+        duckdb_installed_binary_status.stat.isreg | default(false) or
+        duckdb_installed_binary_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to replace {{ duckdb_install_directory }}/duckdb because it is
+      neither a regular file nor a symbolic link.
+
+- name: Determine whether installed DuckDB CLI binary is safe to execute
+  ansible.builtin.set_fact:
+    duckdb_installed_binary_is_safe: >-
+      {{ duckdb_installed_binary_status.stat.isreg | default(false)
+      and not duckdb_installed_binary_status.stat.islnk | default(false)
+      and duckdb_installed_binary_status.stat.uid | default(-1) == 0
+      and duckdb_installed_binary_status.stat.gid | default(-1) == 0
+      and duckdb_installed_binary_status.stat.mode | default('') == '0755' }}
+
 - name: Inspect installed DuckDB CLI version
   ansible.builtin.command:
     argv:
@@ -59,6 +105,7 @@
   changed_when: false
   failed_when: false
   check_mode: false
+  when: duckdb_installed_binary_is_safe
 
 - name: Determine whether DuckDB CLI installation is required
   vars:
@@ -69,7 +116,8 @@
       | first | default('') | regex_replace('^v', '') }}
   ansible.builtin.set_fact:
     duckdb_install_required: >-
-      {{ duckdb_installed_version != duckdb_release_version }}
+      {{ not duckdb_installed_binary_is_safe or
+      duckdb_installed_version != duckdb_release_version }}
 
 - name: Report pending DuckDB CLI installation in check mode
   ansible.builtin.debug:
@@ -172,6 +220,12 @@
             fail_msg: >-
               The extracted DuckDB CLI member is not a regular executable.
 
+        - name: Remove installed DuckDB CLI binary symbolic link
+          ansible.builtin.file:
+            path: "{{ duckdb_install_directory }}/duckdb"
+            state: absent
+          when: duckdb_installed_binary_status.stat.islnk | default(false)
+
         - name: Install verified DuckDB CLI binary
           ansible.builtin.copy:
             src: "{{ duckdb_archive_tempdir.path }}/duckdb"
@@ -180,6 +234,7 @@
             owner: root
             group: root
             mode: "0755"
+            follow: false
       always:
         - name: Remove temporary DuckDB CLI archive directory
           ansible.builtin.file:

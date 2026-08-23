@@ -107,6 +107,7 @@
             deb: >-
               {{ quarto_package_tempdir.path }}/{{ quarto_release_asset.name }}
             state: present
+            allow_downgrade: true
             lock_timeout: 120
       always:
         - name: Remove temporary Quarto CLI package directory
