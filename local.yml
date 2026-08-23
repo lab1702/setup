@@ -37,6 +37,10 @@
         regexp: >-
           ^\s*export\s+PATH=["']?\$HOME/\.npm-global/bin:\$PATH["']?\s*$
         line: export PATH="$HOME/.npm-global/bin:$PATH"
+      - path: "{{ workstation_user_home }}/.bashrc"
+        regexp: >-
+          ^\s*export\s+PATH=["']?\$HOME/go/bin:\$PATH["']?\s*$
+        line: export PATH="$HOME/go/bin:$PATH"
 
   pre_tasks:
     - name: Validate Ubuntu release and architecture support
