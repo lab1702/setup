@@ -457,9 +457,11 @@
                 - vendor_repository_installation_required
           always:
             # The reasserts only undo a package postinst rewrite, which
-            # cannot have happened when no package work ran; they default to
-            # running because a failure earlier in the block leaves the
-            # installation fact unset.
+            # cannot have happened when no package work ran. The fact is
+            # always defined here: the pessimistic set_fact at the top of
+            # this block runs first, and that set_fact is what keeps a
+            # previous vendor's stale value from leaking in — do not
+            # remove it.
             - name: Reassert verified repository signing key after package task
               ansible.builtin.copy:
                 src: "{{ vendor_repository_verified_key_path }}"
@@ -470,7 +472,7 @@
                 mode: "0644"
               when:
                 - not ansible_check_mode
-                - vendor_repository_installation_required | default(true)
+                - vendor_repository_installation_required
 
             - name: Reassert managed apt repository after package task
               ansible.builtin.copy:
@@ -481,7 +483,7 @@
                 mode: "0644"
               when:
                 - not ansible_check_mode
-                - vendor_repository_installation_required | default(true)
+                - vendor_repository_installation_required
       always:
         - name: Remove temporary repository signing key directory
           ansible.builtin.file:

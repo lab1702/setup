@@ -34,6 +34,8 @@
         # specification production passes to the vendor_repository role.
         vendor_repository_spec: "{{ chatgpt_repository }}"
       block:
+        # Runs for real even under --check so the assert below always has
+        # a registered result, matching roles/amd64v3/tests.
         - name: Inspect bundled OpenAI signing key
           ansible.builtin.command:
             argv:
@@ -44,6 +46,7 @@
               - "{{ vendor_repository_key_file }}"
           register: chatgpt_test_repository_key
           changed_when: false
+          check_mode: false
 
         - name: Validate bundled OpenAI signing key
           ansible.builtin.assert:

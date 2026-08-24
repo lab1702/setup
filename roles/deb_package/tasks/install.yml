@@ -3,13 +3,14 @@
   ansible.builtin.assert:
     that:
       - deb_package_path is match('^/.+[.]deb$')
-      - deb_package_install_required is defined
-      - deb_package_repair_required is defined
+      - >-
+        deb_package_status_subject | default('')
+        == deb_package_name ~ ':' ~ deb_package_architecture
       - not ansible_check_mode
     fail_msg: >-
       The {{ deb_package_display_name }} package installation needs an
-      absolute .deb archive path, a preceding status.yml inclusion, and a
-      run outside check mode.
+      absolute .deb archive path, a preceding status.yml inclusion for
+      this same package, and a run outside check mode.
 
 - name: Inspect downloaded package metadata for {{ deb_package_display_name }}
   ansible.builtin.command:

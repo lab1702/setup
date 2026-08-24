@@ -70,6 +70,10 @@
     deb_package_repair_required: >-
       {{ deb_package_version_comparison.rc | default(1) == 0 and
       deb_package_installed_status != 'installed' }}
+    # Records which package the facts above describe, so install.yml can
+    # reject stale facts left over from an earlier consumer in the play.
+    deb_package_status_subject: >-
+      {{ deb_package_name }}:{{ deb_package_architecture }}
 
 - name: Report pending check-mode installation of {{ deb_package_display_name }}
   ansible.builtin.debug:

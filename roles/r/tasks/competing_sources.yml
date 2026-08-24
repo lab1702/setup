@@ -85,16 +85,18 @@
     label: "{{ item.item }}"
   register: r_repository_unreadable_source_statuses
 
+# item is a stat result whose loop item was a slurp result, so the
+# source path sits at item.item.item.
 - name: Refuse to skip existing unreadable APT repository source files
   ansible.builtin.assert:
     that:
       - not item.stat.exists
     fail_msg: >-
-      Unable to read {{ item.item }} while it still exists, so it cannot
-      be inspected for competing CRAN repository entries.
+      Unable to read {{ item.item.item }} while it still exists, so it
+      cannot be inspected for competing CRAN repository entries.
   loop: "{{ r_repository_unreadable_source_statuses.results }}"
   loop_control:
-    label: "{{ item.item }}"
+    label: "{{ item.item.item }}"
 
 - name: Inspect symbolic-link APT repository source targets
   ansible.builtin.stat:
@@ -132,17 +134,19 @@
     label: "{{ item.item }}"
   register: r_repository_unreadable_symlink_statuses
 
+# item is a stat result whose loop item was a slurp result, so the
+# source path sits at item.item.item.
 - name: Refuse to skip existing unreadable symbolic-link APT repository sources
   ansible.builtin.assert:
     that:
       - not item.stat.exists or not item.stat.isreg | default(false)
     fail_msg: >-
-      Unable to read {{ item.item }} while its target remains a regular
-      file, so it cannot be inspected for competing CRAN repository
-      entries.
+      Unable to read {{ item.item.item }} while its target remains a
+      regular file, so it cannot be inspected for competing CRAN
+      repository entries.
   loop: "{{ r_repository_unreadable_symlink_statuses.results }}"
   loop_control:
-    label: "{{ item.item }}"
+    label: "{{ item.item.item }}"
 
 - name: Initialize competing CRAN repository migration plans
   ansible.builtin.set_fact:
@@ -222,17 +226,23 @@
   loop: "{{ r_repository_migration_source_statuses.results }}"
   when: item.stat.exists
 
+# Keyed on the reinspected list so a migration target that vanished
+# after planning does not stop the dry run.
 - name: Stop check mode when competing CRAN sources require migration
+  vars:
+    r_repository_remaining_migration_paths: >-
+      {{ r_repository_migration_source_statuses.results
+      | selectattr('stat.exists') | map(attribute='item') | list }}
   ansible.builtin.fail:
     msg: >-
       Competing CRAN repository entries must be removed from
-      {{ r_repository_regular_source_migrations
-      | map(attribute='path') | join(', ') }} before APT can be checked safely.
-      Run this playbook once without --check to migrate those entries while
-      preserving unrelated APT sources.
+      {{ r_repository_remaining_migration_paths | join(', ') }} before APT
+      can be checked safely. Run this playbook once without --check to
+      migrate those entries while preserving unrelated APT sources.
   when:
     - ansible_check_mode
-    - r_repository_regular_source_migrations | length > 0
+    - r_repository_migration_source_statuses.results
+      | selectattr('stat.exists') | list | length > 0
 
 - name: Migrate competing CRAN repository entries
   vars:

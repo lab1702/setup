@@ -22,12 +22,15 @@
             ansible_facts["architecture"]
             in linux_release_architecture_map
 
+    # Scaffolding tasks run for real even under --check so the exercised
+    # role sees a complete sandbox, matching roles/amd64v3/tests.
     - name: Create temporary Claude test key directory
       ansible.builtin.tempfile:
         state: directory
         suffix: .claude-repository-test
       register: claude_desktop_test_key_tempdir
       changed_when: false
+      check_mode: false
 
     - name: Exercise verified Claude repository metadata
       vars:
@@ -45,6 +48,7 @@
             dest: "{{ claude_desktop_test_key_path }}"
             mode: "0600"
           changed_when: false
+          check_mode: false
 
         - name: Inspect Claude signing key
           ansible.builtin.command:
@@ -56,6 +60,7 @@
               - "{{ claude_desktop_test_key_path }}"
           register: claude_desktop_test_repository_key
           changed_when: false
+          check_mode: false
 
         - name: Validate Claude signing key
           ansible.builtin.assert:
@@ -96,3 +101,4 @@
             path: "{{ claude_desktop_test_key_tempdir.path }}"
             state: absent
           changed_when: false
+          check_mode: false
