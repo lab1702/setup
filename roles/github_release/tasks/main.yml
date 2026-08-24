@@ -31,45 +31,62 @@
       {{ github_release_display_name }} supports AMD64 and ARM64. Detected
       {{ ansible_facts["architecture"] }}.
 
-- name: Resolve release version probe account
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ github_release_probe_user }}"
-    fail_key: false
+# The probe account and install directory are constant across this
+# role's includes, so their validation runs once per play (keyed on the
+# pair so an overriding consumer still gets validated).
+- name: Validate release installation environment
+  when: >-
+    github_release_validated_environment | default('')
+    != github_release_probe_user ~ ':' ~ github_release_install_directory
+  block:
+    - name: Resolve release version probe account
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ github_release_probe_user }}"
+        fail_key: false
 
-- name: Validate release version probe account
-  vars:
-    github_release_probe_passwd: >-
-      {{ ansible_facts["getent_passwd"][github_release_probe_user]
-      | default([], true) }}
-  ansible.builtin.assert:
-    that:
-      - github_release_probe_passwd | length >= 3
-      - (github_release_probe_passwd + ['', '', ''])[1] | int > 0
-    fail_msg: >-
-      Version probes require the unprivileged
-      {{ github_release_probe_user }} account with a non-root user ID.
+    - name: Validate release version probe account
+      vars:
+        github_release_probe_passwd: >-
+          {{ ansible_facts["getent_passwd"][github_release_probe_user]
+          | default([], true) }}
+      ansible.builtin.assert:
+        that:
+          - github_release_probe_passwd | length >= 3
+          - (github_release_probe_passwd + ['', '', ''])[1] | int > 0
+        fail_msg: >-
+          Version probes require the unprivileged
+          {{ github_release_probe_user }} account with a non-root user ID.
 
-- name: Inspect release install directory
-  ansible.builtin.stat:
-    path: "{{ github_release_install_directory }}"
-    follow: false
-  register: github_release_install_directory_status
+    - name: Inspect release install directory
+      ansible.builtin.stat:
+        path: "{{ github_release_install_directory }}"
+        follow: false
+      register: github_release_install_directory_status
 
-- name: Validate release install directory security
-  ansible.builtin.assert:
-    that:
-      - github_release_install_directory_status.stat.isdir | default(false)
-      - not github_release_install_directory_status.stat.islnk | default(false)
-      - github_release_install_directory_status.stat.uid | default(-1) == 0
-      - github_release_install_directory_status.stat.gid | default(-1) == 0
-      - >-
-        (github_release_install_directory_status.stat.mode | default(''))
-        is match('^0[1357][0145][15]$')
-    fail_msg: >-
-      {{ github_release_install_directory }} must be an existing root-owned
-      directory, must not be a symbolic link, must be traversable by ordinary
-      users, and must not be group- or world-writable.
+    - name: Validate release install directory security
+      ansible.builtin.assert:
+        that:
+          - github_release_install_directory_status.stat.isdir | default(false)
+          - >-
+            not github_release_install_directory_status.stat.islnk
+            | default(false)
+          - github_release_install_directory_status.stat.uid | default(-1) == 0
+          - github_release_install_directory_status.stat.gid | default(-1) == 0
+          - >-
+            (github_release_install_directory_status.stat.mode | default(''))
+            is match('^0[1357][0145][15]$')
+        fail_msg: >-
+          {{ github_release_install_directory }} must be an existing
+          root-owned directory, must not be a symbolic link, must be
+          traversable by ordinary users, and must not be group- or
+          world-writable.
+
+    - name: Record validated release installation environment
+      ansible.builtin.set_fact:
+        github_release_validated_environment: >-
+          {{ github_release_probe_user }}:{{
+          github_release_install_directory }}
 
 - name: Resolve latest release archive asset
   ansible.builtin.include_tasks: resolve_asset.yml
@@ -213,15 +230,17 @@
           | map('list') | list | sort }}
       block:
         # The retries cover transient connection errors and server-side
-        # failures, matching the metadata fetch that resolved the asset.
+        # failures, matching the metadata fetch that resolved the asset;
+        # checksum mismatches are retried deliberately since transient
+        # corruption is their common cause.
         - name: Download verified release archive
           ansible.builtin.get_url:
             url: "{{ github_release_asset.browser_download_url }}"
             dest: "{{ github_release_archive_path }}"
             checksum: "{{ github_release_asset.digest }}"
             mode: "0600"
-          retries: 3
-          delay: 10
+          retries: "{{ remote_fetch_retries }}"
+          delay: "{{ remote_fetch_retry_delay }}"
 
         - name: Inspect release archive member names
           ansible.builtin.command:

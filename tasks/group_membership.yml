@@ -5,11 +5,14 @@
 # change and the check-mode report. Include with:
 #
 #   system_group_name   name of the system group to manage
+# The probe's result is only consumed by the check-mode gates below, so
+# real runs skip it; the group module guarantees existence for real.
 - name: Inspect membership before managing group {{ system_group_name }}
   ansible.builtin.getent:
     database: group
     key: "{{ system_group_name }}"
     fail_key: false
+  when: ansible_check_mode
 
 - name: Ensure managed system group {{ system_group_name }}
   ansible.builtin.group:

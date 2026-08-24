@@ -19,18 +19,22 @@
   register: rstudio_downloads_metadata
   changed_when: false
   check_mode: false
-  retries: 3
-  delay: 10
+  retries: "{{ remote_fetch_retries }}"
+  delay: "{{ remote_fetch_retry_delay }}"
 
-# A 200 whose body is not JSON (CDN error page, captive portal) would
-# otherwise surface as an opaque undefined-variable templating error.
+# A 200 whose body is not the downloads schema (CDN error page, captive
+# portal, or a proxy's JSON error object) would otherwise surface as an
+# opaque undefined-variable templating error in the selection below.
 - name: Validate Posit RStudio Desktop metadata transport
   ansible.builtin.assert:
     that:
-      - rstudio_downloads_metadata.json is defined
+      - >-
+        rstudio_downloads_metadata.json.rstudio.open_source.stable.desktop.installer
+        is defined
     fail_msg: >-
-      {{ rstudio_downloads_metadata_url }} did not return JSON metadata;
-      an intercepting proxy or a CDN error page may be in the way.
+      {{ rstudio_downloads_metadata_url }} did not return the expected
+      downloads metadata structure; an intercepting proxy or a CDN error
+      page may be in the way.
 
 - name: Select Posit RStudio Desktop package metadata
   vars:

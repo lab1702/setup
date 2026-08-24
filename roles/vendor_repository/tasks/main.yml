@@ -42,9 +42,6 @@
     mode: "0755"
   register: vendor_repository_keyring_directory_creation
 
-- name: Determine whether the signing key can be verified
-  ansible.builtin.include_tasks: gpg_probe.yml
-
 # In check mode the keyring directory was not really created and gpg was
 # not really installed by the base packages, so the configure block below
 # cannot run in either case; report what a real run would do so the dry
@@ -101,8 +98,8 @@
             mode: "0600"
           changed_when: false
           check_mode: false
-          retries: 3
-          delay: 10
+          retries: "{{ remote_fetch_retries }}"
+          delay: "{{ remote_fetch_retry_delay }}"
           when:
             - vendor_repository_key_url | length > 0
             - not vendor_repository_key_is_preverified
@@ -252,6 +249,7 @@
             - name: Assume package work until the installed state is known
               ansible.builtin.set_fact:
                 vendor_repository_installation_required: true
+                vendor_repository_index_refreshed: false
             # The play-level cache refresh can predate this repository's
             # source file, and its lists can be cleared out of band while
             # the source file survives byte-identical — but both cases
@@ -293,36 +291,8 @@
               register: vendor_repository_index_statuses
               when: not ansible_check_mode
 
-            # A transient vendor endpoint failure is retried before
-            # failing loudly, so one CDN blip does not abort the
-            # remaining roles. The lock timeout is shorter than the
-            # repository-wide 120 seconds used elsewhere because the
-            # retry ladder multiplies it: four 30-second waits plus the
-            # retry delays give a held apt lock about the same total
-            # grace as one 120-second wait.
-            - name: Refresh repository package metadata
-              ansible.builtin.command:
-                argv:
-                  - /usr/bin/apt-get
-                  - -o
-                  - Dir::Etc::sourcelist={{ vendor_repository_sources_path }}
-                  - -o
-                  - Dir::Etc::sourceparts=/dev/null
-                  - -o
-                  - APT::Get::List-Cleanup=0
-                  - -o
-                  - DPkg::Lock::Timeout=30
-                  - -o
-                  - APT::Update::Error-Mode=any
-                  - update
-              environment:
-                DEBIAN_FRONTEND: noninteractive
-                LC_ALL: C
-              register: vendor_repository_metadata_refresh
-              changed_when: false
-              retries: 3
-              delay: 10
-              until: vendor_repository_metadata_refresh.rc == 0
+            - name: Refresh repository package metadata when required
+              ansible.builtin.include_tasks: index_refresh.yml
               when:
                 - not ansible_check_mode
                 - >-
@@ -333,6 +303,15 @@
                   | default([]) | length == 0 or
                   vendor_repository_index_statuses.results | default([])
                   | rejectattr('stat.exists') | list | length > 0
+
+            # Staleness is not locally detectable, so remember whether
+            # the resolution below starts from freshly fetched metadata;
+            # pending package work found on possibly stale metadata is
+            # re-resolved after a refresh before anything is installed.
+            - name: Record whether resolution starts from fresh metadata
+              ansible.builtin.set_fact:
+                vendor_repository_resolved_after_refresh: >-
+                  {{ vendor_repository_index_refreshed }}
 
             - name: Refresh isolated repository metadata in check mode
               ansible.builtin.include_role:
@@ -352,134 +331,27 @@
                   {{ vendor_repository_package_names }}
               when: ansible_check_mode
 
-            - name: Discover published package versions
-              ansible.builtin.command:
-                argv:
-                  - apt-cache
-                  - madison
-                  - "{{ item }}"
-              environment:
-                LC_ALL: C
-              loop: "{{ vendor_repository_package_names }}"
-              register: vendor_repository_package_versions
-              changed_when: false
-              check_mode: false
-              when: not ansible_check_mode
+            - name: Resolve current package versions
+              ansible.builtin.include_tasks: resolve_packages.yml
 
-            - name: Select package version output
-              ansible.builtin.set_fact:
-                vendor_repository_package_version_results: >-
-                  {{ repository_check_package_versions.results
-                  if ansible_check_mode
-                  else vendor_repository_package_versions.results }}
-                vendor_repository_candidate_versions: {}
-                vendor_repository_installation_required: false
+            # A pinned version can vanish from a single-version vendor
+            # pool between the last index refresh and this run. When
+            # package work is pending but the resolution above used
+            # possibly stale metadata, refresh once and resolve again so
+            # the installation acts on current metadata.
+            - name: Refresh repository package metadata before pending work
+              ansible.builtin.include_tasks: index_refresh.yml
+              when:
+                - not ansible_check_mode
+                - vendor_repository_installation_required | bool
+                - not vendor_repository_resolved_after_refresh | bool
 
-            - name: Select current package versions from the repository
-              vars:
-                vendor_repository_version_rows: >-
-                  {{ item.stdout_lines
-                  | select('match', '^\s*'
-                  ~ (item.item | ansible.builtin.regex_escape)
-                  ~ vendor_repository_origin_pattern_suffix) | list }}
-                vendor_repository_candidate_row: >-
-                  {{ vendor_repository_version_rows | first | default('') }}
-              ansible.builtin.set_fact:
-                vendor_repository_candidate_versions: >-
-                  {{ vendor_repository_candidate_versions
-                  | combine({item.item:
-                  (vendor_repository_candidate_row.split('|') + ['', ''])[1]
-                  | trim}) }}
-              loop: "{{ vendor_repository_package_version_results }}"
-              loop_control:
-                label: "{{ item.item }}"
-
-            - name: Validate available package versions
-              ansible.builtin.assert:
-                that:
-                  - vendor_repository_candidate_versions[item] | length > 0
-                fail_msg: >-
-                  The verified {{ vendor_repository_display_name }} repository
-                  does not publish a candidate for {{ item }} on this
-                  architecture.
-              loop: "{{ vendor_repository_package_names }}"
-
-            - name: Validate current Debian versions
-              ansible.builtin.command:
-                argv:
-                  - dpkg
-                  - --validate-version
-                  - "{{ vendor_repository_candidate_versions[item] }}"
-              loop: "{{ vendor_repository_package_names }}"
-              loop_control:
-                label: >-
-                  {{ item }}={{ vendor_repository_candidate_versions[item]
-                  | default('') }}
-              changed_when: false
-              check_mode: false
-
-            - name: Reject ambiguous package origins
-              vars:
-                vendor_repository_candidate_version_rows: >-
-                  {{ item.stdout_lines
-                  | select('match', '^\s*'
-                  ~ (item.item | ansible.builtin.regex_escape)
-                  ~ '\s*\|\s*'
-                  ~ (vendor_repository_candidate_versions[item.item]
-                  | ansible.builtin.regex_escape)
-                  ~ '\s*\|') | list }}
-                vendor_repository_origin_version_rows: >-
-                  {{ item.stdout_lines
-                  | select('match', '^\s*'
-                  ~ (item.item | ansible.builtin.regex_escape)
-                  ~ vendor_repository_origin_pattern_suffix) | list }}
-              ansible.builtin.assert:
-                that:
-                  - vendor_repository_candidate_version_rows | length > 0
-                  - >-
-                    vendor_repository_candidate_version_rows
-                    | difference(vendor_repository_origin_version_rows)
-                    | length == 0
-                fail_msg: >-
-                  Refusing to install {{ item.item }}={{
-                  vendor_repository_candidate_versions[item.item] }} because
-                  the same version is available from a repository other than
-                  {{ vendor_repository_display_name }}. Remove the competing
-                  apt source providing {{ vendor_repository_candidate_version_rows
-                  | difference(vendor_repository_origin_version_rows)
-                  | join('; ') }} and rerun the playbook.
-              loop: "{{ vendor_repository_package_version_results }}"
-              loop_control:
-                label: "{{ item.item }}"
-              when: not ansible_check_mode
-
-            - name: Inspect installed package versions
-              ansible.builtin.command:
-                argv:
-                  - dpkg-query
-                  - --show
-                  - --showformat=${Version}\t${db:Status-Status}\n
-                  - "{{ item }}"
-              loop: "{{ vendor_repository_package_names }}"
-              register: vendor_repository_installed_packages
-              changed_when: false
-              failed_when: false
-              check_mode: false
-
-            - name: Determine whether packages need installation
-              vars:
-                vendor_repository_expected_installed_state: >-
-                  {{ vendor_repository_candidate_versions[item.item]
-                  ~ '\tinstalled' }}
-              ansible.builtin.set_fact:
-                vendor_repository_installation_required: >-
-                  {{ vendor_repository_installation_required | bool or
-                  item.rc != 0 or
-                  vendor_repository_expected_installed_state
-                  not in item.stdout_lines }}
-              loop: "{{ vendor_repository_installed_packages.results }}"
-              loop_control:
-                label: "{{ item.item }}"
+            - name: Resolve packages from refreshed repository metadata
+              ansible.builtin.include_tasks: resolve_packages.yml
+              when:
+                - not ansible_check_mode
+                - vendor_repository_installation_required | bool
+                - not vendor_repository_resolved_after_refresh | bool
 
             - name: Report pending installation of {{ vendor_repository_display_name }}
               ansible.builtin.debug:

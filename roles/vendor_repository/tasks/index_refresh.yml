@@ -1,0 +1,34 @@
+---
+# Scoped apt update for this vendor's source file only. A transient
+# vendor endpoint failure is retried before failing loudly, so one CDN
+# blip does not abort the remaining roles. The lock timeout is shorter
+# than the repository-wide 120 seconds used elsewhere because the retry
+# ladder multiplies it: four 30-second waits plus the retry delays give
+# a held apt lock about the same total grace as one 120-second wait.
+- name: Refresh repository package metadata
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/apt-get
+      - -o
+      - Dir::Etc::sourcelist={{ vendor_repository_sources_path }}
+      - -o
+      - Dir::Etc::sourceparts=/dev/null
+      - -o
+      - APT::Get::List-Cleanup=0
+      - -o
+      - DPkg::Lock::Timeout=30
+      - -o
+      - APT::Update::Error-Mode=any
+      - update
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    LC_ALL: C
+  register: vendor_repository_metadata_refresh
+  changed_when: false
+  retries: "{{ remote_fetch_retries }}"
+  delay: "{{ remote_fetch_retry_delay }}"
+  until: vendor_repository_metadata_refresh.rc == 0
+
+- name: Record refreshed repository metadata
+  ansible.builtin.set_fact:
+    vendor_repository_index_refreshed: true

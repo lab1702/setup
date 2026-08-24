@@ -26,17 +26,29 @@
 # the run: the directory ensure and the write below tolerate failure, and
 # an unusable cache only costs one unconditional API request. The
 # directory is created in check mode too — the write below runs for real
-# during dry runs and needs the directory to exist.
+# during dry runs and needs the directory to exist — and only once per
+# play, since the path is constant across the role's includes.
 - name: Ensure release metadata cache directory exists
   ansible.builtin.file:
     path: "{{ github_release_cache_directory }}"
     state: directory
-    owner: root
-    group: root
+    owner: "{{ github_release_cache_owner }}"
+    group: "{{ github_release_cache_group }}"
     mode: "0755"
   changed_when: false
   failed_when: false
   check_mode: false
+  when: >-
+    github_release_cache_directory_ensured | default('')
+    != github_release_cache_directory
+
+- name: Record ensured release metadata cache directory
+  ansible.builtin.set_fact:
+    github_release_cache_directory_ensured: >-
+      {{ github_release_cache_directory }}
+  when: >-
+    github_release_cache_directory_ensured | default('')
+    != github_release_cache_directory
 
 - name: Inspect cached release metadata of {{ github_release_display_name }}
   ansible.builtin.stat:
@@ -48,11 +60,14 @@
   ansible.builtin.set_fact:
     github_release_cache: {}
 
+# The exact 0644 mode excludes group- and world-writability, so with
+# the configured owner it bounds who could have written the cache.
 - name: Load cached release metadata of {{ github_release_display_name }}
   when:
     - github_release_cache_status.stat.isreg | default(false)
-    - github_release_cache_status.stat.uid | default(-1) == 0
-    - github_release_cache_status.stat.gid | default(-1) == 0
+    - >-
+      github_release_cache_status.stat.pw_name | default('')
+      == github_release_cache_owner | string
     - github_release_cache_status.stat.mode | default('') == '0644'
   block:
     - name: Read cached release metadata of {{ github_release_display_name }}
@@ -90,8 +105,8 @@
   register: github_release_metadata
   changed_when: false
   check_mode: false
-  retries: 3
-  delay: 10
+  retries: "{{ remote_fetch_retries }}"
+  delay: "{{ remote_fetch_retry_delay }}"
 
 # A 200 response whose body is not usable release JSON — unparseable, or
 # parseable without the release fields (an intercepting proxy's error
@@ -99,13 +114,17 @@
 # keep-installed fallback applies instead of a templating error. The
 # shape test mirrors the malformed-cache discard above, so only bodies
 # the loader would accept are ever treated as fresh metadata.
+# A 304 is only trustworthy when this role actually sent an
+# If-None-Match from a validated cache; a misbehaving proxy answering
+# an unconditional request with 304 must not count as available.
 - name: Determine release metadata availability
   ansible.builtin.set_fact:
     github_release_api_available: >-
       {{ (github_release_metadata.status == 200
       and github_release_metadata.json.tag_name | default('') | length > 0
       and github_release_metadata.json.assets | default([]) | length > 0)
-      or github_release_metadata.status == 304 }}
+      or (github_release_metadata.status == 304
+      and github_release_cache.body is defined) }}
 
 # Written in check mode too: the API request above always runs, so dry
 # runs would otherwise never earn quota-free 304 revalidations.
@@ -115,8 +134,8 @@
     content: >-
       {{ {'etag': github_release_metadata.etag,
       'body': github_release_metadata.json} | to_nice_json }}
-    owner: root
-    group: root
+    owner: "{{ github_release_cache_owner }}"
+    group: "{{ github_release_cache_group }}"
     mode: "0644"
   changed_when: false
   failed_when: false

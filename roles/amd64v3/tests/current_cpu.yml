@@ -52,6 +52,9 @@
             path: "{{ amd64v3_apt_config_path }}"
           register: amd64v3_test_current_cpu_configuration
 
+        # Under --check the role only predicts the configuration write,
+        # so the dry run validates the predicted change instead of the
+        # file's existence.
         - name: Validate current CPU detection and configuration
           ansible.builtin.assert:
             that:
@@ -67,7 +70,12 @@
                   )
                 )
               - >-
+                ansible_check_mode or
                 amd64v3_test_current_cpu_configuration.stat.exists ==
+                amd64v3_cpu_supported
+              - >-
+                not ansible_check_mode or
+                (amd64v3_apt_configuration.changed | default(false)) ==
                 amd64v3_cpu_supported
       always:
         - name: Remove the temporary current-CPU test directory

@@ -1,0 +1,116 @@
+---
+# Exercises the release-metadata cache against the live GitHub API: a
+# fresh 200 populates the cache, a rerun revalidates it with a
+# quota-free 304, and corrupt or malformed caches are discarded without
+# failing the run. The cache directory and ownership come from the role
+# defaults, overridden here so the flow runs without privileges. Ends
+# early when the API is rate limited, since the behavior under test
+# needs real 200/304 responses.
+- name: Exercise the GitHub release metadata cache
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars_files:
+    - ../../../group_vars/all.yml
+  vars:
+    github_release_display_name: Ruff cache test
+    github_release_repository: astral-sh/ruff
+    github_release_binaries:
+      - ruff
+    github_release_cache_directory: >-
+      {{ github_release_test_cache_directory.path }}/cache
+    github_release_cache_owner: "{{ ansible_facts['user_id'] }}"
+    github_release_test_cache_path: >-
+      {{ github_release_cache_directory }}/astral-sh--ruff.json
+    github_release_cache_group: "{{ ansible_facts['user_gid'] }}"
+  tasks:
+    - name: Create temporary cache test directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .github-release-cache-test
+      register: github_release_test_cache_directory
+      changed_when: false
+      check_mode: false
+
+    - name: Exercise cache population and revalidation
+      block:
+        - name: Resolve the release without a cache
+          ansible.builtin.include_role:
+            name: github_release
+            tasks_from: resolve_asset.yml
+
+        - name: Stop the test early while the API is rate limited
+          ansible.builtin.meta: end_play
+          when: github_release_metadata.status in [403, 429]
+
+        - name: Validate the fresh resolution and the written cache
+          ansible.builtin.assert:
+            that:
+              - github_release_metadata.status == 200
+              - github_release_api_available
+              - github_release_version | length > 0
+              - github_release_test_cache_path is exists
+
+        - name: Resolve the release against the cache
+          ansible.builtin.include_role:
+            name: github_release
+            tasks_from: resolve_asset.yml
+
+        - name: Validate the quota-free revalidation
+          ansible.builtin.assert:
+            that:
+              - github_release_metadata.status == 304
+              - github_release_api_available
+              - github_release_version | length > 0
+
+        - name: Corrupt the cache with unparseable content
+          ansible.builtin.copy:
+            dest: "{{ github_release_test_cache_path }}"
+            content: not json {
+            mode: "0644"
+          changed_when: false
+          check_mode: false
+
+        - name: Resolve the release against the corrupt cache
+          ansible.builtin.include_role:
+            name: github_release
+            tasks_from: resolve_asset.yml
+
+        - name: Validate the corrupt cache was discarded
+          ansible.builtin.assert:
+            that:
+              - github_release_metadata.status in [200, 403, 429]
+              - >-
+                github_release_metadata.status != 200
+                or github_release_api_available
+
+        - name: Replace the cache with a malformed but current shape
+          ansible.builtin.copy:
+            dest: "{{ github_release_test_cache_path }}"
+            content: >-
+              {{ {'etag': github_release_metadata.etag | default('W/"x"'),
+              'body': {}} | to_nice_json }}
+            mode: "0644"
+          changed_when: false
+          check_mode: false
+
+        - name: Resolve the release against the malformed cache
+          ansible.builtin.include_role:
+            name: github_release
+            tasks_from: resolve_asset.yml
+
+        - name: Validate the malformed cache was discarded before use
+          ansible.builtin.assert:
+            that:
+              - github_release_metadata.status in [200, 403, 429]
+              - >-
+                github_release_metadata.status != 200
+                or (github_release_api_available
+                and github_release_version | length > 0)
+      always:
+        - name: Remove the temporary cache test directory
+          ansible.builtin.file:
+            path: "{{ github_release_test_cache_directory.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false

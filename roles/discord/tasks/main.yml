@@ -19,8 +19,8 @@
   register: discord_download_response
   changed_when: false
   check_mode: false
-  retries: 3
-  delay: 10
+  retries: "{{ remote_fetch_retries }}"
+  delay: "{{ remote_fetch_retry_delay }}"
 
 - name: Validate latest stable Discord package location
   vars:

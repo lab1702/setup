@@ -161,6 +161,13 @@ ansible-playbook --check roles/amd64v3/tests/check_mode.yml
 ansible-playbook roles/amd64v3/tests/current_cpu.yml
 ```
 
+The GitHub release-metadata cache (ETag revalidation, corrupt-cache
+recovery) has its own regression test against the live GitHub API:
+
+```bash
+ansible-playbook roles/github_release/tests/resolve_asset_cache.yml
+```
+
 ## Optional: Setup Git Authentication
 
 Step A:

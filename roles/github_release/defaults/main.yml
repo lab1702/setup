@@ -27,6 +27,10 @@ github_release_cache_directory: /var/cache/ansible-github-releases
 github_release_cache_path: >-
   {{ github_release_cache_directory }}/{{
   github_release_repository | replace('/', '--') }}.json
+# The cache is root-owned by default; the tests override the owner to
+# exercise the cache flow without privileges.
+github_release_cache_owner: root
+github_release_cache_group: root
 github_release_base_url: >-
   https://github.com/{{ github_release_repository }}/releases/download
 github_release_install_directory: /usr/local/bin

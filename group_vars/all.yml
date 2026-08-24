@@ -10,3 +10,9 @@ linux_release_architecture_map:
   arm64: arm64
 workstation_architecture: >-
   {{ linux_release_architecture_map[ansible_facts["architecture"]] }}
+
+# Shared retry policy for remote fetches and refreshes: transient
+# connection errors and server-side failures are retried, permanent
+# failures stay loud. Tune the policy here, not per task.
+remote_fetch_retries: 3
+remote_fetch_retry_delay: 10
