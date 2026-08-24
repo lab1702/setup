@@ -112,13 +112,15 @@
   loop_control:
     label: "{{ item.item }}"
 
+# The statuses above were stat'ed with follow: false, so a symbolic link
+# is never reported as a regular file and the isreg test already excludes
+# one.
 - name: Determine whether installed release binaries are safe to execute
   vars:
     github_release_safe_binary_statuses: >-
       {{ github_release_installed_binary_statuses.results
       | selectattr('stat.isreg', 'defined')
       | selectattr('stat.isreg')
-      | rejectattr('stat.islnk')
       | selectattr('stat.uid', 'equalto', 0)
       | selectattr('stat.gid', 'equalto', 0)
       | selectattr('stat.mode', 'equalto', '0755') | list }}

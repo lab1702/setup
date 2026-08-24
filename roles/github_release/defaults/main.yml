@@ -19,6 +19,16 @@ github_release_binaries: []
 
 github_release_api_url: >-
   https://api.github.com/repos/{{ github_release_repository }}/releases/latest
+# Statuses the release-metadata request accepts instead of failing: a
+# fresh 200, a quota-free 304 revalidation, and the rate-limit responses
+# the caller's keep-installed fallback handles. The request's retry gate
+# consults this same list, so the accepted set cannot drift between the
+# status check and the retry decision.
+github_release_accepted_status_codes:
+  - 200
+  - 304
+  - 403
+  - 429
 
 # Conditional-request cache for the release metadata: GitHub 304 responses
 # do not count against the unauthenticated per-IP rate limit, so caching

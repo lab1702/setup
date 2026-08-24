@@ -23,11 +23,12 @@
   environment:
     DEBIAN_FRONTEND: noninteractive
     LC_ALL: C
-  register: vendor_repository_metadata_refresh
   changed_when: false
+  # No until: the default retry gate is already the command's own exit
+  # status, and APT::Update::Error-Mode=any makes any failed index a
+  # non-zero exit.
   retries: "{{ remote_fetch_retries }}"
   delay: "{{ remote_fetch_retry_delay }}"
-  until: vendor_repository_metadata_refresh.rc == 0
 
 - name: Record refreshed repository metadata
   ansible.builtin.set_fact:

@@ -91,18 +91,6 @@
         owner: "{{ repository_check_owner }}"
         group: "{{ repository_check_group }}"
         mode: "0644"
-      when: repository_check_key_source is defined
-      changed_when: false
-      check_mode: false
-
-    - name: Write verified signing key into isolated APT metadata
-      ansible.builtin.copy:
-        content: "{{ repository_check_key_content }}"
-        dest: "{{ repository_check_key_path }}"
-        owner: "{{ repository_check_owner }}"
-        group: "{{ repository_check_group }}"
-        mode: "0644"
-      when: repository_check_key_content is defined
       changed_when: false
       check_mode: false
 

@@ -128,7 +128,7 @@ prefix, and add its `bin` directory and `~/go/bin` (for Go-installed tools) to
 `PATH`. Existing matching entries in `.bashrc` and `.npmrc` are updated, and
 duplicate legacy entries are collapsed.
 
-## Running the test playbooks
+## Running the tests
 
 The repository tracks regression tests for the shared repository sandbox
 (one per keyring format: `chatgpt` covers a deb822 source with a binary
@@ -166,6 +166,15 @@ recovery) has its own regression test against the live GitHub API:
 
 ```bash
 ansible-playbook roles/github_release/tests/resolve_asset_cache.yml
+```
+
+The `r` role's CRAN source migration filter decides which entries are
+deleted from APT sources, so its parsing of both source formats is covered
+by unit tests. They read no APT configuration, need no network or root,
+and also run from the repository root:
+
+```bash
+python3 -m unittest discover --start-directory roles/r/tests
 ```
 
 ## Optional: Setup Git Authentication

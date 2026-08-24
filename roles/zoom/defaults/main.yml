@@ -1,4 +1,20 @@
 ---
+# Zoom's signing key is served from a versioned path, and this parameter
+# is an opaque token rather than a version this playbook can derive:
+#   - only one value is live at a time; every other value tried, older and
+#     newer alike, answers 404,
+#   - it does not track the installed client (6-7-5 is live while the
+#     current Zoom Workplace release is 7.1.x), and
+#   - dropping the parameter is not a fallback: the bare URL answers 200
+#     with an HTML page, so the key verification below would reject a
+#     response that looks successful.
+# So when Zoom retires this token the run fails on a 404 and the value has
+# to be re-read from the "version=" parameter of the pubkey URL in Zoom's
+# current Linux installation instructions (the download page renders that
+# link with JavaScript, so fetching its HTML does not reveal it). Confirm
+# the key still carries key_fingerprint before committing a new token; a
+# key rotation needs that fingerprint updated too, which is a deliberate
+# review point rather than something to follow automatically.
 zoom_repository_key_version: 6-7-5
 
 zoom_repository:

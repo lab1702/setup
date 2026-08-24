@@ -20,7 +20,12 @@
 # JSON (an intercepting proxy, for example); in both cases the caller
 # decides whether an already-installed release makes skipping this run
 # acceptable. The retries cover genuinely failed attempts (connection
-# errors and server-side failures) only.
+# errors and server-side failures) only; the until below stops retrying
+# deterministic responses, which repeat identically — an accepted status
+# and, among the failures, any remaining 3xx or 4xx outside the shared
+# transient list in group_vars. A 404 in particular is deterministic:
+# GitHub answers /releases/latest that way for a renamed or deleted
+# repository and for one whose releases are all prereleases or drafts.
 
 # The cache is a pure optimization, so its bookkeeping must never fail
 # the run: the directory ensure and the write below tolerate failure, and
@@ -111,7 +116,7 @@
   ansible.builtin.uri:
     url: "{{ github_release_api_url }}"
     return_content: true
-    status_code: [200, 304, 403, 429]
+    status_code: "{{ github_release_accepted_status_codes }}"
     headers:
       If-None-Match: "{{ github_release_cache.etag | default(omit) }}"
   register: github_release_metadata
@@ -119,6 +124,13 @@
   check_mode: false
   retries: "{{ remote_fetch_retries }}"
   delay: "{{ remote_fetch_retry_delay }}"
+  until: >-
+    github_release_metadata.status | default(-1)
+    in github_release_accepted_status_codes or
+    (github_release_metadata.status | default(-1) >= 300 and
+    github_release_metadata.status | default(-1) < 500 and
+    github_release_metadata.status | default(-1)
+    not in remote_fetch_transient_status_codes)
 
 # A 200 response whose body is not usable release JSON — unparseable, or
 # parseable without the release fields (an intercepting proxy's error

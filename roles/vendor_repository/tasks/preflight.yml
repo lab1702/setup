@@ -14,6 +14,7 @@
 - name: Inspect managed apt repository source
   ansible.builtin.stat:
     path: "{{ vendor_repository_sources_path }}"
+    follow: false
   register: vendor_repository_source_status
 
 - name: Preflight the managed repository state
@@ -27,6 +28,7 @@
         - name: Inspect legacy apt repository source
           ansible.builtin.stat:
             path: "{{ vendor_repository_legacy_sources_path }}"
+            follow: false
           register: vendor_repository_legacy_source_status
 
         - name: Validate legacy apt repository source path type
@@ -125,6 +127,7 @@
     - name: Inspect installed repository signing key file
       ansible.builtin.stat:
         path: "{{ vendor_repository_keyring_path }}"
+        follow: false
       register: vendor_repository_installed_key_status
 
     - name: Validate installed repository signing key path type

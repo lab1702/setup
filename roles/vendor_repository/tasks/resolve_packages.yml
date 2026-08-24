@@ -4,9 +4,9 @@
 # main.yml (it consumes its vars) and may run a second time after a
 # metadata refresh, so every fact it sets is recomputed from scratch.
 # The madison and dpkg-query probes batch every package into one
-# invocation, with rows matched back per package by name;
-# dpkg --validate-version takes exactly one version per call, so it
-# loops over the unique candidate versions.
+# invocation, with rows matched back per package by name; the dpkg
+# version subcommands take exactly one version (--validate-version) or
+# one pair (--compare-versions) per call, so those loop instead.
 # Runs against the system lists in check mode too: unknown packages
 # yield empty output with a zero exit status, and the ambiguity guard
 # below always vets these rows, whatever source resolves the versions.
@@ -28,6 +28,7 @@
       else vendor_repository_package_versions.stdout_lines }}
     vendor_repository_candidate_versions: {}
     vendor_repository_origin_rows: {}
+    vendor_repository_installed_versions: {}
     vendor_repository_installation_required: false
 
 # The version selection reads the resolution rows (the isolated sandbox
@@ -137,17 +138,73 @@
   failed_when: false
   check_mode: false
 
-# The expected row is built in a YAML double-quoted scalar because YAML
-# decodes \t there into the real tabs dpkg-query emits; inside a {{ }}
-# template this ansible-core keeps the backslash literally (only bare
-# when/assert expressions decode escapes) and the row would never match.
+# Rows are matched back per package with a regexp anchored on the
+# trailing field separator, so a package name that prefixes another one
+# (r-base beside r-base-core) cannot claim its row, and the fields are
+# split on whitespace so no tab literal is needed inside a template
+# (a {{ }} string literal keeps the backslash here — only bare
+# when/assert expressions decode escapes). A package that is not fully
+# installed records no version and needs installation regardless of how
+# versions would compare.
+- name: Select installed package versions
+  vars:
+    vendor_repository_installed_fields: >-
+      {{ (vendor_repository_installed_packages.stdout_lines | default([])
+      | select('match', '^' ~ (item | ansible.builtin.regex_escape) ~ '\s')
+      | first | default('')).split() + ['', '', ''] }}
+  ansible.builtin.set_fact:
+    vendor_repository_installed_versions: >-
+      {{ vendor_repository_installed_versions
+      | combine({item: vendor_repository_installed_fields[1]
+      if vendor_repository_installed_fields[2] == 'installed'
+      else ''}) }}
+  loop: "{{ vendor_repository_package_names }}"
+
+# Debian version equality is wider than string equality (epochs and
+# revision shorthands compare equal across different spellings), so the
+# comparison delegates to dpkg instead of Jinja's string operators,
+# matching the deb_package role.
+- name: Compare installed and candidate package versions
+  ansible.builtin.command:
+    argv:
+      - dpkg
+      - --compare-versions
+      - "{{ vendor_repository_installed_versions[item] }}"
+      - eq
+      - "{{ vendor_repository_candidate_versions[item] }}"
+  register: vendor_repository_version_comparisons
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ vendor_repository_package_names }}"
+  when: vendor_repository_installed_versions[item] | length > 0
+
+# dpkg exits 1 when the versions merely differ but 2 when it cannot
+# compare them at all; only a genuine difference may drive a reinstall.
+- name: Validate package version comparisons
+  ansible.builtin.assert:
+    that:
+      - item.rc in [0, 1]
+    fail_msg: >-
+      dpkg could not compare the installed and candidate versions of
+      {{ item.item }}: {{ item.stderr | default('') }}
+  loop: >-
+    {{ vendor_repository_version_comparisons.results | default([])
+    | selectattr('rc', 'defined') | list }}
+  loop_control:
+    label: "{{ item.item }}"
+
+# A skipped comparison is a package with no installed version, and a
+# non-zero exit is a package installed at a different version; either
+# way the repository's candidates have to be installed.
 - name: Determine whether packages need installation
   vars:
-    vendor_repository_expected_installed_row: "{{ item }}\t{{ vendor_repository_candidate_versions[item] }}\tinstalled"
+    vendor_repository_completed_comparisons: >-
+      {{ vendor_repository_version_comparisons.results | default([])
+      | selectattr('rc', 'defined') | list }}
   ansible.builtin.set_fact:
     vendor_repository_installation_required: >-
-      {{ vendor_repository_installation_required | bool or
-      vendor_repository_expected_installed_row
-      not in vendor_repository_installed_packages.stdout_lines
-      | default([]) }}
-  loop: "{{ vendor_repository_package_names }}"
+      {{ vendor_repository_completed_comparisons | length
+      != vendor_repository_package_names | length
+      or vendor_repository_completed_comparisons
+      | rejectattr('rc', 'equalto', 0) | list | length > 0 }}

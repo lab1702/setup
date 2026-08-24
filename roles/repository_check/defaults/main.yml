@@ -7,9 +7,8 @@
 #   repository_check_system_keyring_path  keyring path named in the source
 #   repository_check_keyring_filename     keyring filename in the sandbox
 #   repository_check_package_names        packages to resolve with madison
-# and exactly one of:
-#   repository_check_key_source (+ repository_check_key_remote_src)
-#   repository_check_key_content
+#   repository_check_key_source           verified signing key to copy in
+#   repository_check_key_remote_src       whether that key is a remote path
 # Results are registered as repository_check_package_versions.
 repository_check_owner: root
 repository_check_group: root
