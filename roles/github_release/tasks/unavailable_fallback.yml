@@ -18,7 +18,8 @@
       ') without uploaded assets, typically assets still uploading or a
       source-only release'
       if (github_release_metadata.json.tag_name | default('') | length > 0
-      and github_release_metadata.json.assets | default([]) == [])
+      and github_release_metadata.json.assets is defined
+      and github_release_metadata.json.assets == [])
       else 'an HTTP ' ~ github_release_metadata.status ~
       ' response without usable release metadata, typically an
       intercepting proxy or a network problem' }}

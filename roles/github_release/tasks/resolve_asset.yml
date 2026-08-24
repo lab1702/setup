@@ -26,8 +26,9 @@
 # the run: the directory ensure and the write below tolerate failure, and
 # an unusable cache only costs one unconditional API request. The
 # directory is created in check mode too — the write below runs for real
-# during dry runs and needs the directory to exist — and only once per
-# play, since the path is constant across the role's includes.
+# during dry runs and needs the directory to exist — and, once it has
+# succeeded, only once per play since the path is constant across the
+# role's includes.
 - name: Ensure release metadata cache directory exists
   ansible.builtin.file:
     path: "{{ github_release_cache_directory }}"
@@ -55,7 +56,7 @@
       != github_release_cache_directory
     - >-
       github_release_cache_directory_result.state | default('')
-      == 'directory'
+      in ['directory', 'link']
 
 - name: Inspect cached release metadata of {{ github_release_display_name }}
   ansible.builtin.stat:

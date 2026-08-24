@@ -242,13 +242,15 @@
 
         - name: Install packages while preserving the verified repository
           block:
-            # Pessimistic default (facts persist across role includes) so a
-            # failure before the dpkg comparison below still reasserts the
-            # key and source file in the always block; the comparison
-            # refines this once the installed state is known.
-            - name: Assume package work until the installed state is known
+            # Reset up front because facts persist across role includes:
+            # a failure before the resolution below must not leak a
+            # previous vendor's values into this vendor's always-block
+            # reasserts or refresh gate. resolve_packages.yml recomputes
+            # the installation fact from scratch, and the reasserts only
+            # matter after package work actually ran.
+            - name: Reset package facts before resolution
               ansible.builtin.set_fact:
-                vendor_repository_installation_required: true
+                vendor_repository_installation_required: false
                 vendor_repository_index_refreshed: false
             # The play-level cache refresh can predate this repository's
             # source file, and its lists can be cleared out of band while

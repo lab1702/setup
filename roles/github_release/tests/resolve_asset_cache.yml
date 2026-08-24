@@ -5,8 +5,10 @@
 # fresh 200), and corrupt or malformed caches are discarded without
 # failing the run. The cache directory and ownership come from the role
 # defaults, overridden here so the flow runs without privileges. A
-# rate-limited response at any step skips the remaining checks — via a
-# gated block rather than end_play, so the cleanup below always runs.
+# rate-limited first resolution skips the remaining checks — via a
+# gated block rather than end_play, so the cleanup below always runs —
+# and rate limiting that begins mid-test is tolerated by the later
+# asserts, which accept 403/429 alongside the expected statuses.
 - name: Exercise the GitHub release metadata cache
   hosts: localhost
   connection: local

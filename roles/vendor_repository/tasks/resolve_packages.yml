@@ -3,8 +3,10 @@
 # whether package work is needed. Runs inside the configure block of
 # main.yml (it consumes its vars) and may run a second time after a
 # metadata refresh, so every fact it sets is recomputed from scratch.
-# Each probe batches every package into one invocation; rows are
-# matched back per package by name.
+# The madison and dpkg-query probes batch every package into one
+# invocation, with rows matched back per package by name;
+# dpkg --validate-version takes exactly one version per call, so it
+# loops over the unique candidate versions.
 - name: Discover published package versions
   ansible.builtin.command:
     argv: >-
@@ -23,8 +25,12 @@
       if ansible_check_mode
       else vendor_repository_package_versions.stdout_lines }}
     vendor_repository_candidate_versions: {}
+    vendor_repository_origin_rows: {}
     vendor_repository_installation_required: false
 
+# The per-package origin rows recorded here are the single source both
+# for the version selection and for the ambiguity guard below, so the
+# two can never vet different row sets.
 - name: Select current package versions from the repository
   vars:
     vendor_repository_version_rows: >-
@@ -40,6 +46,9 @@
       | combine({item:
       (vendor_repository_candidate_row.split('|') + ['', ''])[1]
       | trim}) }}
+    vendor_repository_origin_rows: >-
+      {{ vendor_repository_origin_rows
+      | combine({item: vendor_repository_version_rows}) }}
   loop: "{{ vendor_repository_package_names }}"
 
 - name: Validate available package versions
@@ -61,6 +70,11 @@
   loop: >-
     {{ vendor_repository_candidate_versions.values()
     | unique | list }}
+  loop_control:
+    label: >-
+      {{ item }} ({{ vendor_repository_candidate_versions | dict2items
+      | selectattr('value', 'equalto', item)
+      | map(attribute='key') | join(', ') }})
   changed_when: false
   check_mode: false
 
@@ -75,10 +89,7 @@
       | ansible.builtin.regex_escape)
       ~ '\s*\|') | list }}
     vendor_repository_origin_version_rows: >-
-      {{ vendor_repository_package_version_rows
-      | select('match', '^\s*'
-      ~ (item | ansible.builtin.regex_escape)
-      ~ vendor_repository_origin_pattern_suffix) | list }}
+      {{ vendor_repository_origin_rows[item] }}
   ansible.builtin.assert:
     that:
       - vendor_repository_candidate_version_rows | length > 0
@@ -108,12 +119,13 @@
   failed_when: false
   check_mode: false
 
+# The expected row is built in a YAML double-quoted scalar because YAML
+# decodes \t there into the real tabs dpkg-query emits; inside a {{ }}
+# template this ansible-core keeps the backslash literally (only bare
+# when/assert expressions decode escapes) and the row would never match.
 - name: Determine whether packages need installation
   vars:
-    vendor_repository_expected_installed_row: >-
-      {{ item ~ '\t'
-      ~ vendor_repository_candidate_versions[item]
-      ~ '\tinstalled' }}
+    vendor_repository_expected_installed_row: "{{ item }}\t{{ vendor_repository_candidate_versions[item] }}\tinstalled"
   ansible.builtin.set_fact:
     vendor_repository_installation_required: >-
       {{ vendor_repository_installation_required | bool or
