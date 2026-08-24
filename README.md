@@ -130,24 +130,35 @@ duplicate legacy entries are collapsed.
 
 ## Running the test playbooks
 
-The repository tracks check-mode regression tests for the shared repository
-sandbox (one per keyring format: `chatgpt` covers a deb822 source with a
-binary `.gpg` keyring, `claude_desktop` covers a deb822 source with an
-armored `.asc` keyring) and for the `amd64v3` role. The tests source their
-repository URLs, fingerprints, and platform values from the role defaults, so
-they follow key rotations and support changes automatically. Run them from
-the repository root, where `ansible.cfg` resolves the roles:
+The repository tracks regression tests for the shared repository sandbox
+(one per keyring format: `chatgpt` covers a deb822 source with a binary
+`.gpg` keyring, `claude_desktop` covers a deb822 source with an armored
+`.asc` keyring) and for the `amd64v3` role (a full run in an isolated apt
+sandbox, a check-mode run, and a current-CPU detection run). The tests
+source their repository URLs, fingerprints, and platform values from the
+role defaults, so they follow key rotations and support changes
+automatically. Run them from the repository root, where `ansible.cfg`
+resolves the roles; the repository-metadata tests support `--check` and
+the check-mode test requires it:
 
 ```bash
-ansible-playbook roles/chatgpt/tests/check_mode_repository_metadata.yml
+ansible-playbook --check roles/chatgpt/tests/check_mode_repository_metadata.yml
 ```
 
 ```bash
-ansible-playbook roles/claude_desktop/tests/check_mode_repository_metadata.yml
+ansible-playbook --check roles/claude_desktop/tests/check_mode_repository_metadata.yml
 ```
 
 ```bash
 ansible-playbook roles/amd64v3/tests/main.yml
+```
+
+```bash
+ansible-playbook --check roles/amd64v3/tests/check_mode.yml
+```
+
+```bash
+ansible-playbook roles/amd64v3/tests/current_cpu.yml
 ```
 
 ## Optional: Setup Git Authentication

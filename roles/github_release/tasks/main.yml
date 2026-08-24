@@ -212,12 +212,16 @@
           else []) + ['-'] * (github_release_binaries | length))
           | map('list') | list | sort }}
       block:
+        # The retries cover transient connection errors and server-side
+        # failures, matching the metadata fetch that resolved the asset.
         - name: Download verified release archive
           ansible.builtin.get_url:
             url: "{{ github_release_asset.browser_download_url }}"
             dest: "{{ github_release_archive_path }}"
             checksum: "{{ github_release_asset.digest }}"
             mode: "0600"
+          retries: 3
+          delay: 10
 
         - name: Inspect release archive member names
           ansible.builtin.command:

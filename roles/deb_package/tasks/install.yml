@@ -6,11 +6,12 @@
       - >-
         deb_package_status_subject | default('')
         == deb_package_name ~ ':' ~ deb_package_architecture
+        ~ '=' ~ deb_package_version
       - not ansible_check_mode
     fail_msg: >-
       The {{ deb_package_display_name }} package installation needs an
       absolute .deb archive path, a preceding status.yml inclusion for
-      this same package, and a run outside check mode.
+      this same package and target version, and a run outside check mode.
 
 - name: Inspect downloaded package metadata for {{ deb_package_display_name }}
   ansible.builtin.command:

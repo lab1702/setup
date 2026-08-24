@@ -27,15 +27,17 @@
 #                 points' variables and this is the preferred entry point
 #   status.yml    inspects the installed package with one dpkg-query probe
 #                 of deb_package_name:deb_package_architecture, sets the
-#                 deb_package_install_required and
-#                 deb_package_repair_required facts, and reports pending
+#                 deb_package_install_required,
+#                 deb_package_repair_required, and
+#                 deb_package_status_subject facts, and reports pending
 #                 work in check mode
 #   install.yml   validates the downloaded archive metadata with dpkg-deb,
 #                 installs it when installation is required, repairs an
 #                 incomplete dpkg state through APT when repair is required,
 #                 and validates the repaired package state afterwards; it
-#                 requires the facts set by a preceding status.yml inclusion
-#                 and never runs in check mode
+#                 requires a preceding status.yml inclusion for the same
+#                 package, architecture, and target version (enforced via
+#                 deb_package_status_subject) and never runs in check mode
 #   download_install.yml
 #                 owns the whole fetch-and-install flow: creates a temporary
 #                 directory, downloads the archive (checksum-verified, or

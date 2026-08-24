@@ -32,6 +32,7 @@
             path: "{{ amd64v3_test_directory.path }}/parts"
             state: directory
             mode: "0755"
+          check_mode: false
 
         - name: Configure the isolated apt environment
           ansible.builtin.copy:
@@ -40,6 +41,7 @@
               Dir::Etc::Parts "{{ amd64v3_test_directory.path }}/parts";
               Dir::Etc::Main "/dev/null";
             mode: "0644"
+          check_mode: false
 
         - name: Configure AMD64v3 for the current CPU
           ansible.builtin.include_role:

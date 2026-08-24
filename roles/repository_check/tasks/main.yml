@@ -136,6 +136,10 @@
         LC_ALL: C
       changed_when: false
       check_mode: false
+      # The retries cover transient vendor endpoint failures, matching
+      # the real-mode refresh this sandbox update substitutes for.
+      retries: 3
+      delay: 10
 
     - name: Discover packages in isolated vendor metadata
       ansible.builtin.command:

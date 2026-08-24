@@ -13,16 +13,20 @@
 # Unauthenticated api.github.com requests share a small per-IP quota, so
 # each 200 response's ETag and body are cached and revalidated with
 # If-None-Match on the next run — 304 responses do not count against the
-# rate limit. A rate-limited response (403 or 429) is accepted immediately
-# without retrying — the quota resets on the order of an hour, far beyond
-# any useful retry delay; github_release_api_available becomes false and
-# the caller decides whether an already-installed release makes skipping
-# this run acceptable. The retries cover genuinely failed attempts
-# (connection errors and server-side failures) only.
+# rate limit. github_release_api_available becomes false for a
+# rate-limited response (403 or 429, accepted immediately without
+# retrying — the quota resets on the order of an hour, far beyond any
+# useful retry delay) and for a 200 whose body is not usable release
+# JSON (an intercepting proxy, for example); in both cases the caller
+# decides whether an already-installed release makes skipping this run
+# acceptable. The retries cover genuinely failed attempts (connection
+# errors and server-side failures) only.
 
 # The cache is a pure optimization, so its bookkeeping must never fail
 # the run: the directory ensure and the write below tolerate failure, and
-# an unusable cache only costs one unconditional API request.
+# an unusable cache only costs one unconditional API request. The
+# directory is created in check mode too — the write below runs for real
+# during dry runs and needs the directory to exist.
 - name: Ensure release metadata cache directory exists
   ansible.builtin.file:
     path: "{{ github_release_cache_directory }}"
@@ -32,6 +36,7 @@
     mode: "0755"
   changed_when: false
   failed_when: false
+  check_mode: false
 
 - name: Inspect cached release metadata of {{ github_release_display_name }}
   ansible.builtin.stat:
@@ -88,14 +93,18 @@
   retries: 3
   delay: 10
 
-# A 200 response whose body is not JSON is treated like an unavailable
-# API so the caller's keep-installed fallback applies instead of a
-# templating error.
+# A 200 response whose body is not usable release JSON — unparseable, or
+# parseable without the release fields (an intercepting proxy's error
+# object) — is treated like an unavailable API so the caller's
+# keep-installed fallback applies instead of a templating error. The
+# shape test mirrors the malformed-cache discard above, so only bodies
+# the loader would accept are ever treated as fresh metadata.
 - name: Determine release metadata availability
   ansible.builtin.set_fact:
     github_release_api_available: >-
       {{ (github_release_metadata.status == 200
-      and github_release_metadata.json is defined)
+      and github_release_metadata.json.tag_name | default('') | length > 0
+      and github_release_metadata.json.assets | default([]) | length > 0)
       or github_release_metadata.status == 304 }}
 
 # Written in check mode too: the API request above always runs, so dry
@@ -113,8 +122,8 @@
   failed_when: false
   check_mode: false
   when:
+    - github_release_api_available
     - github_release_metadata.status == 200
-    - github_release_metadata.json is defined
     - github_release_metadata.etag | default('') | length > 0
 
 - name: Select release metadata of {{ github_release_display_name }}

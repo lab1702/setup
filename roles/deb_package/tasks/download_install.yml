@@ -21,12 +21,16 @@
     deb_package_download_path: >-
       {{ deb_package_tempdir.path }}/{{ deb_package_filename }}
   block:
+    # The retries cover transient connection errors and server-side
+    # failures, matching the metadata fetches that precede the download.
     - name: Download verified package of {{ deb_package_display_name }}
       ansible.builtin.get_url:
         url: "{{ deb_package_url }}"
         dest: "{{ deb_package_download_path }}"
         checksum: "{{ deb_package_checksum }}"
         mode: "0600"
+      retries: 3
+      delay: 10
       when: deb_package_checksum | length > 0
 
     # Without a published checksum the download's authenticity relies on
@@ -39,6 +43,8 @@
         follow_redirects: none
         status_code: 200
         mode: "0600"
+      retries: 3
+      delay: 10
       when: deb_package_checksum | length == 0
 
     - name: Install or repair validated package of {{ deb_package_display_name }}

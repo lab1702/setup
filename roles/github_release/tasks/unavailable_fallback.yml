@@ -1,22 +1,35 @@
 ---
-# Shared policy for a rejected GitHub API request: an installed release
+# Shared policy for an unusable GitHub API response: an installed release
 # may be kept unchanged for one run, but a missing installation cannot be
 # bootstrapped without release metadata, so only that case fails. Callers
 # set github_release_installed to whether a safe installation is present.
+# Reached for rate-limited responses (403/429) and for responses without
+# usable release JSON, so the diagnostics name the actual condition.
+- name: Describe unusable release metadata of {{ github_release_display_name }}
+  ansible.builtin.set_fact:
+    github_release_unavailable_reason: >-
+      {{ 'HTTP ' ~ github_release_metadata.status
+      ~ ', typically rate limiting'
+      if github_release_metadata.status in [403, 429]
+      else 'an HTTP ' ~ github_release_metadata.status
+      ~ ' response without usable release metadata, typically an'
+      ~ ' intercepting proxy or a network problem' }}
+
 - name: Require installed release of {{ github_release_display_name }}
   ansible.builtin.assert:
     that:
       - github_release_installed
     fail_msg: >-
-      The GitHub API request for {{ github_release_repository }} was
-      rejected (HTTP {{ github_release_metadata.status }}, typically rate
-      limiting) and {{ github_release_display_name }} is not installed
-      yet, so the release cannot be resolved. Rerun the playbook later.
+      The GitHub API request for {{ github_release_repository }} returned
+      {{ github_release_unavailable_reason }} and
+      {{ github_release_display_name }} is not installed yet, so the
+      release cannot be resolved. Rerun the playbook once the GitHub API
+      is reachable again.
 
 - name: Skip release update check of {{ github_release_display_name }}
   ansible.builtin.debug:
     msg: >-
       Keeping the installed {{ github_release_display_name }} unchanged;
-      the GitHub API request was rejected (HTTP
-      {{ github_release_metadata.status }}, typically rate limiting), so
-      the latest-release check was skipped this run.
+      the GitHub API request returned
+      {{ github_release_unavailable_reason }}, so the latest-release
+      check was skipped this run.
