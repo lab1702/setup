@@ -110,27 +110,13 @@
       {{ github_release_safe_binary_statuses | length
       == github_release_binaries | length }}
 
-# A rate-limited GitHub API is a transient condition: keeping the installed
-# release for one run is fine, but a missing installation cannot be
-# bootstrapped without release metadata, so only that case fails.
-- name: Require installed binaries while release metadata is unavailable
-  ansible.builtin.assert:
-    that:
-      - github_release_installed_binaries_are_safe
-    fail_msg: >-
-      The GitHub API request for {{ github_release_repository }} was
-      rejected (HTTP {{ github_release_metadata.status }}, typically rate
-      limiting) and {{ github_release_display_name }} is not installed yet,
-      so the release cannot be resolved. Rerun the playbook later.
-  when: not github_release_api_available
-
-- name: Skip release update check while release metadata is unavailable
-  ansible.builtin.debug:
-    msg: >-
-      Keeping the installed {{ github_release_display_name }} binaries
-      unchanged; the GitHub API request was rejected (HTTP
-      {{ github_release_metadata.status }}, typically rate limiting), so
-      the latest-release check was skipped this run.
+# A rate-limited GitHub API is a transient condition; the shared fallback
+# keeps a safe installation and fails only when nothing is installed yet.
+- name: Handle unavailable release metadata for {{ github_release_display_name }}
+  ansible.builtin.include_tasks: unavailable_fallback.yml
+  vars:
+    github_release_installed: >-
+      {{ github_release_installed_binaries_are_safe }}
   when: not github_release_api_available
 
 - name: Inspect installed release versions as {{ github_release_probe_user }}
@@ -181,7 +167,7 @@
   ansible.builtin.debug:
     msg: >-
       {{ github_release_display_name }}
-      {{ github_release_metadata.json.tag_name | default('(unresolved)') }}
+      {{ github_release_data.tag_name | default('(unresolved)') }}
       would be installed in
       {{ github_release_install_directory }}
       ({{ github_release_binaries | join(', ') }}).

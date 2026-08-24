@@ -10,6 +10,8 @@
       {{ ansible_facts["distribution_version"] }} on
       {{ ansible_facts["architecture"] }}.
 
+# The retries cover transient connection errors and server-side failures,
+# so one CDN blip does not abort the remaining roles.
 - name: Get latest stable Posit RStudio Desktop release metadata
   ansible.builtin.uri:
     url: "{{ rstudio_downloads_metadata_url }}"
@@ -17,6 +19,8 @@
   register: rstudio_downloads_metadata
   changed_when: false
   check_mode: false
+  retries: 3
+  delay: 10
 
 - name: Select Posit RStudio Desktop package metadata
   vars:

@@ -71,6 +71,31 @@
   failed_when: false
   no_log: true
 
+# Tolerance above extends only to files that actually vanished: an
+# unreadable file that still exists could hide competing CRAN entries,
+# so it stops the run loudly instead of being skipped.
+- name: Reinspect unreadable APT repository source files
+  ansible.builtin.stat:
+    path: "{{ item.item }}"
+    follow: false
+  loop: >-
+    {{ r_repository_regular_source_contents.results
+    | rejectattr('content', 'defined') | list }}
+  loop_control:
+    label: "{{ item.item }}"
+  register: r_repository_unreadable_source_statuses
+
+- name: Refuse to skip existing unreadable APT repository source files
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists
+    fail_msg: >-
+      Unable to read {{ item.item }} while it still exists, so it cannot
+      be inspected for competing CRAN repository entries.
+  loop: "{{ r_repository_unreadable_source_statuses.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
 - name: Inspect symbolic-link APT repository source targets
   ansible.builtin.stat:
     path: "{{ item }}"
@@ -93,6 +118,31 @@
   register: r_repository_symlink_source_contents
   failed_when: false
   no_log: true
+
+# Same narrowing for the symlink reads: only a target that vanished or
+# stopped being a regular file may be skipped.
+- name: Reinspect unreadable symbolic-link APT repository sources
+  ansible.builtin.stat:
+    path: "{{ item.item }}"
+    follow: true
+  loop: >-
+    {{ r_repository_symlink_source_contents.results
+    | rejectattr('content', 'defined') | list }}
+  loop_control:
+    label: "{{ item.item }}"
+  register: r_repository_unreadable_symlink_statuses
+
+- name: Refuse to skip existing unreadable symbolic-link APT repository sources
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists or not item.stat.isreg | default(false)
+    fail_msg: >-
+      Unable to read {{ item.item }} while its target remains a regular
+      file, so it cannot be inspected for competing CRAN repository
+      entries.
+  loop: "{{ r_repository_unreadable_symlink_statuses.results }}"
+  loop_control:
+    label: "{{ item.item }}"
 
 - name: Initialize competing CRAN repository migration plans
   ansible.builtin.set_fact:
@@ -154,6 +204,8 @@
     | map(attribute='path') | list }}
   register: r_repository_migration_source_statuses
 
+# A migration target that vanished since planning carries no competing
+# entries any more, so it is skipped rather than failed.
 - name: Validate CRAN migration target safety
   ansible.builtin.assert:
     that:
@@ -168,6 +220,7 @@
       target must remain a root-owned regular file that is not writable by its
       group or by other users.
   loop: "{{ r_repository_migration_source_statuses.results }}"
+  when: item.stat.exists
 
 - name: Stop check mode when competing CRAN sources require migration
   ansible.builtin.fail:
@@ -193,7 +246,9 @@
     group: root
     mode: "{{ item.stat.mode }}"
     follow: false
-  loop: "{{ r_repository_migration_source_statuses.results }}"
+  loop: >-
+    {{ r_repository_migration_source_statuses.results
+    | selectattr('stat.exists') | list }}
   no_log: true
 
 - name: Record completed CRAN competing-source migration

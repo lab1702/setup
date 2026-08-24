@@ -27,8 +27,8 @@
 #                 points' variables and this is the preferred entry point
 #   status.yml    inspects the installed package with one dpkg-query probe
 #                 of deb_package_name:deb_package_architecture, sets the
-#                 deb_package_installed_version, deb_package_install_required,
-#                 and deb_package_repair_required facts, and reports pending
+#                 deb_package_install_required and
+#                 deb_package_repair_required facts, and reports pending
 #                 work in check mode
 #   install.yml   validates the downloaded archive metadata with dpkg-deb,
 #                 installs it when installation is required, repairs an

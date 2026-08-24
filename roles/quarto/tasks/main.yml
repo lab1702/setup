@@ -19,9 +19,8 @@
     github_release_repository: "{{ quarto_repository }}"
     github_release_asset_filename: "{{ quarto_package_filename }}"
 
-# A rate-limited GitHub API is a transient condition: keeping the installed
-# package for one run is fine, but a missing installation cannot be
-# bootstrapped without release metadata, so only that case fails.
+# A rate-limited GitHub API is a transient condition; the shared fallback
+# keeps an installed package and fails only when nothing is installed yet.
 - name: Inspect installed Quarto CLI package while metadata is unavailable
   ansible.builtin.command:
     argv:
@@ -37,25 +36,17 @@
   check_mode: false
   when: not github_release_api_available
 
-- name: Require installed Quarto CLI while release metadata is unavailable
-  ansible.builtin.assert:
-    that:
-      - quarto_installed_probe.rc == 0
-      - quarto_installed_probe.stdout_lines | last | default('') == 'installed'
-    fail_msg: >-
-      The GitHub API request for {{ quarto_repository }} was rejected (HTTP
-      {{ github_release_metadata.status }}, typically rate limiting) and
-      Quarto CLI is not installed yet, so the release cannot be resolved.
-      Rerun the playbook later.
-  when: not github_release_api_available
-
-- name: Skip Quarto CLI update check while release metadata is unavailable
-  ansible.builtin.debug:
-    msg: >-
-      Keeping the installed Quarto CLI package unchanged; the GitHub API
-      request was rejected (HTTP {{ github_release_metadata.status }},
-      typically rate limiting), so the latest-release check was skipped
-      this run.
+- name: Handle unavailable Quarto CLI release metadata
+  ansible.builtin.include_role:
+    name: github_release
+    tasks_from: unavailable_fallback.yml
+  vars:
+    github_release_display_name: Quarto CLI
+    github_release_repository: "{{ quarto_repository }}"
+    github_release_installed: >-
+      {{ quarto_installed_probe.rc == 0 and
+      quarto_installed_probe.stdout_lines | last | default('')
+      == 'installed' }}
   when: not github_release_api_available
 
 - name: Ensure latest Quarto CLI release

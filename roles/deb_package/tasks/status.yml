@@ -25,14 +25,16 @@
   failed_when: false
   check_mode: false
 
+- name: Parse installed package state for {{ deb_package_display_name }}
+  ansible.builtin.set_fact:
+    deb_package_installed_fields: >-
+      {{ deb_package_installed_query.stdout.split()
+      if deb_package_installed_query.rc | default(1) == 0 else [] }}
+
 # Debian version equality is wider than string equality (epochs and
 # revision shorthands compare equal across different spellings), so the
 # comparison delegates to dpkg instead of Jinja's string operators.
 - name: Compare installed and target versions for {{ deb_package_display_name }}
-  vars:
-    deb_package_installed_fields: >-
-      {{ deb_package_installed_query.stdout.split()
-      if deb_package_installed_query.rc | default(1) == 0 else [] }}
   ansible.builtin.command:
     argv:
       - dpkg
@@ -46,17 +48,23 @@
   check_mode: false
   when: deb_package_installed_fields | length == 2
 
+# dpkg exits 1 when the versions merely differ but 2 when it cannot
+# compare them at all; only a genuine difference may drive a reinstall.
+- name: Validate version comparison for {{ deb_package_display_name }}
+  ansible.builtin.assert:
+    that:
+      - deb_package_version_comparison.rc | default(1) in [0, 1]
+    fail_msg: >-
+      dpkg could not compare the installed and target versions of
+      {{ deb_package_display_name }}:
+      {{ deb_package_version_comparison.stderr | default('') }}
+
 - name: Determine required package action for {{ deb_package_display_name }}
   vars:
-    deb_package_installed_fields: >-
-      {{ deb_package_installed_query.stdout.split()
-      if deb_package_installed_query.rc | default(1) == 0 else [] }}
     deb_package_installed_status: >-
       {{ deb_package_installed_fields | last | default('')
       if deb_package_installed_fields | length == 2 else '' }}
   ansible.builtin.set_fact:
-    deb_package_installed_version: >-
-      {{ deb_package_installed_fields | first | default('') }}
     deb_package_install_required: >-
       {{ deb_package_version_comparison.rc | default(1) != 0 }}
     deb_package_repair_required: >-

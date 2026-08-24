@@ -255,6 +255,10 @@
             # this vendor's metadata, not every configured repository. A
             # transient vendor endpoint failure is retried before failing
             # loudly, so one CDN blip does not abort the remaining roles.
+            # The lock timeout is shorter than the repository-wide 120
+            # seconds used elsewhere because the retry ladder multiplies
+            # it: four 30-second waits plus the retry delays give a held
+            # apt lock about the same total grace as one 120-second wait.
             - name: Refresh repository package metadata
               ansible.builtin.command:
                 argv:
@@ -266,7 +270,7 @@
                   - -o
                   - APT::Get::List-Cleanup=0
                   - -o
-                  - DPkg::Lock::Timeout=120
+                  - DPkg::Lock::Timeout=30
                   - -o
                   - APT::Update::Error-Mode=any
                   - update

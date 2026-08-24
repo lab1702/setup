@@ -7,6 +7,8 @@
       Discord supports AMD64. Detected
       {{ ansible_facts["architecture"] }}.
 
+# The retries cover transient connection errors and server-side failures,
+# so one CDN blip does not abort the remaining roles.
 - name: Discover latest stable Discord package
   ansible.builtin.uri:
     url: "{{ discord_download_endpoint }}"
@@ -17,6 +19,8 @@
   register: discord_download_response
   changed_when: false
   check_mode: false
+  retries: 3
+  delay: 10
 
 - name: Validate latest stable Discord package location
   vars:

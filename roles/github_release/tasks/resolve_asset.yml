@@ -3,22 +3,68 @@
 # validates the asset named github_release_asset_filename. The filename may
 # reference github_release_version (the release tag without a leading "v"),
 # which is set before the asset is selected. Exports the
-# github_release_metadata, github_release_api_available,
-# github_release_version, and github_release_asset facts for the caller.
+# github_release_metadata and github_release_api_available facts for the
+# caller; the github_release_data, github_release_version, and
+# github_release_asset facts are exported only when
+# github_release_api_available is true and otherwise stay unset — or keep
+# stale values from an earlier include in the same play — so callers must
+# guard every use of them on github_release_api_available.
 #
-# Unauthenticated api.github.com requests share a small per-IP quota, so a
-# rate-limited response (403 or 429) is accepted immediately without
-# retrying — the quota resets on the order of an hour, far beyond any
-# useful retry delay; github_release_api_available becomes false and the
-# caller decides whether an already-installed release makes skipping this
-# run acceptable. The retries cover genuinely failed attempts (connection
-# errors and server-side failures) only.
+# Unauthenticated api.github.com requests share a small per-IP quota, so
+# each 200 response's ETag and body are cached and revalidated with
+# If-None-Match on the next run — 304 responses do not count against the
+# rate limit. A rate-limited response (403 or 429) is accepted immediately
+# without retrying — the quota resets on the order of an hour, far beyond
+# any useful retry delay; github_release_api_available becomes false and
+# the caller decides whether an already-installed release makes skipping
+# this run acceptable. The retries cover genuinely failed attempts
+# (connection errors and server-side failures) only.
+
+- name: Ensure release metadata cache directory exists
+  ansible.builtin.file:
+    path: "{{ github_release_cache_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Inspect cached release metadata of {{ github_release_display_name }}
+  ansible.builtin.stat:
+    path: "{{ github_release_cache_path }}"
+    follow: false
+  register: github_release_cache_status
+
+- name: Reset cached release metadata of {{ github_release_display_name }}
+  ansible.builtin.set_fact:
+    github_release_cache: {}
+
+- name: Load cached release metadata of {{ github_release_display_name }}
+  when:
+    - github_release_cache_status.stat.isreg | default(false)
+    - github_release_cache_status.stat.uid | default(-1) == 0
+  block:
+    - name: Read cached release metadata of {{ github_release_display_name }}
+      ansible.builtin.slurp:
+        src: "{{ github_release_cache_path }}"
+      register: github_release_cache_content
+
+    - name: Accept cached release metadata of {{ github_release_display_name }}
+      ansible.builtin.set_fact:
+        github_release_cache: >-
+          {{ github_release_cache_content.content | b64decode | from_json }}
+  rescue:
+    # A corrupt cache only costs one unconditional API request.
+    - name: Discard unreadable release metadata cache of {{ github_release_display_name }}
+      ansible.builtin.set_fact:
+        github_release_cache: {}
 
 - name: Get latest release of {{ github_release_display_name }}
   ansible.builtin.uri:
     url: "{{ github_release_api_url }}"
     return_content: true
-    status_code: [200, 403, 429]
+    status_code: [200, 304, 403, 429]
+    headers:
+      If-None-Match: "{{ github_release_cache.etag | default(omit) }}"
   register: github_release_metadata
   changed_when: false
   check_mode: false
@@ -28,18 +74,41 @@
 - name: Determine release metadata availability
   ansible.builtin.set_fact:
     github_release_api_available: >-
-      {{ github_release_metadata.status == 200 }}
+      {{ github_release_metadata.status in [200, 304] }}
+
+- name: Cache release metadata of {{ github_release_display_name }}
+  ansible.builtin.copy:
+    dest: "{{ github_release_cache_path }}"
+    content: >-
+      {{ {'etag': github_release_metadata.etag,
+      'body': github_release_metadata.json} | to_nice_json }}
+    owner: root
+    group: root
+    mode: "0644"
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - github_release_metadata.status == 200
+    - github_release_metadata.etag | default('') | length > 0
+
+- name: Select release metadata of {{ github_release_display_name }}
+  ansible.builtin.set_fact:
+    github_release_data: >-
+      {{ github_release_metadata.json
+      if github_release_metadata.status == 200
+      else github_release_cache.body | default({}) }}
+  when: github_release_api_available
 
 - name: Select release version of {{ github_release_display_name }}
   ansible.builtin.set_fact:
     github_release_version: >-
-      {{ github_release_metadata.json.tag_name | regex_replace('^v', '') }}
+      {{ github_release_data.tag_name | regex_replace('^v', '') }}
   when: github_release_api_available
 
 - name: Select release asset of {{ github_release_display_name }}
   ansible.builtin.set_fact:
     github_release_asset: >-
-      {{ github_release_metadata.json.assets
+      {{ github_release_data.assets
       | selectattr('name', 'equalto', github_release_asset_filename)
       | first | default({}) }}
   when: github_release_api_available
