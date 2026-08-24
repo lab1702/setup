@@ -7,9 +7,12 @@
 # github_release_version, and github_release_asset facts for the caller.
 #
 # Unauthenticated api.github.com requests share a small per-IP quota, so a
-# rate-limited response (403 or 429) is not treated as a task failure;
-# github_release_api_available becomes false and the caller decides whether
-# an already-installed release makes skipping this run acceptable.
+# rate-limited response (403 or 429) is accepted immediately without
+# retrying — the quota resets on the order of an hour, far beyond any
+# useful retry delay; github_release_api_available becomes false and the
+# caller decides whether an already-installed release makes skipping this
+# run acceptable. The retries cover genuinely failed attempts (connection
+# errors and server-side failures) only.
 
 - name: Get latest release of {{ github_release_display_name }}
   ansible.builtin.uri:
@@ -21,7 +24,6 @@
   check_mode: false
   retries: 3
   delay: 10
-  until: github_release_metadata.status in [200, 403, 429]
 
 - name: Determine release metadata availability
   ansible.builtin.set_fact:

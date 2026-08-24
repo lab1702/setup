@@ -58,21 +58,10 @@
       this run.
   when: not github_release_api_available
 
-- name: Determine required Quarto CLI package action
+- name: Ensure latest Quarto CLI release
   ansible.builtin.include_role:
     name: deb_package
-    tasks_from: status.yml
-  vars:
-    deb_package_display_name: Quarto CLI
-    deb_package_name: "{{ quarto_package_name }}"
-    deb_package_architecture: "{{ workstation_architecture }}"
-    deb_package_version: "{{ quarto_release_version }}"
-  when: github_release_api_available
-
-- name: Download, verify, and install required Quarto CLI release
-  ansible.builtin.include_role:
-    name: deb_package
-    tasks_from: download_install.yml
+    tasks_from: ensure.yml
   vars:
     deb_package_display_name: Quarto CLI
     deb_package_name: "{{ quarto_package_name }}"
@@ -81,7 +70,4 @@
     deb_package_url: "{{ github_release_asset.browser_download_url }}"
     deb_package_checksum: "{{ github_release_asset.digest }}"
     deb_package_filename: "{{ github_release_asset.name }}"
-  when:
-    - github_release_api_available
-    - deb_package_install_required or deb_package_repair_required
-    - not ansible_check_mode
+  when: github_release_api_available

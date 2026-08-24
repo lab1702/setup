@@ -2,5 +2,6 @@
 - name: Refuse direct use of the deb_package role
   ansible.builtin.fail:
     msg: >-
-      The deb_package role only provides the status.yml and install.yml
-      entry points; include it through include_role with tasks_from.
+      The deb_package role only provides the ensure.yml, status.yml,
+      install.yml, and download_install.yml entry points; include it
+      through include_role with tasks_from.

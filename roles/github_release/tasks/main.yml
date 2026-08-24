@@ -156,6 +156,9 @@
       {{ github_release_api_available
       and not github_release_installed_binaries_are_safe }}
 
+# Skipped probe attempts register per-item results without an rc key, so
+# only completed probes may drive the comparison; a rate-limited run keeps
+# the installation state from the initialization above.
 - name: Determine whether release installation is required
   vars:
     github_release_installed_version: >-
@@ -166,9 +169,11 @@
   ansible.builtin.set_fact:
     github_release_install_required: >-
       {{ github_release_install_required | bool or
-      item.rc | default(1) != 0 or
+      item.rc != 0 or
       github_release_installed_version != github_release_version }}
-  loop: "{{ github_release_installed_releases.results | default([]) }}"
+  loop: >-
+    {{ github_release_installed_releases.results | default([])
+    | selectattr('rc', 'defined') | list }}
   loop_control:
     label: "{{ item.item }}"
 
@@ -176,7 +181,8 @@
   ansible.builtin.debug:
     msg: >-
       {{ github_release_display_name }}
-      {{ github_release_metadata.json.tag_name }} would be installed in
+      {{ github_release_metadata.json.tag_name | default('(unresolved)') }}
+      would be installed in
       {{ github_release_install_directory }}
       ({{ github_release_binaries | join(', ') }}).
   changed_when: true
@@ -186,6 +192,7 @@
 
 - name: Download, verify, and install required release
   when:
+    - github_release_api_available
     - github_release_install_required
     - not ansible_check_mode
   block:

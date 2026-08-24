@@ -15,8 +15,10 @@ megasync_repository:
   key_fingerprint: B01C811880480C854C73EC7E1A664B787094A482
   key_url: "{{ megasync_repository_url }}Release.key"
   legacy_sources_path: /etc/apt/sources.list.d/megasync.list
-  # Match any MEGA distribution path, not only the current release's.
+  # Match any MEGA distribution path, not only the current release's:
+  # the repository has lived under /linux/repo/ and /linux/MEGAsync/, on
+  # mega.nz and the older mega.co.nz host, over plain and TLS HTTP.
   legacy_entry_regexp: >-
     {{ '(?i)^[ \t]*deb(?:-src)?[ \t]+'
-    ~ '(?:\[[^]]*\][ \t]+)?https://mega[.]nz/linux/repo/'
+    ~ '(?:\[[^]]*\][ \t]+)?https?://mega(?:[.]co)?[.]nz/linux/'
     ~ '[^ \t#]+(?:[ \t]+.*)?$' }}

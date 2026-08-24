@@ -59,11 +59,16 @@
       | selectattr('stat.islnk') | map(attribute='item') | list }}
   changed_when: false
 
+# A source file can vanish between discovery and this read (a package
+# upgrade or an administrator racing the run), so an unreadable file is
+# skipped instead of failing the play; the migration loops below only
+# consider results that carry content.
 - name: Read regular APT repository source files
   ansible.builtin.slurp:
     src: "{{ item }}"
   loop: "{{ r_repository_regular_source_paths }}"
   register: r_repository_regular_source_contents
+  failed_when: false
   no_log: true
 
 - name: Inspect symbolic-link APT repository source targets
@@ -86,6 +91,7 @@
     src: "{{ item }}"
   loop: "{{ r_repository_inspectable_symlink_source_paths }}"
   register: r_repository_symlink_source_contents
+  failed_when: false
   no_log: true
 
 - name: Initialize competing CRAN repository migration plans
@@ -110,7 +116,9 @@
       + [r_repository_planned_migration] }}
   changed_when: false
   loop: "{{ r_repository_regular_source_contents.results }}"
-  when: r_repository_candidate_migration.migration_required
+  when:
+    - item.content is defined
+    - r_repository_candidate_migration.migration_required
   no_log: true
 
 - name: Identify CRAN entries reached through symbolic links
@@ -123,7 +131,9 @@
       {{ r_repository_matching_symlink_sources + [item.item] }}
   changed_when: false
   loop: "{{ r_repository_symlink_source_contents.results }}"
-  when: r_repository_candidate_migration.migration_required
+  when:
+    - item.content is defined
+    - r_repository_candidate_migration.migration_required
   no_log: true
 
 - name: Refuse to migrate CRAN repository entries through symbolic links

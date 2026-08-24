@@ -1,0 +1,13 @@
+---
+# Single entry point pairing the status probe with the conditional
+# download-and-install flow, so every caller shares one install guard
+# instead of copying it. Requires the union of the status.yml and
+# download_install.yml variables.
+- name: Determine required package action for {{ deb_package_display_name }}
+  ansible.builtin.include_tasks: status.yml
+
+- name: Install required package of {{ deb_package_display_name }}
+  ansible.builtin.include_tasks: download_install.yml
+  when:
+    - deb_package_install_required or deb_package_repair_required
+    - not ansible_check_mode

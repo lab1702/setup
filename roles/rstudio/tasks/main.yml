@@ -44,20 +44,10 @@
       Desktop package URL, filename, version, and SHA-256 checksum for
       Ubuntu {{ rstudio_platform }}.
 
-- name: Determine required Posit RStudio Desktop package action
+- name: Ensure latest stable Posit RStudio Desktop release
   ansible.builtin.include_role:
     name: deb_package
-    tasks_from: status.yml
-  vars:
-    deb_package_display_name: Posit RStudio Desktop
-    deb_package_name: "{{ rstudio_package_name }}"
-    deb_package_architecture: "{{ rstudio_package_architecture }}"
-    deb_package_version: "{{ rstudio_release.version }}"
-
-- name: Install latest stable Posit RStudio Desktop release
-  ansible.builtin.include_role:
-    name: deb_package
-    tasks_from: download_install.yml
+    tasks_from: ensure.yml
   vars:
     deb_package_display_name: Posit RStudio Desktop
     deb_package_name: "{{ rstudio_package_name }}"
@@ -66,6 +56,3 @@
     deb_package_url: "{{ rstudio_release.url }}"
     deb_package_checksum: "sha256:{{ rstudio_release.sha256 }}"
     deb_package_filename: "{{ rstudio_release.basename }}"
-  when:
-    - deb_package_install_required or deb_package_repair_required
-    - not ansible_check_mode

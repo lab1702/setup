@@ -76,24 +76,14 @@
   changed_when: false
   check_mode: false
 
-- name: Determine required Discord package action
-  ansible.builtin.include_role:
-    name: deb_package
-    tasks_from: status.yml
-  vars:
-    deb_package_display_name: Discord
-    deb_package_name: "{{ discord_package_name }}"
-    deb_package_architecture: "{{ discord_package_architecture }}"
-    deb_package_version: "{{ discord_release.version }}"
-
 # Accepted tradeoff (README Item 8): Discord publishes no checksum,
 # signature, or signed repository for this DEB, so its authenticity relies
 # on TLS to the validated download host; the empty checksum makes the
 # shared download refuse redirects away from it.
-- name: Install latest stable Discord package
+- name: Ensure latest stable Discord package
   ansible.builtin.include_role:
     name: deb_package
-    tasks_from: download_install.yml
+    tasks_from: ensure.yml
   vars:
     deb_package_display_name: Discord
     deb_package_name: "{{ discord_package_name }}"
@@ -101,6 +91,3 @@
     deb_package_version: "{{ discord_release.version }}"
     deb_package_url: "{{ discord_release.url }}"
     deb_package_filename: "{{ discord_release.filename }}"
-  when:
-    - deb_package_install_required or deb_package_repair_required
-    - not ansible_check_mode

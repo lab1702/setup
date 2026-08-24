@@ -252,7 +252,9 @@
             # source file, and its lists can be cleared out of band while
             # the source file survives byte-identical, so this repository's
             # own index is always refreshed; the scoped update fetches only
-            # this vendor's metadata, not every configured repository.
+            # this vendor's metadata, not every configured repository. A
+            # transient vendor endpoint failure is retried before failing
+            # loudly, so one CDN blip does not abort the remaining roles.
             - name: Refresh repository package metadata
               ansible.builtin.command:
                 argv:
@@ -271,7 +273,11 @@
               environment:
                 DEBIAN_FRONTEND: noninteractive
                 LC_ALL: C
+              register: vendor_repository_metadata_refresh
               changed_when: false
+              retries: 3
+              delay: 10
+              until: vendor_repository_metadata_refresh.rc == 0
               when: not ansible_check_mode
 
             - name: Refresh isolated repository metadata in check mode
@@ -428,8 +434,10 @@
                   | map('join', '=') | join(', ') }} would be installed from
                   the verified {{ vendor_repository_display_name }}
                   repository.
-              changed_when: vendor_repository_installation_required
-              when: ansible_check_mode
+              changed_when: true
+              when:
+                - ansible_check_mode
+                - vendor_repository_installation_required
 
             - name: Install exact current package versions
               ansible.builtin.apt:

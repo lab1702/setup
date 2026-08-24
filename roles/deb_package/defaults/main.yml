@@ -21,6 +21,10 @@
 #
 # Entry points:
 #
+#   ensure.yml    pairs status.yml with download_install.yml behind the
+#                 shared install guard (installation or repair required,
+#                 and not check mode); callers pass the union of both entry
+#                 points' variables and this is the preferred entry point
 #   status.yml    inspects the installed package with one dpkg-query probe
 #                 of deb_package_name:deb_package_architecture, sets the
 #                 deb_package_installed_version, deb_package_install_required,

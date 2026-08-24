@@ -1,0 +1,37 @@
+---
+# Ensures a system group exists and user_name belongs to it. Minimal images
+# may lack the group entirely, and check mode cannot create it, so a getent
+# probe (fail_key: false) drives both the check-mode gate on the membership
+# change and the check-mode report. Include with:
+#
+#   system_group_name   name of the system group to manage
+- name: Inspect membership before managing group {{ system_group_name }}
+  ansible.builtin.getent:
+    database: group
+    key: "{{ system_group_name }}"
+    fail_key: false
+
+- name: Ensure managed system group {{ system_group_name }}
+  ansible.builtin.group:
+    name: "{{ system_group_name }}"
+    system: true
+    state: present
+
+- name: Add user to managed group {{ system_group_name }}
+  ansible.builtin.user:
+    name: "{{ user_name }}"
+    groups: "{{ system_group_name }}"
+    append: true
+  when: >-
+    not ansible_check_mode or
+    ansible_facts["getent_group"][system_group_name] is not none
+
+- name: Report pending check-mode membership of group {{ system_group_name }}
+  ansible.builtin.debug:
+    msg: >-
+      The user {{ user_name }} would be added to the
+      {{ system_group_name }} group.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - ansible_facts["getent_group"][system_group_name] is none
