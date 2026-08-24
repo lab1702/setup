@@ -19,9 +19,18 @@
 #   legacy_sources_path   one-line source file whose matching entries are removed
 #   legacy_entry_regexp   regexp selecting those entries (default: repository URL)
 #   legacy_keyring_path   superseded keyring file to remove
-#   supported_architectures   host architectures allowed to use the repository
+#   supported_architectures   Debian architectures (as normalized by
+#                             workstation_architecture) allowed to use the
+#                             repository (default: every mapped architecture)
 #   install_recommends        apt install_recommends setting (default: apt's)
 vendor_repository_spec: {}
+
+# Whether this host currently installs the vendor's packages. The
+# preflight entry point honors this: when false it only repairs or
+# quarantines a managed source file that already exists on disk (created
+# while the vendor was still managed here), and never touches apt
+# configuration the playbook does not own.
+vendor_repository_manage: true
 
 vendor_repository_display_name: "{{ vendor_repository_spec.display_name }}"
 vendor_repository_package_names: >-
@@ -49,7 +58,7 @@ vendor_repository_legacy_keyring_path: >-
   {{ vendor_repository_spec.legacy_keyring_path | default('') }}
 vendor_repository_supported_architectures: >-
   {{ vendor_repository_spec.supported_architectures
-  | default(vendor_repository_architecture_map.keys() | list) }}
+  | default(vendor_repository_architecture_map.values() | unique | list) }}
 vendor_repository_install_recommends: >-
   {{ vendor_repository_spec.install_recommends | default(omit) }}
 

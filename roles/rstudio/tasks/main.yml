@@ -3,16 +3,16 @@
   ansible.builtin.assert:
     that:
       - ansible_facts["distribution"] == "Ubuntu"
-      - ansible_facts["architecture"] in rstudio_supported_architectures
+      - workstation_architecture in rstudio_supported_architectures
     fail_msg: >-
       Posit's stable RStudio Desktop installer metadata supports Ubuntu on
       AMD64. Detected {{ ansible_facts["distribution"] }}
       {{ ansible_facts["distribution_version"] }} on
-      {{ ansible_facts["architecture"] }}.
+      {{ workstation_architecture }}.
 
 # The retries cover transient connection errors and server-side
 # failures; the until stops retrying deterministic statuses (any 2xx-4xx
-# other than the transient 408/429 repeats identically).
+# other than the shared transient list in group_vars repeats identically).
 - name: Get latest stable Posit RStudio Desktop release metadata
   ansible.builtin.uri:
     url: "{{ rstudio_downloads_metadata_url }}"
@@ -25,7 +25,8 @@
   until: >-
     rstudio_downloads_metadata.status | default(-1) >= 200 and
     rstudio_downloads_metadata.status | default(-1) < 500 and
-    rstudio_downloads_metadata.status | default(-1) not in [408, 429]
+    rstudio_downloads_metadata.status | default(-1)
+    not in remote_fetch_transient_status_codes
 
 # A 200 whose body is not the downloads schema (CDN error page, captive
 # portal, or a proxy's JSON error object) would otherwise surface as an

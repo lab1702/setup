@@ -80,22 +80,25 @@
   register: amd64v3_apt_configuration_removal
   when: not amd64v3_cpu_supported
 
+# Exported for the play: whether this run changed (or, in check mode,
+# would change) the apt architecture-variant opt-in, meaning the variant
+# indexes must be fetched before the next package selection. Consumers
+# outside this role read this fact, never the register names above.
+- name: Record AMD64v3 apt configuration change
+  ansible.builtin.set_fact:
+    amd64v3_apt_configuration_changed: >-
+      {{
+        amd64v3_apt_configuration.changed | default(false) or
+        amd64v3_apt_configuration_removal.changed | default(false)
+      }}
+
+# The enable and removal tasks above run under mutually exclusive
+# conditions and a skipped task registers changed: false, so the shared
+# fact already reflects exactly the branch that ran.
 - name: Record a pending AMD64v3 check-mode change
   ansible.builtin.set_fact:
     amd64v3_apt_configuration_change_pending: >-
-      {{
-        ansible_check_mode and
-        (
-          (
-            amd64v3_cpu_supported and
-            (amd64v3_apt_configuration.changed | default(false))
-          ) or
-          (
-            not amd64v3_cpu_supported and
-            (amd64v3_apt_configuration_removal.changed | default(false))
-          )
-        )
-      }}
+      {{ ansible_check_mode and amd64v3_apt_configuration_changed }}
 
 - name: Inspect apt fragments for competing architecture-variant directives
   ansible.builtin.find:

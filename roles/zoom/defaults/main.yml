@@ -18,5 +18,4 @@ zoom_repository:
   # Earlier playbook revisions managed a one-line source at this path.
   legacy_sources_path: /etc/apt/sources.list.d/zoom.list
   supported_architectures:
-    - x86_64
     - amd64

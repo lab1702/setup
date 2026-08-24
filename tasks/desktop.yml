@@ -12,36 +12,43 @@
   vars:
     system_group_name: kvm
 
+# Every application include is gated on the shared enablement facts
+# derived from workstation_applications in local.yml, never on locally
+# re-derived desktop or architecture conditions.
 - name: Install ChatGPT Desktop
   ansible.builtin.include_role:
     name: chatgpt
+  when: workstation_application_enabled['chatgpt']
 
 - name: Install Claude Desktop
   ansible.builtin.include_role:
     name: claude_desktop
+  when: workstation_application_enabled['claude_desktop']
 
 - name: Install Visual Studio Code
   ansible.builtin.include_role:
     name: vscode
+  when: workstation_application_enabled['vscode']
 
 - name: Install MEGA Desktop App
   ansible.builtin.include_role:
     name: megasync
+  when: workstation_application_enabled['megasync']
 
 - name: Install Discord
   ansible.builtin.include_role:
     name: discord
-  when: workstation_architecture == "amd64"
+  when: workstation_application_enabled['discord']
 
 - name: Install Posit RStudio Desktop
   ansible.builtin.include_role:
     name: rstudio
-  when: workstation_architecture == "amd64"
+  when: workstation_application_enabled['rstudio']
 
 - name: Install Zoom Workplace
   ansible.builtin.include_role:
     name: zoom
-  when: workstation_architecture == "amd64"
+  when: workstation_application_enabled['zoom']
 
 - name: Install LibreOffice
   ansible.builtin.apt:

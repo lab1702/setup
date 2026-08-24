@@ -18,14 +18,14 @@
       - >-
         ansible_facts["distribution_version"]
         in vendor_repository_supported_ubuntu_versions
-      - ansible_facts["architecture"] in vendor_repository_supported_architectures
+      - workstation_architecture in vendor_repository_supported_architectures
     fail_msg: >-
       {{ vendor_repository_display_name }} supports Ubuntu
       {{ vendor_repository_supported_ubuntu_versions | join(', ') }} on
       {{ vendor_repository_supported_architectures | join(', ') }}. Detected
       {{ ansible_facts["distribution"] }}
       {{ ansible_facts["distribution_version"] }} on
-      {{ ansible_facts["architecture"] }}.
+      {{ workstation_architecture }}.
 
 - name: Preflight apt repository for {{ vendor_repository_display_name }}
   ansible.builtin.include_tasks: preflight.yml
@@ -129,32 +129,18 @@
           check_mode: false
           when: vendor_repository_key_is_preverified
 
-        - name: Inspect repository signing key
-          ansible.builtin.command:
-            argv:
-              - gpg
-              - --batch
-              - --show-keys
-              - --with-colons
-              - "{{ vendor_repository_candidate_key_path }}"
-          register: vendor_repository_key
-          changed_when: false
-          check_mode: false
+        # The predicate is shared with the preflight via inspect_key.yml so
+        # the healthy-path decision and this assert cannot drift apart.
+        - name: Verify candidate repository signing key
+          ansible.builtin.include_tasks: inspect_key.yml
+          vars:
+            vendor_repository_inspect_key_path: >-
+              {{ vendor_repository_candidate_key_path }}
 
         - name: Verify repository signing key fingerprint
-          vars:
-            vendor_repository_public_key_records: >-
-              {{ vendor_repository_key.stdout_lines
-              | select('match', '^pub:') | list }}
-            vendor_repository_fingerprint_records: >-
-              {{ vendor_repository_key.stdout_lines
-              | select('match', '^fpr:') | list }}
           ansible.builtin.assert:
             that:
-              - vendor_repository_public_key_records | length == 1
-              - >-
-                (vendor_repository_fingerprint_records | first | default(''))
-                == vendor_repository_expected_fingerprint_record
+              - vendor_repository_inspected_key_matches
             fail_msg: >-
               The {{ vendor_repository_display_name }} signing key does not
               contain exactly one primary key with fingerprint
@@ -252,16 +238,17 @@
               ansible.builtin.set_fact:
                 vendor_repository_installation_required: false
                 vendor_repository_index_refreshed: false
+                vendor_repository_check_sandbox_used: false
             # The play-level cache refresh can predate this repository's
             # source file, and its lists can be cleared out of band while
             # the source file survives byte-identical — but both cases
             # are locally detectable: the copies above register a change
             # when the keyring or source drifted, and cleared lists leave
-            # the repository's expected index files missing. The two
-            # tasks below detect those signals so a converged repository
-            # costs no network round trip; whenever apt cannot even
-            # enumerate the expected index files, the refresh runs as
-            # the safe fallback.
+            # the repository's expected index files missing. The tasks
+            # below detect those signals so a converged repository costs
+            # no network round trip — in real mode and in check mode
+            # alike; whenever apt cannot even enumerate the expected
+            # index files, the refresh runs as the safe fallback.
             - name: Discover expected repository index files
               ansible.builtin.command:
                 argv:
@@ -279,7 +266,6 @@
               changed_when: false
               failed_when: false
               check_mode: false
-              when: not ansible_check_mode
 
             - name: Inspect expected repository index files
               ansible.builtin.stat:
@@ -291,21 +277,38 @@
                 if vendor_repository_index_targets.rc | default(1) == 0
                 else [] }}
               register: vendor_repository_index_statuses
-              when: not ansible_check_mode
 
-            - name: Refresh repository package metadata when required
-              ansible.builtin.include_tasks: index_refresh.yml
-              when:
-                - not ansible_check_mode
-                - >-
-                  vendor_repository_keyring_installation is changed or
+            - name: Determine whether the repository metadata is stale
+              ansible.builtin.set_fact:
+                vendor_repository_index_refresh_required: >-
+                  {{ vendor_repository_keyring_installation is changed or
                   vendor_repository_sources_configuration is changed or
                   vendor_repository_index_targets.rc | default(1) != 0 or
                   vendor_repository_index_targets.stdout_lines
                   | default([]) | length == 0 or
                   vendor_repository_index_statuses.results | default([])
-                  | rejectattr('stat.exists') | list | length > 0
+                  | rejectattr('stat.exists') | list | length > 0 }}
+              changed_when: false
 
+            - name: Refresh repository package metadata when required
+              ansible.builtin.include_tasks: index_refresh.yml
+              when:
+                - not ansible_check_mode
+                - vendor_repository_index_refresh_required
+
+            # Check mode cannot run the real refresh above, so a repository
+            # whose preflight did not prove it healthy — or whose metadata
+            # is stale — is resolved through an isolated sandbox instead.
+            # A verified, converged repository resolves from the system
+            # lists exactly as real mode does, with no network round trip.
+            - name: Determine check-mode resolution source
+              ansible.builtin.set_fact:
+                vendor_repository_check_sandbox_used: >-
+                  {{ ansible_check_mode and
+                  (vendor_repository_index_refresh_required or
+                  vendor_repository_sources_path
+                  not in (vendor_repository_healthy_paths | default([]))) }}
+              changed_when: false
 
             - name: Refresh isolated repository metadata in check mode
               ansible.builtin.include_role:
@@ -323,7 +326,7 @@
                 repository_check_source_filename: repository.sources
                 repository_check_package_names: >-
                   {{ vendor_repository_package_names }}
-              when: ansible_check_mode
+              when: vendor_repository_check_sandbox_used
 
             - name: Resolve current package versions
               ansible.builtin.include_tasks: resolve_packages.yml

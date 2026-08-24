@@ -1,0 +1,40 @@
+---
+# Inspects one signing key file with gpg and records whether it carries
+# exactly one primary key whose first fingerprint matches the pinned
+# specification. The preflight (quarantine decision) and the configure
+# phase (fatal assert) both consume this single predicate, so the two
+# verdicts can never drift apart.
+#
+# The caller sets vendor_repository_inspect_key_path and, when the
+# inspection may be skipped, resets vendor_repository_inspected_key_matches
+# first so a previous vendor's verdict cannot leak through role includes.
+
+- name: Inspect repository signing key
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --batch
+      - --show-keys
+      - --with-colons
+      - "{{ vendor_repository_inspect_key_path }}"
+  register: vendor_repository_inspected_key
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Record repository signing key verdict
+  vars:
+    vendor_repository_inspected_public_key_records: >-
+      {{ vendor_repository_inspected_key.stdout_lines | default([])
+      | select('match', '^pub:') | list }}
+    vendor_repository_inspected_fingerprint_records: >-
+      {{ vendor_repository_inspected_key.stdout_lines | default([])
+      | select('match', '^fpr:') | list }}
+  ansible.builtin.set_fact:
+    vendor_repository_inspected_key_matches: >-
+      {{ vendor_repository_inspected_key.rc == 0
+      and vendor_repository_inspected_public_key_records | length == 1
+      and (vendor_repository_inspected_fingerprint_records
+      | first | default(''))
+      == vendor_repository_expected_fingerprint_record }}
+  changed_when: false

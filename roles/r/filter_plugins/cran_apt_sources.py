@@ -73,8 +73,12 @@ def _is_matching_repository_uri(candidate: str, expected: str) -> bool:
     # mirror.example.edu/CRAN/bin/linux/ubuntu, ...), so an entry on any host
     # whose path ends with that layout also competes with the managed source.
     # The suffix's leading "/" keeps the comparison on full path-segment
-    # boundaries, and a root expected path never matches by suffix.
-    return expected_path != "/" and candidate_path.endswith(expected_path)
+    # boundaries. A root or single-segment expected path (for example the
+    # "/ubuntu" of Ubuntu's own archive URLs) identifies nothing
+    # CRAN-specific, so such a configured URL matches exactly or not at
+    # all: suffix-matching it would classify unrelated repositories --
+    # including the OS archive -- as competing and delete them.
+    return expected_path.count("/") >= 2 and candidate_path.endswith(expected_path)
 
 
 def _migrate_one_line_sources(content: str, repository_url: str) -> tuple[str, int]:

@@ -16,3 +16,9 @@ workstation_architecture: >-
 # failures stay loud. Tune the policy here, not per task.
 remote_fetch_retries: 3
 remote_fetch_retry_delay: 10
+# HTTP client statuses that repeat transiently rather than
+# deterministically; every retry loop's status classification consults
+# this one list so the transient set cannot drift between tasks.
+remote_fetch_transient_status_codes:
+  - 408
+  - 429

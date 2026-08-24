@@ -37,6 +37,42 @@
           ^\s*export\s+PATH=["']?\$HOME/go/bin:\$PATH["']?\s*$
         line: export PATH="$HOME/go/bin:$PATH"
         mode: "0644"
+    # Single source of truth for the optional applications this playbook
+    # gates: desktop_only applications need a graphical desktop, an
+    # architectures list restricts an application to those Debian
+    # architectures, and managed_repository marks the roles that manage a
+    # vendor apt repository and expose a repository_preflight entry point.
+    # tasks/desktop.yml and the preflight loop below both consume the
+    # workstation_application_enabled facts derived from this table, so
+    # install gates and preflight gates cannot drift apart.
+    workstation_applications:
+      chatgpt:
+        desktop_only: true
+        managed_repository: true
+      claude_desktop:
+        desktop_only: true
+        managed_repository: true
+      vscode:
+        desktop_only: true
+        managed_repository: true
+      megasync:
+        desktop_only: true
+        managed_repository: true
+      r:
+        desktop_only: false
+        managed_repository: true
+      zoom:
+        desktop_only: true
+        managed_repository: true
+        architectures: [amd64]
+      discord:
+        desktop_only: true
+        managed_repository: false
+        architectures: [amd64]
+      rstudio:
+        desktop_only: true
+        managed_repository: false
+        architectures: [amd64]
 
   pre_tasks:
     - name: Validate Ubuntu release and architecture support
@@ -99,28 +135,40 @@
         workstation_has_desktop: >-
           {{ graphical_desktop_sessions.matched | default(0) | int > 0 }}
 
-    # Each preflight is gated on the same conditions as its install role so
-    # hosts that never manage a vendor's repository (headless systems, or
-    # architectures the vendor does not publish for) do not have that
-    # vendor's apt sources rewritten, quarantined, or failed in check mode.
+    - name: Determine which optional applications this host installs
+      ansible.builtin.set_fact:
+        workstation_application_enabled: >-
+          {{ workstation_application_enabled | default({})
+          | combine({item.key:
+          (workstation_has_desktop or not item.value.desktop_only)
+          and workstation_architecture
+          in item.value.architectures
+          | default([workstation_architecture])}) }}
+      loop: "{{ workstation_applications | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    # Every vendor that manages an apt repository is preflighted, even on
+    # hosts where the application itself is gated off (headless systems,
+    # architectures the vendor does not publish for): a source file this
+    # playbook created while the gate still held must stay repairable and
+    # quarantinable before the play-wide APT refresh, or a broken orphaned
+    # vendor repository would fail every later run at the base-package
+    # cache refresh. The preflight itself skips hosts that neither install
+    # the application nor have its managed source file on disk, so a
+    # vendor repository this playbook never configured is left alone.
     - name: Preflight vendor apt repositories before package refreshes
       ansible.builtin.include_role:
-        name: "{{ item.role }}"
+        name: "{{ item.key }}"
         tasks_from: repository_preflight
-      loop:
-        - { role: chatgpt, desktop_only: true }
-        - { role: claude_desktop, desktop_only: true }
-        - { role: megasync, desktop_only: true }
-        - { role: r, desktop_only: false }
-        - { role: zoom, desktop_only: true, architectures: [amd64] }
-        - { role: vscode, desktop_only: true }
+      vars:
+        vendor_repository_manage: >-
+          {{ workstation_application_enabled[item.key] }}
+      loop: >-
+        {{ workstation_applications | dict2items
+        | selectattr('value.managed_repository') | list }}
       loop_control:
-        label: "{{ item.role }}"
-      when:
-        - not item.desktop_only or workstation_has_desktop
-        - >-
-          workstation_architecture
-          in item.architectures | default([workstation_architecture])
+        label: "{{ item.key }}"
 
   tasks:
     - name: Install base packages
@@ -129,11 +177,10 @@
         # A refresh from within the last hour is current enough for the base
         # packages, except when the amd64v3 role just changed the apt
         # architecture-variant opt-in and the variant indexes must be fetched
-        # before any package selection.
+        # before any package selection. The role exports this fact
+        # unconditionally, so no default() may mask a renamed fact here.
         cache_valid_time: >-
-          {{ 0 if (amd64v3_apt_configuration.changed | default(false)
-          or amd64v3_apt_configuration_removal.changed | default(false))
-          else 3600 }}
+          {{ 0 if amd64v3_apt_configuration_changed else 3600 }}
         lock_timeout: 120
         name:
           # Build tools and utilities
@@ -257,6 +304,7 @@
     - name: Install latest R release from CRAN
       ansible.builtin.include_role:
         name: r
+      when: workstation_application_enabled['r']
 
     - name: Ensure user-local NPM prefix directory exists
       ansible.builtin.file:

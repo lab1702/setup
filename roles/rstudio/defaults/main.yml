@@ -7,6 +7,7 @@ rstudio_downloads_metadata_url: https://cdn.posit.co/downloads.json
 # play-level platform assertion already gates the supported releases.
 rstudio_platform: "{{ ansible_facts['distribution_release'] }}"
 
+# Debian architecture names as normalized by workstation_architecture in
+# group_vars/all.yml, where raw machine spellings are registered once.
 rstudio_supported_architectures:
-  - x86_64
   - amd64

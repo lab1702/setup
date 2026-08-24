@@ -164,11 +164,13 @@
 # the installation state from the initialization above.
 - name: Determine whether release installation is required
   vars:
+    # An out-of-range token index yields undefined, which default('')
+    # absorbs before the prefix strip.
+    github_release_probe_tokens: >-
+      {{ (item.stdout | default('')).split() }}
     github_release_installed_version: >-
-      {{ ((item.stdout | default('')).split() + ['']
-      * (github_release_version_token_index | int
-      + 1))[github_release_version_token_index | int]
-      | regex_replace('^v', '') }}
+      {{ github_release_probe_tokens[github_release_version_token_index | int]
+      | default('') | regex_replace('^v', '') }}
   ansible.builtin.set_fact:
     github_release_install_required: >-
       {{ github_release_install_required | bool or
@@ -462,11 +464,13 @@
 
         - name: Validate downloaded release versions
           vars:
+            # An out-of-range token index yields undefined, which
+            # default('') absorbs before the prefix strip.
+            github_release_probe_tokens: >-
+              {{ (item.stdout | default('')).split() }}
             github_release_downloaded_version: >-
-              {{ (item.stdout.split() + ['']
-              * (github_release_version_token_index | int
-              + 1))[github_release_version_token_index | int]
-              | regex_replace('^v', '') }}
+              {{ github_release_probe_tokens[github_release_version_token_index | int]
+              | default('') | regex_replace('^v', '') }}
           ansible.builtin.assert:
             that:
               - github_release_downloaded_version == github_release_version

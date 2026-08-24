@@ -2,14 +2,14 @@
 - name: Validate Discord platform support
   ansible.builtin.assert:
     that:
-      - ansible_facts["architecture"] in discord_supported_architectures
+      - workstation_architecture in discord_supported_architectures
     fail_msg: >-
       Discord supports AMD64. Detected
-      {{ ansible_facts["architecture"] }}.
+      {{ workstation_architecture }}.
 
 # The retries cover transient connection errors and server-side
 # failures; the until stops retrying deterministic statuses (any 2xx-4xx
-# other than the transient 408/429 repeats identically).
+# other than the shared transient list in group_vars repeats identically).
 - name: Discover latest stable Discord package
   ansible.builtin.uri:
     url: "{{ discord_download_endpoint }}"
@@ -25,7 +25,8 @@
   until: >-
     discord_download_response.status | default(-1) >= 200 and
     discord_download_response.status | default(-1) < 500 and
-    discord_download_response.status | default(-1) not in [408, 429]
+    discord_download_response.status | default(-1)
+    not in remote_fetch_transient_status_codes
 
 - name: Validate latest stable Discord package location
   vars:

@@ -7,6 +7,9 @@
 # invocation, with rows matched back per package by name;
 # dpkg --validate-version takes exactly one version per call, so it
 # loops over the unique candidate versions.
+# Runs against the system lists in check mode too: unknown packages
+# yield empty output with a zero exit status, and the ambiguity guard
+# below always vets these rows, whatever source resolves the versions.
 - name: Discover published package versions
   ansible.builtin.command:
     argv: >-
@@ -16,21 +19,23 @@
   register: vendor_repository_package_versions
   changed_when: false
   check_mode: false
-  when: not ansible_check_mode
 
 - name: Select package version output
   ansible.builtin.set_fact:
     vendor_repository_package_version_rows: >-
       {{ repository_check_package_versions.stdout_lines
-      if ansible_check_mode
+      if vendor_repository_check_sandbox_used | default(false)
       else vendor_repository_package_versions.stdout_lines }}
     vendor_repository_candidate_versions: {}
     vendor_repository_origin_rows: {}
     vendor_repository_installation_required: false
 
-# The per-package origin rows recorded here are the single source both
-# for the version selection and for the ambiguity guard below, so the
-# two can never vet different row sets.
+# The version selection reads the resolution rows (the isolated sandbox
+# in check mode before the repository converges, the system lists
+# otherwise), while the per-package origin rows recorded for the
+# ambiguity guard below always come from the system lists: competing
+# sources are only visible there, and the sandbox by construction
+# contains this vendor's repository alone.
 - name: Select current package versions from the repository
   vars:
     vendor_repository_version_rows: >-
@@ -40,6 +45,11 @@
       ~ vendor_repository_origin_pattern_suffix) | list }}
     vendor_repository_candidate_row: >-
       {{ vendor_repository_version_rows | first | default('') }}
+    vendor_repository_system_origin_rows: >-
+      {{ vendor_repository_package_versions.stdout_lines
+      | select('match', '^\s*'
+      ~ (item | ansible.builtin.regex_escape)
+      ~ vendor_repository_origin_pattern_suffix) | list }}
   ansible.builtin.set_fact:
     vendor_repository_candidate_versions: >-
       {{ vendor_repository_candidate_versions
@@ -48,7 +58,7 @@
       | trim}) }}
     vendor_repository_origin_rows: >-
       {{ vendor_repository_origin_rows
-      | combine({item: vendor_repository_version_rows}) }}
+      | combine({item: vendor_repository_system_origin_rows}) }}
   loop: "{{ vendor_repository_package_names }}"
 
 - name: Validate available package versions
@@ -78,10 +88,17 @@
   changed_when: false
   check_mode: false
 
+# Vets the system lists in every mode, so a dry run fails on the same
+# competing source a real run would refuse. Before the repository
+# converges in check mode, the sandbox supplies the candidate version
+# while the system lists may not know the package at all, so only the
+# foreign-origin comparison applies there; once the repository is
+# converged (and always in real mode) the candidate must also be
+# visible in the system lists.
 - name: Reject ambiguous package origins
   vars:
     vendor_repository_candidate_version_rows: >-
-      {{ vendor_repository_package_version_rows
+      {{ vendor_repository_package_versions.stdout_lines
       | select('match', '^\s*'
       ~ (item | ansible.builtin.regex_escape)
       ~ '\s*\|\s*'
@@ -92,7 +109,9 @@
       {{ vendor_repository_origin_rows[item] }}
   ansible.builtin.assert:
     that:
-      - vendor_repository_candidate_version_rows | length > 0
+      - >-
+        vendor_repository_check_sandbox_used | default(false) or
+        vendor_repository_candidate_version_rows | length > 0
       - >-
         vendor_repository_candidate_version_rows
         | difference(vendor_repository_origin_version_rows)
@@ -106,7 +125,6 @@
       | difference(vendor_repository_origin_version_rows)
       | join('; ') }} and rerun the playbook.
   loop: "{{ vendor_repository_package_names }}"
-  when: not ansible_check_mode
 
 - name: Inspect installed package versions
   ansible.builtin.command:

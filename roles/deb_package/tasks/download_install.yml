@@ -40,8 +40,8 @@
     # TLS to the validated host, so redirects away from it are refused.
     # The until stops retrying deterministic responses: a redirect or
     # most client errors repeat identically, while connection errors,
-    # server-side failures, and the transient client statuses 408 and
-    # 429 remain worth retrying.
+    # server-side failures, and the shared transient client statuses
+    # from group_vars remain worth retrying.
     - name: Download redirect-free package of {{ deb_package_display_name }}
       ansible.builtin.uri:
         url: "{{ deb_package_url }}"
@@ -58,7 +58,7 @@
         (deb_package_download_response.status | default(-1) >= 300 and
         deb_package_download_response.status | default(-1) < 500 and
         deb_package_download_response.status | default(-1)
-        not in [408, 429])
+        not in remote_fetch_transient_status_codes)
       when: deb_package_checksum | length == 0
 
     - name: Install or repair validated package of {{ deb_package_display_name }}
