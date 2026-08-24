@@ -3,15 +3,14 @@
 # whether package work is needed. Runs inside the configure block of
 # main.yml (it consumes its vars) and may run a second time after a
 # metadata refresh, so every fact it sets is recomputed from scratch.
+# Each probe batches every package into one invocation; rows are
+# matched back per package by name.
 - name: Discover published package versions
   ansible.builtin.command:
-    argv:
-      - apt-cache
-      - madison
-      - "{{ item }}"
+    argv: >-
+      {{ ['apt-cache', 'madison'] + vendor_repository_package_names }}
   environment:
     LC_ALL: C
-  loop: "{{ vendor_repository_package_names }}"
   register: vendor_repository_package_versions
   changed_when: false
   check_mode: false
@@ -19,31 +18,29 @@
 
 - name: Select package version output
   ansible.builtin.set_fact:
-    vendor_repository_package_version_results: >-
-      {{ repository_check_package_versions.results
+    vendor_repository_package_version_rows: >-
+      {{ repository_check_package_versions.stdout_lines
       if ansible_check_mode
-      else vendor_repository_package_versions.results }}
+      else vendor_repository_package_versions.stdout_lines }}
     vendor_repository_candidate_versions: {}
     vendor_repository_installation_required: false
 
 - name: Select current package versions from the repository
   vars:
     vendor_repository_version_rows: >-
-      {{ item.stdout_lines
+      {{ vendor_repository_package_version_rows
       | select('match', '^\s*'
-      ~ (item.item | ansible.builtin.regex_escape)
+      ~ (item | ansible.builtin.regex_escape)
       ~ vendor_repository_origin_pattern_suffix) | list }}
     vendor_repository_candidate_row: >-
       {{ vendor_repository_version_rows | first | default('') }}
   ansible.builtin.set_fact:
     vendor_repository_candidate_versions: >-
       {{ vendor_repository_candidate_versions
-      | combine({item.item:
+      | combine({item:
       (vendor_repository_candidate_row.split('|') + ['', ''])[1]
       | trim}) }}
-  loop: "{{ vendor_repository_package_version_results }}"
-  loop_control:
-    label: "{{ item.item }}"
+  loop: "{{ vendor_repository_package_names }}"
 
 - name: Validate available package versions
   ansible.builtin.assert:
@@ -60,29 +57,27 @@
     argv:
       - dpkg
       - --validate-version
-      - "{{ vendor_repository_candidate_versions[item] }}"
-  loop: "{{ vendor_repository_package_names }}"
-  loop_control:
-    label: >-
-      {{ item }}={{ vendor_repository_candidate_versions[item]
-      | default('') }}
+      - "{{ item }}"
+  loop: >-
+    {{ vendor_repository_candidate_versions.values()
+    | unique | list }}
   changed_when: false
   check_mode: false
 
 - name: Reject ambiguous package origins
   vars:
     vendor_repository_candidate_version_rows: >-
-      {{ item.stdout_lines
+      {{ vendor_repository_package_version_rows
       | select('match', '^\s*'
-      ~ (item.item | ansible.builtin.regex_escape)
+      ~ (item | ansible.builtin.regex_escape)
       ~ '\s*\|\s*'
-      ~ (vendor_repository_candidate_versions[item.item]
+      ~ (vendor_repository_candidate_versions[item]
       | ansible.builtin.regex_escape)
       ~ '\s*\|') | list }}
     vendor_repository_origin_version_rows: >-
-      {{ item.stdout_lines
+      {{ vendor_repository_package_version_rows
       | select('match', '^\s*'
-      ~ (item.item | ansible.builtin.regex_escape)
+      ~ (item | ansible.builtin.regex_escape)
       ~ vendor_repository_origin_pattern_suffix) | list }}
   ansible.builtin.assert:
     that:
@@ -92,26 +87,22 @@
         | difference(vendor_repository_origin_version_rows)
         | length == 0
     fail_msg: >-
-      Refusing to install {{ item.item }}={{
-      vendor_repository_candidate_versions[item.item] }} because
+      Refusing to install {{ item }}={{
+      vendor_repository_candidate_versions[item] }} because
       the same version is available from a repository other than
       {{ vendor_repository_display_name }}. Remove the competing
       apt source providing {{ vendor_repository_candidate_version_rows
       | difference(vendor_repository_origin_version_rows)
       | join('; ') }} and rerun the playbook.
-  loop: "{{ vendor_repository_package_version_results }}"
-  loop_control:
-    label: "{{ item.item }}"
+  loop: "{{ vendor_repository_package_names }}"
   when: not ansible_check_mode
 
 - name: Inspect installed package versions
   ansible.builtin.command:
-    argv:
-      - dpkg-query
-      - --show
-      - --showformat=${Version}\t${db:Status-Status}\n
-      - "{{ item }}"
-  loop: "{{ vendor_repository_package_names }}"
+    argv: >-
+      {{ ['dpkg-query', '--show',
+      '--showformat=${Package}\t${Version}\t${db:Status-Status}\n']
+      + vendor_repository_package_names }}
   register: vendor_repository_installed_packages
   changed_when: false
   failed_when: false
@@ -119,15 +110,14 @@
 
 - name: Determine whether packages need installation
   vars:
-    vendor_repository_expected_installed_state: >-
-      {{ vendor_repository_candidate_versions[item.item]
+    vendor_repository_expected_installed_row: >-
+      {{ item ~ '\t'
+      ~ vendor_repository_candidate_versions[item]
       ~ '\tinstalled' }}
   ansible.builtin.set_fact:
     vendor_repository_installation_required: >-
       {{ vendor_repository_installation_required | bool or
-      item.rc != 0 or
-      vendor_repository_expected_installed_state
-      not in item.stdout_lines }}
-  loop: "{{ vendor_repository_installed_packages.results }}"
-  loop_control:
-    label: "{{ item.item }}"
+      vendor_repository_expected_installed_row
+      not in vendor_repository_installed_packages.stdout_lines
+      | default([]) }}
+  loop: "{{ vendor_repository_package_names }}"

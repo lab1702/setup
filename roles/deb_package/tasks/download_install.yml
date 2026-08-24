@@ -39,8 +39,9 @@
     # Without a published checksum the download's authenticity relies on
     # TLS to the validated host, so redirects away from it are refused.
     # The until stops retrying deterministic responses: a redirect or
-    # client error repeats identically, while connection errors and
-    # server-side failures remain worth retrying.
+    # most client errors repeat identically, while connection errors,
+    # server-side failures, and the transient client statuses 408 and
+    # 429 remain worth retrying.
     - name: Download redirect-free package of {{ deb_package_display_name }}
       ansible.builtin.uri:
         url: "{{ deb_package_url }}"
@@ -55,7 +56,9 @@
       until: >-
         deb_package_download_response.status | default(-1) == 200 or
         (deb_package_download_response.status | default(-1) >= 300 and
-        deb_package_download_response.status | default(-1) < 500)
+        deb_package_download_response.status | default(-1) < 500 and
+        deb_package_download_response.status | default(-1)
+        not in [408, 429])
       when: deb_package_checksum | length == 0
 
     - name: Install or repair validated package of {{ deb_package_display_name }}

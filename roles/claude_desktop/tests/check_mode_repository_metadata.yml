@@ -49,6 +49,8 @@
             mode: "0600"
           changed_when: false
           check_mode: false
+          retries: "{{ remote_fetch_retries }}"
+          delay: "{{ remote_fetch_retry_delay }}"
 
         - name: Inspect Claude signing key
           ansible.builtin.command:
@@ -92,8 +94,7 @@
           ansible.builtin.assert:
             that:
               - >-
-                (repository_check_package_versions.results
-                | first).stdout
+                repository_check_package_versions.stdout
                 is search(vendor_repository_package_names | first)
       always:
         - name: Remove temporary Claude test key directory

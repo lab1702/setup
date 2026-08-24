@@ -78,6 +78,5 @@
           ansible.builtin.assert:
             that:
               - >-
-                (repository_check_package_versions.results
-                | first).stdout
+                repository_check_package_versions.stdout
                 is search(vendor_repository_package_names | first)

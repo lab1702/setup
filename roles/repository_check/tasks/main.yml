@@ -16,6 +16,25 @@
       {{ repository_check_path }}/{{ repository_check_keyring_filename }}
     repository_check_source_path: >-
       {{ repository_check_path }}/{{ repository_check_source_filename }}
+    # Shared by the update and madison invocations below, which must
+    # scope to exactly the same isolated apt state.
+    repository_check_apt_scope_options:
+      - -o
+      - Dir::Etc::sourcelist={{ repository_check_source_path }}
+      - -o
+      - Dir::Etc::sourceparts={{ repository_check_path }}/sourceparts
+      - -o
+      - Dir::Etc::preferences=/dev/null
+      - -o
+      - >-
+        Dir::Etc::preferencesparts={{
+        repository_check_path }}/preferencesparts
+      - -o
+      - Dir::State::lists={{ repository_check_path }}/lists
+      - -o
+      - Dir::Cache::pkgcache=
+      - -o
+      - Dir::Cache::srcpkgcache=
   block:
     - name: Make isolated APT metadata readable by APT helpers
       ansible.builtin.file:
@@ -102,35 +121,14 @@
 
     - name: Refresh isolated authenticated vendor metadata
       ansible.builtin.command:
-        argv:
-          - /usr/bin/apt-get
-          - -o
-          - Dir::Etc::sourcelist={{ repository_check_source_path }}
-          - -o
-          - >-
-            Dir::Etc::sourceparts={{
-            repository_check_path }}/sourceparts
-          - -o
-          - Dir::Etc::preferences=/dev/null
-          - -o
-          - >-
-            Dir::Etc::preferencesparts={{
-            repository_check_path }}/preferencesparts
-          - -o
-          - Dir::State::lists={{ repository_check_path }}/lists
-          - -o
-          - Dir::Cache::pkgcache=
-          - -o
-          - Dir::Cache::srcpkgcache=
-          - -o
-          - APT::Sandbox::User={{ repository_check_apt_user }}
-          - -o
-          - Debug::NoLocking=true
-          - -o
-          - Acquire::Languages=none
-          - -o
-          - APT::Update::Error-Mode=any
-          - update
+        argv: >-
+          {{ ['/usr/bin/apt-get']
+          + repository_check_apt_scope_options
+          + ['-o', 'APT::Sandbox::User=' ~ repository_check_apt_user,
+          '-o', 'Debug::NoLocking=true',
+          '-o', 'Acquire::Languages=none',
+          '-o', 'APT::Update::Error-Mode=any',
+          'update'] }}
       environment:
         APT_CONFIG: "{{ repository_check_config_path }}"
         LC_ALL: C
@@ -141,34 +139,17 @@
       retries: "{{ remote_fetch_retries }}"
       delay: "{{ remote_fetch_retry_delay }}"
 
+    # Batched like the production resolution: one madison call for all
+    # packages, matched back per package by name downstream.
     - name: Discover packages in isolated vendor metadata
       ansible.builtin.command:
-        argv:
-          - /usr/bin/apt-cache
-          - -o
-          - Dir::Etc::sourcelist={{ repository_check_source_path }}
-          - -o
-          - >-
-            Dir::Etc::sourceparts={{
-            repository_check_path }}/sourceparts
-          - -o
-          - Dir::Etc::preferences=/dev/null
-          - -o
-          - >-
-            Dir::Etc::preferencesparts={{
-            repository_check_path }}/preferencesparts
-          - -o
-          - Dir::State::lists={{ repository_check_path }}/lists
-          - -o
-          - Dir::Cache::pkgcache=
-          - -o
-          - Dir::Cache::srcpkgcache=
-          - madison
-          - "{{ item }}"
+        argv: >-
+          {{ ['/usr/bin/apt-cache']
+          + repository_check_apt_scope_options
+          + ['madison'] + repository_check_package_names }}
       environment:
         APT_CONFIG: "{{ repository_check_config_path }}"
         LC_ALL: C
-      loop: "{{ repository_check_package_names }}"
       register: repository_check_package_versions
       changed_when: false
       check_mode: false

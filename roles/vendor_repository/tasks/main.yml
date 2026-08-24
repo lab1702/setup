@@ -90,7 +90,7 @@
           in (vendor_repository_healthy_paths | default([])) }}
       block:
         # The retries cover transient connection errors and server-side
-        # failures, matching the repository metadata refresh below.
+        # failures, following the shared retry policy in group_vars.
         - name: Download repository signing key
           ansible.builtin.get_url:
             url: "{{ vendor_repository_key_url }}"
@@ -304,14 +304,6 @@
                   vendor_repository_index_statuses.results | default([])
                   | rejectattr('stat.exists') | list | length > 0
 
-            # Staleness is not locally detectable, so remember whether
-            # the resolution below starts from freshly fetched metadata;
-            # pending package work found on possibly stale metadata is
-            # re-resolved after a refresh before anything is installed.
-            - name: Record whether resolution starts from fresh metadata
-              ansible.builtin.set_fact:
-                vendor_repository_resolved_after_refresh: >-
-                  {{ vendor_repository_index_refreshed }}
 
             - name: Refresh isolated repository metadata in check mode
               ansible.builtin.include_role:
@@ -338,20 +330,15 @@
             # pool between the last index refresh and this run. When
             # package work is pending but the resolution above used
             # possibly stale metadata, refresh once and resolve again so
-            # the installation acts on current metadata.
-            - name: Refresh repository package metadata before pending work
-              ansible.builtin.include_tasks: index_refresh.yml
+            # the installation acts on current metadata. Staleness is
+            # not locally detectable, so the gate is simply whether this
+            # vendor's index was fetched during this run.
+            - name: Refresh and resolve again before pending work
+              ansible.builtin.include_tasks: refresh_and_resolve.yml
               when:
                 - not ansible_check_mode
                 - vendor_repository_installation_required | bool
-                - not vendor_repository_resolved_after_refresh | bool
-
-            - name: Resolve packages from refreshed repository metadata
-              ansible.builtin.include_tasks: resolve_packages.yml
-              when:
-                - not ansible_check_mode
-                - vendor_repository_installation_required | bool
-                - not vendor_repository_resolved_after_refresh | bool
+                - not vendor_repository_index_refreshed
 
             - name: Report pending installation of {{ vendor_repository_display_name }}
               ansible.builtin.debug:

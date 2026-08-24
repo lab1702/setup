@@ -1,0 +1,9 @@
+---
+# Refreshes this vendor's index and re-resolves the pending package
+# work against the fresh metadata, so an install never acts on a
+# candidate the vendor may have withdrawn since the last refresh.
+- name: Refresh repository package metadata for pending work
+  ansible.builtin.include_tasks: index_refresh.yml
+
+- name: Resolve packages from refreshed repository metadata
+  ansible.builtin.include_tasks: resolve_packages.yml
