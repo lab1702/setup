@@ -3,21 +3,36 @@
 # validates the asset named github_release_asset_filename. The filename may
 # reference github_release_version (the release tag without a leading "v"),
 # which is set before the asset is selected. Exports the
-# github_release_metadata, github_release_version, and github_release_asset
-# facts for the caller.
+# github_release_metadata, github_release_api_available,
+# github_release_version, and github_release_asset facts for the caller.
+#
+# Unauthenticated api.github.com requests share a small per-IP quota, so a
+# rate-limited response (403 or 429) is not treated as a task failure;
+# github_release_api_available becomes false and the caller decides whether
+# an already-installed release makes skipping this run acceptable.
 
 - name: Get latest release of {{ github_release_display_name }}
   ansible.builtin.uri:
     url: "{{ github_release_api_url }}"
     return_content: true
+    status_code: [200, 403, 429]
   register: github_release_metadata
   changed_when: false
   check_mode: false
+  retries: 3
+  delay: 10
+  until: github_release_metadata.status in [200, 403, 429]
+
+- name: Determine release metadata availability
+  ansible.builtin.set_fact:
+    github_release_api_available: >-
+      {{ github_release_metadata.status == 200 }}
 
 - name: Select release version of {{ github_release_display_name }}
   ansible.builtin.set_fact:
     github_release_version: >-
       {{ github_release_metadata.json.tag_name | regex_replace('^v', '') }}
+  when: github_release_api_available
 
 - name: Select release asset of {{ github_release_display_name }}
   ansible.builtin.set_fact:
@@ -25,6 +40,7 @@
       {{ github_release_metadata.json.assets
       | selectattr('name', 'equalto', github_release_asset_filename)
       | first | default({}) }}
+  when: github_release_api_available
 
 - name: Validate release asset of {{ github_release_display_name }}
   ansible.builtin.assert:
@@ -41,3 +57,4 @@
       The latest {{ github_release_display_name }} release did not contain
       the expected uploaded asset with a trusted GitHub download URL and
       SHA-256 digest.
+  when: github_release_api_available

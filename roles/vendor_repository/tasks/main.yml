@@ -42,9 +42,13 @@
     mode: "0755"
   register: vendor_repository_keyring_directory_creation
 
-# In check mode the keyring directory was not really created, so the
-# configure block below cannot run; report what a real run would do so the
-# dry run does not silently under-report the repository and packages.
+- name: Determine whether the signing key can be verified
+  ansible.builtin.include_tasks: gpg_probe.yml
+
+# In check mode the keyring directory was not really created and gpg was
+# not really installed by the base packages, so the configure block below
+# cannot run in either case; report what a real run would do so the dry
+# run does not silently under-report the repository and packages.
 - name: Report pending repository configuration in check mode
   ansible.builtin.debug:
     msg: >-
@@ -55,12 +59,16 @@
   changed_when: true
   when:
     - ansible_check_mode
-    - vendor_repository_keyring_directory_creation.changed
+    - >-
+      vendor_repository_keyring_directory_creation.changed or
+      not vendor_repository_gpg_available
 
 - name: Configure signed repository and install packages
-  when: >-
-    not ansible_check_mode or
-    not vendor_repository_keyring_directory_creation.changed
+  when:
+    - >-
+      not ansible_check_mode or
+      not vendor_repository_keyring_directory_creation.changed
+    - not ansible_check_mode or vendor_repository_gpg_available
   block:
     - name: Create temporary directory for repository signing key
       ansible.builtin.tempfile:
@@ -233,21 +241,38 @@
 
         - name: Install packages while preserving the verified repository
           block:
-            # When neither the keyring nor the source file changed in this
-            # run, the play-level cache refresh already indexed this
-            # repository, so a full apt-get update per vendor would be
-            # wasted work.
+            # Pessimistic default (facts persist across role includes) so a
+            # failure before the dpkg comparison below still reasserts the
+            # key and source file in the always block; the comparison
+            # refines this once the installed state is known.
+            - name: Assume package work until the installed state is known
+              ansible.builtin.set_fact:
+                vendor_repository_installation_required: true
+            # The play-level cache refresh can predate this repository's
+            # source file, and its lists can be cleared out of band while
+            # the source file survives byte-identical, so this repository's
+            # own index is always refreshed; the scoped update fetches only
+            # this vendor's metadata, not every configured repository.
             - name: Refresh repository package metadata
-              ansible.builtin.apt:
-                update_cache: true
-                cache_valid_time: 0
-                lock_timeout: 120
+              ansible.builtin.command:
+                argv:
+                  - /usr/bin/apt-get
+                  - -o
+                  - Dir::Etc::sourcelist={{ vendor_repository_sources_path }}
+                  - -o
+                  - Dir::Etc::sourceparts=/dev/null
+                  - -o
+                  - APT::Get::List-Cleanup=0
+                  - -o
+                  - DPkg::Lock::Timeout=120
+                  - -o
+                  - APT::Update::Error-Mode=any
+                  - update
+              environment:
+                DEBIAN_FRONTEND: noninteractive
+                LC_ALL: C
               changed_when: false
-              when:
-                - not ansible_check_mode
-                - >-
-                  vendor_repository_keyring_installation.changed or
-                  vendor_repository_sources_configuration.changed
+              when: not ansible_check_mode
 
             - name: Refresh isolated repository metadata in check mode
               ansible.builtin.include_role:
@@ -415,8 +440,14 @@
                 allow_downgrade: true
                 install_recommends: "{{ vendor_repository_install_recommends }}"
                 lock_timeout: 120
-              when: not ansible_check_mode
+              when:
+                - not ansible_check_mode
+                - vendor_repository_installation_required
           always:
+            # The reasserts only undo a package postinst rewrite, which
+            # cannot have happened when no package work ran; they default to
+            # running because a failure earlier in the block leaves the
+            # installation fact unset.
             - name: Reassert verified repository signing key after package task
               ansible.builtin.copy:
                 src: "{{ vendor_repository_verified_key_path }}"
@@ -425,7 +456,9 @@
                 owner: root
                 group: root
                 mode: "0644"
-              when: not ansible_check_mode
+              when:
+                - not ansible_check_mode
+                - vendor_repository_installation_required | default(true)
 
             - name: Reassert managed apt repository after package task
               ansible.builtin.copy:
@@ -434,7 +467,9 @@
                 owner: root
                 group: root
                 mode: "0644"
-              when: not ansible_check_mode
+              when:
+                - not ansible_check_mode
+                - vendor_repository_installation_required | default(true)
       always:
         - name: Remove temporary repository signing key directory
           ansible.builtin.file:

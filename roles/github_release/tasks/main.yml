@@ -110,6 +110,29 @@
       {{ github_release_safe_binary_statuses | length
       == github_release_binaries | length }}
 
+# A rate-limited GitHub API is a transient condition: keeping the installed
+# release for one run is fine, but a missing installation cannot be
+# bootstrapped without release metadata, so only that case fails.
+- name: Require installed binaries while release metadata is unavailable
+  ansible.builtin.assert:
+    that:
+      - github_release_installed_binaries_are_safe
+    fail_msg: >-
+      The GitHub API request for {{ github_release_repository }} was
+      rejected (HTTP {{ github_release_metadata.status }}, typically rate
+      limiting) and {{ github_release_display_name }} is not installed yet,
+      so the release cannot be resolved. Rerun the playbook later.
+  when: not github_release_api_available
+
+- name: Skip release update check while release metadata is unavailable
+  ansible.builtin.debug:
+    msg: >-
+      Keeping the installed {{ github_release_display_name }} binaries
+      unchanged; the GitHub API request was rejected (HTTP
+      {{ github_release_metadata.status }}, typically rate limiting), so
+      the latest-release check was skipped this run.
+  when: not github_release_api_available
+
 - name: Inspect installed release versions as {{ github_release_probe_user }}
   ansible.builtin.command:
     argv:
@@ -123,12 +146,15 @@
   changed_when: false
   failed_when: false
   check_mode: false
-  when: github_release_installed_binaries_are_safe
+  when:
+    - github_release_api_available
+    - github_release_installed_binaries_are_safe
 
 - name: Initialize required release installation state
   ansible.builtin.set_fact:
     github_release_install_required: >-
-      {{ not github_release_installed_binaries_are_safe }}
+      {{ github_release_api_available
+      and not github_release_installed_binaries_are_safe }}
 
 - name: Determine whether release installation is required
   vars:

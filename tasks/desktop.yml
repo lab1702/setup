@@ -1,5 +1,9 @@
 ---
-# Desktop-specific packages
+# Desktop-specific packages, included from local.yml. This file lives in
+# tasks/ rather than the repository root because ansible-pull without -p
+# auto-selects a root-level <hostname>.yml before local.yml, so a host
+# named "desktop" would otherwise execute this bare task list as its
+# playbook and fail.
 
 # Mirrors the docker-group handling in local.yml: minimal images without
 # udev's static kvm group must not abort the desktop phase.

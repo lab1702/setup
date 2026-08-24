@@ -19,6 +19,45 @@
     github_release_repository: "{{ quarto_repository }}"
     github_release_asset_filename: "{{ quarto_package_filename }}"
 
+# A rate-limited GitHub API is a transient condition: keeping the installed
+# package for one run is fine, but a missing installation cannot be
+# bootstrapped without release metadata, so only that case fails.
+- name: Inspect installed Quarto CLI package while metadata is unavailable
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - --show
+      - '--showformat=${db:Status-Status}\n'
+      - "{{ quarto_package_name }}:{{ workstation_architecture }}"
+  environment:
+    LC_ALL: C
+  register: quarto_installed_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: not github_release_api_available
+
+- name: Require installed Quarto CLI while release metadata is unavailable
+  ansible.builtin.assert:
+    that:
+      - quarto_installed_probe.rc == 0
+      - quarto_installed_probe.stdout_lines | last | default('') == 'installed'
+    fail_msg: >-
+      The GitHub API request for {{ quarto_repository }} was rejected (HTTP
+      {{ github_release_metadata.status }}, typically rate limiting) and
+      Quarto CLI is not installed yet, so the release cannot be resolved.
+      Rerun the playbook later.
+  when: not github_release_api_available
+
+- name: Skip Quarto CLI update check while release metadata is unavailable
+  ansible.builtin.debug:
+    msg: >-
+      Keeping the installed Quarto CLI package unchanged; the GitHub API
+      request was rejected (HTTP {{ github_release_metadata.status }},
+      typically rate limiting), so the latest-release check was skipped
+      this run.
+  when: not github_release_api_available
+
 - name: Determine required Quarto CLI package action
   ansible.builtin.include_role:
     name: deb_package
@@ -28,43 +67,21 @@
     deb_package_name: "{{ quarto_package_name }}"
     deb_package_architecture: "{{ workstation_architecture }}"
     deb_package_version: "{{ quarto_release_version }}"
+  when: github_release_api_available
 
 - name: Download, verify, and install required Quarto CLI release
+  ansible.builtin.include_role:
+    name: deb_package
+    tasks_from: download_install.yml
+  vars:
+    deb_package_display_name: Quarto CLI
+    deb_package_name: "{{ quarto_package_name }}"
+    deb_package_architecture: "{{ workstation_architecture }}"
+    deb_package_version: "{{ quarto_release_version }}"
+    deb_package_url: "{{ github_release_asset.browser_download_url }}"
+    deb_package_checksum: "{{ github_release_asset.digest }}"
+    deb_package_filename: "{{ github_release_asset.name }}"
   when:
+    - github_release_api_available
     - deb_package_install_required or deb_package_repair_required
     - not ansible_check_mode
-  block:
-    - name: Create temporary directory for Quarto CLI package
-      ansible.builtin.tempfile:
-        state: directory
-        suffix: .quarto
-      register: quarto_package_tempdir
-      changed_when: false
-
-    - name: Download and install verified Quarto CLI package
-      block:
-        - name: Download verified Quarto CLI package
-          ansible.builtin.get_url:
-            url: "{{ github_release_asset.browser_download_url }}"
-            dest: >-
-              {{ quarto_package_tempdir.path }}/{{ github_release_asset.name }}
-            checksum: "{{ github_release_asset.digest }}"
-            mode: "0600"
-
-        - name: Install or repair verified Quarto CLI package
-          ansible.builtin.include_role:
-            name: deb_package
-            tasks_from: install.yml
-          vars:
-            deb_package_display_name: Quarto CLI
-            deb_package_name: "{{ quarto_package_name }}"
-            deb_package_architecture: "{{ workstation_architecture }}"
-            deb_package_version: "{{ quarto_release_version }}"
-            deb_package_path: >-
-              {{ quarto_package_tempdir.path }}/{{ github_release_asset.name }}
-      always:
-        - name: Remove temporary Quarto CLI package directory
-          ansible.builtin.file:
-            path: "{{ quarto_package_tempdir.path }}"
-            state: absent
-          changed_when: false

@@ -86,47 +86,21 @@
     deb_package_architecture: "{{ discord_package_architecture }}"
     deb_package_version: "{{ discord_release.version }}"
 
+# Accepted tradeoff (README Item 8): Discord publishes no checksum,
+# signature, or signed repository for this DEB, so its authenticity relies
+# on TLS to the validated download host; the empty checksum makes the
+# shared download refuse redirects away from it.
 - name: Install latest stable Discord package
+  ansible.builtin.include_role:
+    name: deb_package
+    tasks_from: download_install.yml
+  vars:
+    deb_package_display_name: Discord
+    deb_package_name: "{{ discord_package_name }}"
+    deb_package_architecture: "{{ discord_package_architecture }}"
+    deb_package_version: "{{ discord_release.version }}"
+    deb_package_url: "{{ discord_release.url }}"
+    deb_package_filename: "{{ discord_release.filename }}"
   when:
     - deb_package_install_required or deb_package_repair_required
     - not ansible_check_mode
-  block:
-    - name: Create temporary directory for Discord package
-      ansible.builtin.tempfile:
-        state: directory
-        suffix: .discord
-      register: discord_package_tempdir
-      changed_when: false
-
-    - name: Download, validate, and install Discord package
-      block:
-        # Accepted tradeoff (README Item 8): Discord publishes no checksum,
-        # signature, or signed repository for this DEB, so its authenticity
-        # relies on TLS to the validated download host.
-        - name: Download Discord package
-          ansible.builtin.uri:
-            url: "{{ discord_release.url }}"
-            dest: >-
-              {{ discord_package_tempdir.path }}/{{ discord_release.filename }}
-            method: GET
-            follow_redirects: none
-            status_code: 200
-            mode: "0600"
-
-        - name: Install or repair validated Discord package
-          ansible.builtin.include_role:
-            name: deb_package
-            tasks_from: install.yml
-          vars:
-            deb_package_display_name: Discord
-            deb_package_name: "{{ discord_package_name }}"
-            deb_package_architecture: "{{ discord_package_architecture }}"
-            deb_package_version: "{{ discord_release.version }}"
-            deb_package_path: >-
-              {{ discord_package_tempdir.path }}/{{ discord_release.filename }}
-      always:
-        - name: Remove temporary Discord package directory
-          ansible.builtin.file:
-            path: "{{ discord_package_tempdir.path }}"
-            state: absent
-          changed_when: false

@@ -1,0 +1,22 @@
+---
+# Records once per run whether gpg is usable, so key verification can
+# distinguish an unusable keyring from a host where gpg itself is not
+# installed yet (it arrives with the base packages, after the preflights).
+
+- name: Determine GNU Privacy Guard availability
+  when: vendor_repository_gpg_available is not defined
+  block:
+    - name: Probe GNU Privacy Guard availability
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --version
+      register: vendor_repository_gpg_probe
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Record GNU Privacy Guard availability
+      ansible.builtin.set_fact:
+        vendor_repository_gpg_available: >-
+          {{ vendor_repository_gpg_probe.rc == 0 }}

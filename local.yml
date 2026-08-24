@@ -103,42 +103,24 @@
     # hosts that never manage a vendor's repository (headless systems, or
     # architectures the vendor does not publish for) do not have that
     # vendor's apt sources rewritten, quarantined, or failed in check mode.
-    - name: Preflight OpenAI apt repository before package refreshes
+    - name: Preflight vendor apt repositories before package refreshes
       ansible.builtin.include_role:
-        name: chatgpt
+        name: "{{ item.role }}"
         tasks_from: repository_preflight
-      when: workstation_has_desktop
-
-    - name: Preflight Claude Desktop apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: claude_desktop
-        tasks_from: repository_preflight
-      when: workstation_has_desktop
-
-    - name: Preflight MEGA apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: megasync
-        tasks_from: repository_preflight
-      when: workstation_has_desktop
-
-    - name: Preflight CRAN apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: r
-        tasks_from: repository_preflight
-
-    - name: Preflight Zoom apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: zoom
-        tasks_from: repository_preflight
+      loop:
+        - { role: chatgpt, desktop_only: true }
+        - { role: claude_desktop, desktop_only: true }
+        - { role: megasync, desktop_only: true }
+        - { role: r, desktop_only: false }
+        - { role: zoom, desktop_only: true, architectures: [amd64] }
+        - { role: vscode, desktop_only: true }
+      loop_control:
+        label: "{{ item.role }}"
       when:
-        - workstation_has_desktop
-        - workstation_architecture == "amd64"
-
-    - name: Preflight Visual Studio Code apt repository before package refreshes
-      ansible.builtin.include_role:
-        name: vscode
-        tasks_from: repository_preflight
-      when: workstation_has_desktop
+        - not item.desktop_only or workstation_has_desktop
+        - >-
+          workstation_architecture
+          in item.architectures | default([workstation_architecture])
 
   tasks:
     - name: Install base packages
@@ -366,7 +348,7 @@
         lock_timeout: 120
 
     - name: Include desktop setup
-      ansible.builtin.include_tasks: desktop.yml
+      ansible.builtin.include_tasks: tasks/desktop.yml
       when: workstation_has_desktop
 
     - name: Install latest Ruff release from GitHub

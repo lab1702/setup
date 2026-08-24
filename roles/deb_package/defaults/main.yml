@@ -10,6 +10,14 @@
 #   deb_package_version        target version the caller resolved
 #   deb_package_path           absolute path of the downloaded .deb archive
 #                              (install.yml only)
+#   deb_package_url            HTTPS download URL of the .deb archive
+#                              (download_install.yml only)
+#   deb_package_checksum       expected archive checksum such as
+#                              "sha256:<hex>"; when empty the download
+#                              relies on TLS to the validated host and
+#                              refuses redirects (download_install.yml only)
+#   deb_package_filename       bare filename for the downloaded archive
+#                              (download_install.yml only)
 #
 # Entry points:
 #
@@ -24,8 +32,18 @@
 #                 and validates the repaired package state afterwards; it
 #                 requires the facts set by a preceding status.yml inclusion
 #                 and never runs in check mode
+#   download_install.yml
+#                 owns the whole fetch-and-install flow: creates a temporary
+#                 directory, downloads the archive (checksum-verified, or
+#                 redirect-free over TLS when no checksum exists), runs
+#                 install.yml on it, and always removes the temporary
+#                 directory; it has the same status.yml prerequisite and
+#                 check-mode restriction as install.yml
 deb_package_display_name: ""
 deb_package_name: ""
 deb_package_architecture: ""
 deb_package_version: ""
 deb_package_path: ""
+deb_package_url: ""
+deb_package_checksum: ""
+deb_package_filename: ""

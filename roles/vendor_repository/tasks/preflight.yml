@@ -30,10 +30,12 @@
       failed_when: false
       when: vendor_repository_legacy_source_status.stat.exists
 
+    # With failed_when: false a failed slurp still registers failed=False,
+    # so a missing content key is the only reliable failure signal.
     - name: Validate legacy apt repository source readability
       ansible.builtin.assert:
         that:
-          - not vendor_repository_legacy_source.failed | default(true)
+          - vendor_repository_legacy_source.content is defined
         fail_msg: >-
           Refusing to migrate {{ vendor_repository_legacy_sources_path }}
           because its contents cannot be inspected safely.
@@ -121,6 +123,9 @@
       Refusing to replace {{ vendor_repository_keyring_path }} because it is
       neither a regular file nor a symbolic link.
 
+- name: Determine whether the signing key can be verified
+  ansible.builtin.include_tasks: gpg_probe.yml
+
 - name: Read installed repository signing key
   ansible.builtin.command:
     argv:
@@ -134,18 +139,35 @@
   failed_when: false
   check_mode: false
   when:
+    - vendor_repository_gpg_available
     - vendor_repository_source_status.stat.exists
     - vendor_repository_installed_key_status.stat.isreg | default(false)
 
+# Without gpg the keyring contents cannot be judged, and quarantining a
+# possibly healthy repository over a missing tool would be destructive; the
+# configure phase re-verifies the key after the base packages install gpg.
+- name: Report unverifiable repository signing key
+  ansible.builtin.debug:
+    msg: >-
+      gpg is not installed yet, so the {{ vendor_repository_display_name }}
+      signing key at {{ vendor_repository_keyring_path }} was not verified
+      during preflight; it will be verified after the base packages
+      install gpg.
+  when:
+    - not vendor_repository_gpg_available
+    - vendor_repository_source_status.stat.exists
+
 - name: Determine whether the managed repository needs quarantine
   vars:
+    # A failed slurp registers failed=False under failed_when: false, so
+    # test for the content key instead.
     vendor_repository_source_is_usable: >-
       {{ vendor_repository_source_status.stat.isreg | default(false)
       and vendor_repository_source_status.stat.uid | default(-1) == 0
       and vendor_repository_source_status.stat.gid | default(-1) == 0
       and vendor_repository_source_status.stat.mode | default('') == '0644'
-      and not vendor_repository_source.failed | default(true)
-      and (vendor_repository_source.content | default('') | b64decode)
+      and vendor_repository_source.content is defined
+      and (vendor_repository_source.content | b64decode)
       == vendor_repository_source_content }}
     vendor_repository_installed_public_key_records: >-
       {{ vendor_repository_installed_key.stdout_lines | default([])
@@ -153,16 +175,22 @@
     vendor_repository_installed_fingerprint_records: >-
       {{ vendor_repository_installed_key.stdout_lines | default([])
       | select('match', '^fpr:') | list }}
+    # When gpg is not installed yet the key contents cannot be judged, so
+    # only the file metadata is checked here and the configure phase
+    # verifies the fingerprint after the base packages install gpg;
+    # quarantining over a missing tool would delete a healthy repository.
     vendor_repository_installed_key_is_usable: >-
       {{ vendor_repository_installed_key_status.stat.isreg | default(false)
       and vendor_repository_installed_key_status.stat.uid | default(-1) == 0
       and vendor_repository_installed_key_status.stat.gid | default(-1) == 0
       and vendor_repository_installed_key_status.stat.mode
       | default('') == '0644'
-      and vendor_repository_installed_key.rc | default(1) == 0
+      and (not vendor_repository_gpg_available or
+      (vendor_repository_installed_key.rc | default(1) == 0
       and vendor_repository_installed_public_key_records | length == 1
       and (vendor_repository_installed_fingerprint_records
-      | first | default('')) == vendor_repository_expected_fingerprint_record }}
+      | first | default(''))
+      == vendor_repository_expected_fingerprint_record)) }}
   ansible.builtin.set_fact:
     vendor_repository_quarantine_required: >-
       {{ vendor_repository_source_status.stat.exists and
@@ -196,10 +224,14 @@
     vendor_repository_preflighted_paths: >-
       {{ (vendor_repository_preflighted_paths | default([]))
       + [vendor_repository_sources_path] }}
+    # A path is only healthy when gpg was available to actually verify the
+    # installed keyring; otherwise the configure phase must not take the
+    # preverified shortcut.
     vendor_repository_healthy_paths: >-
       {{ (vendor_repository_healthy_paths | default([]))
       + ([vendor_repository_sources_path]
       if (vendor_repository_source_status.stat.exists
+      and vendor_repository_gpg_available
       and not vendor_repository_quarantine_required | bool)
       else []) }}
   changed_when: false

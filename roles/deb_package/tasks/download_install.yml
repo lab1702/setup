@@ -1,0 +1,53 @@
+---
+- name: Validate download inputs for {{ deb_package_display_name }}
+  ansible.builtin.assert:
+    that:
+      - deb_package_url is match('^https://.+')
+      - deb_package_filename is match('^[^/]+[.]deb$')
+      - not ansible_check_mode
+    fail_msg: >-
+      The {{ deb_package_display_name }} package download needs an HTTPS
+      URL, a bare .deb filename, and a run outside check mode.
+
+- name: Create temporary package directory for {{ deb_package_display_name }}
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: ".{{ deb_package_name }}"
+  register: deb_package_tempdir
+  changed_when: false
+
+- name: Download and install the package of {{ deb_package_display_name }}
+  vars:
+    deb_package_download_path: >-
+      {{ deb_package_tempdir.path }}/{{ deb_package_filename }}
+  block:
+    - name: Download verified package of {{ deb_package_display_name }}
+      ansible.builtin.get_url:
+        url: "{{ deb_package_url }}"
+        dest: "{{ deb_package_download_path }}"
+        checksum: "{{ deb_package_checksum }}"
+        mode: "0600"
+      when: deb_package_checksum | length > 0
+
+    # Without a published checksum the download's authenticity relies on
+    # TLS to the validated host, so redirects away from it are refused.
+    - name: Download redirect-free package of {{ deb_package_display_name }}
+      ansible.builtin.uri:
+        url: "{{ deb_package_url }}"
+        dest: "{{ deb_package_download_path }}"
+        method: GET
+        follow_redirects: none
+        status_code: 200
+        mode: "0600"
+      when: deb_package_checksum | length == 0
+
+    - name: Install or repair validated package of {{ deb_package_display_name }}
+      ansible.builtin.include_tasks: install.yml
+      vars:
+        deb_package_path: "{{ deb_package_download_path }}"
+  always:
+    - name: Remove temporary package directory of {{ deb_package_display_name }}
+      ansible.builtin.file:
+        path: "{{ deb_package_tempdir.path }}"
+        state: absent
+      changed_when: false
