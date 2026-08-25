@@ -168,18 +168,24 @@
     # cache refresh. The preflight itself skips hosts that neither install
     # the application nor have its managed source file on disk, so a
     # vendor repository this playbook never configured is left alone.
+    # The included roles run loops of their own, and a bare `item` there
+    # would shadow this loop's variable: Ansible warns, and any inner
+    # reference to the lazily templated vendor_repository_manage below
+    # would resolve item against the inner loop instead. Naming this
+    # loop's variable keeps the vendor unambiguous throughout the include.
     - name: Preflight vendor apt repositories before package refreshes
       ansible.builtin.include_role:
-        name: "{{ item.key }}"
+        name: "{{ workstation_repository_vendor.key }}"
         tasks_from: repository_preflight
       vars:
         vendor_repository_manage: >-
-          {{ workstation_application_enabled[item.key] }}
+          {{ workstation_application_enabled[workstation_repository_vendor.key] }}
       loop: >-
         {{ workstation_applications | dict2items
         | selectattr('value.managed_repository') | list }}
       loop_control:
-        label: "{{ item.key }}"
+        loop_var: workstation_repository_vendor
+        label: "{{ workstation_repository_vendor.key }}"
 
   tasks:
     - name: Install base packages

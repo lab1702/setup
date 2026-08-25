@@ -45,6 +45,16 @@ github_release_base_url: >-
   https://github.com/{{ github_release_repository }}/releases/download
 github_release_install_directory: /usr/local/bin
 github_release_probe_user: nobody
+# The probe account is deliberately unprivileged and therefore has no
+# usable home directory (nobody's is /nonexistent), so the default
+# remote_tmp of ~/.ansible/tmp cannot be created when the probe modules
+# expand it as that user. Ansible warns once per run and falls back to
+# the system temporary directory anyway; naming a system temporary
+# directory here keeps the runs quiet without moving anything. Ansible
+# already stages unprivileged-become modules under the first entry of
+# system_tmpdirs, so /var/tmp leaves the staging location unchanged, and
+# the module still creates a private 0700 subdirectory inside it.
+github_release_probe_remote_tmp: /var/tmp
 
 github_release_architecture_map:
   x86_64: x86_64

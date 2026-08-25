@@ -146,6 +146,8 @@
     chdir: "{{ github_release_install_directory }}"
   become: true
   become_user: "{{ github_release_probe_user }}"
+  vars:
+    ansible_remote_tmp: "{{ github_release_probe_remote_tmp }}"
   loop: "{{ github_release_binaries }}"
   register: github_release_installed_releases
   changed_when: false
@@ -450,6 +452,8 @@
                 chdir: "{{ github_release_staging_path }}"
               become: true
               become_user: "{{ github_release_probe_user }}"
+              vars:
+                ansible_remote_tmp: "{{ github_release_probe_remote_tmp }}"
               loop: "{{ github_release_binaries }}"
               register: github_release_downloaded_releases
               changed_when: false
