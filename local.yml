@@ -107,9 +107,16 @@
         workstation_user_primary_gid: >-
           {{ ansible_facts["getent_passwd"][user_name][2] }}
 
+    # Detection reads root-owned paths to answer one question -- does this
+    # host have desktop sessions installed -- and never edits them, so it
+    # follows symlinks rather than refusing them the way the apt repair
+    # paths do: a session directory provided through a link still installs
+    # a desktop, and treating it as absent would silently drop every
+    # desktop application and orphan every desktop vendor repository.
     - name: Inspect graphical desktop session directories
       ansible.builtin.stat:
         path: "{{ item }}"
+        follow: true
       loop: "{{ desktop_session_directories }}"
       register: desktop_session_directory_status
 
@@ -120,10 +127,14 @@
           | selectattr('stat.isdir', 'defined')
           | selectattr('stat.isdir')
           | map(attribute='item') | list }}
+      # file_type: any counts a session entry that is itself a symlink.
+      # The find module lstats every entry and only consults follow while
+      # recursing, so file_type: file would reject a linked entry however
+      # follow is set, and recurse is false here anyway.
       ansible.builtin.find:
         paths: "{{ existing_desktop_session_directories }}"
         patterns: "*.desktop"
-        file_type: file
+        file_type: any
         recurse: false
       register: graphical_desktop_sessions
       when: existing_desktop_session_directories | length > 0
