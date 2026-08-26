@@ -1,2 +1,7 @@
 __pycache__/
 *.py[cod]
+.ruff_cache/
+
+# Probe output redirected during manual playbook runs; committed by mistake once.
+out.txt
+err.txt
