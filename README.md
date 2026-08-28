@@ -70,14 +70,6 @@ Reassess these decisions before using the playbook on a shared workstation, an
 untrusted network, infrastructure managed by multiple people, or a host whose
 SSH service is exposed to the internet.
 
-## Step 0: Set up fingerprint Authentication
-
-### If applicable do this after enrolling your fingerprint
-
-```bash
-sudo pam-auth-update
-```
-
 ## Automatic AMD64v3 package selection
 
 Early in the run, the `amd64v3` role asks glibc whether the current AMD64 CPU
