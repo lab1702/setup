@@ -7,9 +7,10 @@ ARM64 systems continue to use their baseline packages.
 Desktop packages are installed when an X11 or Wayland desktop session is
 available. Posit RStudio Desktop, Discord, and Zoom are installed only on AMD64
 systems because their configured distribution channels do not publish ARM64
-packages. Ruff, ty, uv, uvx, the DuckDB CLI, and Quarto track the latest
+packages. Ruff, ty, uv, uvx, the DuckDB CLI, Quarto, and VHS track the latest
 GitHub releases for AMD64 and ARM64; their release downloads are verified with
-the SHA-256 digests published by GitHub before installation. ChatGPT Desktop
+the SHA-256 digests published by GitHub before installation. VHS records
+terminal sessions with the already-installed `ttyd` and `ffmpeg`. ChatGPT Desktop
 tracks the latest package from OpenAI's APT repository, verified with a signing
 key bundled in this repository. Claude Desktop tracks the latest package from
 Anthropic's signed APT repository. Discord tracks the latest official stable AMD64

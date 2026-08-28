@@ -427,3 +427,7 @@
     - name: Install Quarto CLI
       ansible.builtin.include_role:
         name: quarto
+
+    - name: Install VHS terminal recorder
+      ansible.builtin.include_role:
+        name: vhs

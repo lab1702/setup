@@ -1,0 +1,18 @@
+---
+# VHS ships a .deb per Debian architecture alongside its release tarballs.
+# The tarballs also carry a LICENSE, a README, shell completions, and a
+# manpage, so they do not match the single-directory-of-binaries layout the
+# github_release binary installer validates; the package is the asset this
+# repository can install through its shared, checksum-verified flow, and it
+# also places the completions and manpage. The package declares ffmpeg as
+# its only dependency, and vhs additionally drives ttyd while recording;
+# both are installed with the base packages in local.yml.
+vhs_repository: charmbracelet/vhs
+vhs_package_name: vhs
+
+# github_release_version is set by the github_release role's resolve_asset
+# tasks; vhs_package_filename is evaluated during asset selection, after
+# that fact exists, and workstation_architecture comes from group_vars.
+vhs_release_version: "{{ github_release_version }}"
+vhs_package_filename: >-
+  vhs_{{ vhs_release_version }}_{{ workstation_architecture }}.deb
