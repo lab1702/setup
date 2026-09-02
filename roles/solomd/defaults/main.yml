@@ -1,0 +1,17 @@
+---
+# SoloMD (https://solomd.app) is a Markdown editor built on WebKitGTK. Its
+# GitHub releases ship a .deb per Debian architecture alongside AppImage and
+# RPM builds, so the package is the asset this repository can install
+# through its shared, checksum-verified flow, and it also places the
+# desktop entry and icons. The archive names its package solo-md and
+# declares only libwebkit2gtk-4.1-0 and libgtk-3-0 as dependencies, both of
+# which APT resolves from the Ubuntu archive during installation.
+solomd_repository: zhitongblog/solomd
+solomd_package_name: solo-md
+
+# github_release_version is set by the github_release role's resolve_asset
+# tasks; solomd_package_filename is evaluated during asset selection, after
+# that fact exists, and workstation_architecture comes from group_vars.
+solomd_release_version: "{{ github_release_version }}"
+solomd_package_filename: >-
+  SoloMD_{{ solomd_release_version }}_{{ workstation_architecture }}.deb

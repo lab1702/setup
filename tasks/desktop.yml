@@ -45,6 +45,11 @@
     name: rstudio
   when: workstation_application_enabled['rstudio']
 
+- name: Install SoloMD
+  ansible.builtin.include_role:
+    name: solomd
+  when: workstation_application_enabled['solomd']
+
 - name: Install Zoom Workplace
   ansible.builtin.include_role:
     name: zoom

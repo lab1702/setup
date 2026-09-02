@@ -73,6 +73,9 @@
         desktop_only: true
         managed_repository: false
         architectures: [amd64]
+      solomd:
+        desktop_only: true
+        managed_repository: false
 
   pre_tasks:
     - name: Validate Ubuntu release and architecture support
