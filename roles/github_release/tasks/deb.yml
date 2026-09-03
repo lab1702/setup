@@ -14,7 +14,7 @@
 - name: Validate release package parameters for {{ github_release_display_name }}
   ansible.builtin.assert:
     that:
-      - github_release_repository is match('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
+      - github_release_repository is match(github_release_repository_pattern)
       - github_release_deb_package_name is match('^[a-z0-9][a-z0-9.+-]+$')
     fail_msg: >-
       The {{ github_release_display_name }} release package needs a GitHub
@@ -25,8 +25,9 @@
 - name: Resolve latest release package asset of {{ github_release_display_name }}
   ansible.builtin.include_tasks: resolve_asset.yml
 
-# A rate-limited GitHub API is a transient condition; the shared fallback
-# keeps an installed package and fails only when nothing is installed yet.
+# A rate-limited GitHub API, like a release whose asset is still
+# uploading, is a transient condition; the shared fallback keeps an
+# installed package and fails only when nothing is installed yet.
 - name: Inspect installed package while metadata is unavailable for {{ github_release_display_name }}
   ansible.builtin.command:
     argv:

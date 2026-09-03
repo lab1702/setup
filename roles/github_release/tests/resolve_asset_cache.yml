@@ -2,8 +2,9 @@
 # Exercises the release-metadata cache against the live GitHub API: a
 # fresh 200 populates the cache, a rerun revalidates it (normally with a
 # quota-free 304; a release republished mid-test legitimately yields a
-# fresh 200), and corrupt or malformed caches are discarded without
-# failing the run. The cache directory and ownership come from the role
+# fresh 200), corrupt or malformed caches are discarded without failing
+# the run, and a missing asset resolves as pending inside the upload
+# grace window but fails past it. The cache directory and ownership come from the role
 # defaults, overridden here so the flow runs without privileges. A
 # rate-limited first resolution skips the remaining checks — via a
 # gated block rather than end_play, so the cleanup below always runs —
@@ -132,6 +133,50 @@
                     or ((github_release_api_available
                     or github_release_asset_pending)
                     and github_release_version | length > 0)
+
+            # An asset the release does not carry counts as still
+            # uploading inside the grace window, so the keep-installed
+            # fallback applies, and as a deterministic failure past it.
+            - name: Resolve a missing asset inside the upload grace window
+              ansible.builtin.include_role:
+                name: github_release
+                tasks_from: resolve_asset.yml
+              vars:
+                github_release_asset_filename: missing-asset.deb
+                github_release_asset_upload_grace_seconds: 315360000
+
+            - name: Validate the pending resolution
+              ansible.builtin.assert:
+                that:
+                  - github_release_metadata.status in [200, 304, 403, 429]
+                  - >-
+                    github_release_metadata.status not in [200, 304]
+                    or (github_release_asset_pending
+                    and not github_release_api_available)
+
+            - name: Verify a missing asset past the grace window is rejected
+              block:
+                - name: Resolve a missing asset past the upload grace window
+                  ansible.builtin.include_role:
+                    name: github_release
+                    tasks_from: resolve_asset.yml
+                  vars:
+                    github_release_asset_filename: missing-asset.deb
+                    github_release_asset_upload_grace_seconds: 0
+
+                - name: Reject unexpected acceptance of a missing asset
+                  ansible.builtin.fail:
+                    msg: The missing asset was unexpectedly accepted.
+              rescue:
+                - name: Validate the missing-asset rejection
+                  ansible.builtin.assert:
+                    that:
+                      - >-
+                        github_release_metadata.status in [403, 429]
+                        or (not github_release_asset_pending
+                        and github_release_api_available
+                        and ansible_failed_result.msg is search(
+                        'did not contain the expected uploaded asset'))
       always:
         - name: Remove the temporary cache test directory
           ansible.builtin.file:

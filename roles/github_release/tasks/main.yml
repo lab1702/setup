@@ -2,7 +2,7 @@
 - name: Validate GitHub release parameters
   ansible.builtin.assert:
     that:
-      - github_release_repository is match('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
+      - github_release_repository is match(github_release_repository_pattern)
       - github_release_binaries | length > 0
       - >-
         github_release_binaries | unique | list | length
@@ -129,8 +129,9 @@
       {{ github_release_safe_binary_statuses | length
       == github_release_binaries | length }}
 
-# A rate-limited GitHub API is a transient condition; the shared fallback
-# keeps a safe installation and fails only when nothing is installed yet.
+# A rate-limited GitHub API, like a release whose asset is still
+# uploading, is a transient condition; the shared fallback keeps a safe
+# installation and fails only when nothing is installed yet.
 - name: Handle unavailable release metadata for {{ github_release_display_name }}
   ansible.builtin.include_tasks: unavailable_fallback.yml
   vars:

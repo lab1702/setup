@@ -18,10 +18,12 @@
 # rate limit. github_release_api_available becomes false for a
 # rate-limited response (403 or 429, accepted immediately without
 # retrying — the quota resets on the order of an hour, far beyond any
-# useful retry delay) and for a 200 whose body is not usable release
-# JSON (an intercepting proxy, for example); in both cases the caller
-# decides whether an already-installed release makes skipping this run
-# acceptable. The retries cover genuinely failed attempts (connection
+# useful retry delay), for a 200 whose body is not usable release JSON
+# (an intercepting proxy, for example), and for a fresh release whose
+# selected asset is still uploading (the grace window below); in every
+# case the caller decides whether an already-installed release makes
+# skipping this run acceptable. The retries cover genuinely failed
+# attempts (connection
 # errors and server-side failures) only; the until below stops retrying
 # deterministic responses, which repeat identically — an accepted status
 # and, among the failures, any remaining 3xx or 4xx outside the shared

@@ -23,6 +23,8 @@
 github_release_display_name: "{{ github_release_binaries | first }}"
 github_release_binaries: []
 github_release_deb_package_name: ""
+# GitHub "owner/name" shape shared by both entry points' validation.
+github_release_repository_pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
 
 github_release_api_url: >-
   https://api.github.com/repos/{{ github_release_repository }}/releases/latest

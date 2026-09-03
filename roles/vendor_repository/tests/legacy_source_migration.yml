@@ -1,0 +1,80 @@
+---
+# Exercises the preflight's migration of a legacy one-line source against
+# scratch paths: the vendor's entries are removed while unrelated entries
+# and comments survive, a file left blank is removed, and check mode only
+# reports that removal. The specification is synthetic because no key,
+# repository, or network is involved: with the managed source absent the
+# preflight never reaches key verification. Runs for real (without
+# --check), like roles/amd64v3/tests/main.yml.
+- name: Exercise legacy apt source migration
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars_files:
+    - ../../../group_vars/all.yml
+  vars:
+    vendor_repository_test_legacy_path: >-
+      {{ vendor_repository_test_directory.path }}/legacy.list
+    vendor_repository_spec:
+      display_name: Legacy migration test
+      package_names:
+        - example
+      url: https://example.invalid/repo
+      suites: stable
+      components: main
+      sources_path: >-
+        {{ vendor_repository_test_directory.path }}/managed.sources
+      keyring_path: >-
+        {{ vendor_repository_test_directory.path }}/keyring.gpg
+      key_fingerprint: "0000000000000000000000000000000000000000"
+      key_url: https://example.invalid/key.asc
+      legacy_sources_path: "{{ vendor_repository_test_legacy_path }}"
+    vendor_repository_test_entry: deb https://example.invalid/repo stable main
+    vendor_repository_test_unrelated_entry: deb https://other.example/deb x y
+    # expected_content is null when the file must be gone afterwards.
+    vendor_repository_test_cases:
+      - name: a file holding only the vendor entry
+        content: "{{ vendor_repository_test_entry }}\n"
+        expected_content: null
+        expected_blank: true
+      - name: unrelated entries beside the vendor entry
+        content: "{{ vendor_repository_test_entry }}\n{{ vendor_repository_test_unrelated_entry }}\n"
+        expected_content: "{{ vendor_repository_test_unrelated_entry }}\n"
+        expected_blank: false
+      - name: a commented-out vendor entry
+        content: "# {{ vendor_repository_test_entry }}\n"
+        expected_content: "# {{ vendor_repository_test_entry }}\n"
+        expected_blank: false
+      - name: a file holding only whitespace
+        content: "\n  \n"
+        expected_content: null
+        expected_blank: true
+      - name: an empty file in check mode
+        content: ""
+        check_mode: true
+        expected_content: ""
+        expected_blank: true
+  tasks:
+    - name: Create temporary legacy migration test directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .legacy-migration-test
+      register: vendor_repository_test_directory
+      changed_when: false
+      check_mode: false
+
+    - name: Exercise legacy migration cases
+      block:
+        - name: Exercise one legacy migration case
+          ansible.builtin.include_tasks: legacy_source_case.yml
+          loop: "{{ vendor_repository_test_cases }}"
+          loop_control:
+            loop_var: vendor_repository_test_case
+            label: "{{ vendor_repository_test_case.name }}"
+      always:
+        - name: Remove temporary legacy migration test directory
+          ansible.builtin.file:
+            path: "{{ vendor_repository_test_directory.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false

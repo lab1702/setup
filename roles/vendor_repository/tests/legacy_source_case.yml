@@ -1,0 +1,54 @@
+---
+# One legacy migration case: writes the legacy file, runs the preflight
+# (in check mode when the case asks for it), and validates the outcome.
+- name: Write legacy apt source with {{ vendor_repository_test_case.name }}
+  ansible.builtin.copy:
+    dest: "{{ vendor_repository_test_legacy_path }}"
+    content: "{{ vendor_repository_test_case.content }}"
+    mode: "0644"
+  changed_when: false
+  check_mode: false
+
+- name: Preflight legacy apt source with {{ vendor_repository_test_case.name }}
+  ansible.builtin.include_role:
+    name: vendor_repository
+    tasks_from: preflight
+    apply:
+      check_mode: "{{ vendor_repository_test_case.check_mode | default(false) }}"
+
+- name: Inspect legacy apt source after {{ vendor_repository_test_case.name }}
+  ansible.builtin.stat:
+    path: "{{ vendor_repository_test_legacy_path }}"
+    follow: false
+  register: vendor_repository_test_legacy_status
+
+- name: Read legacy apt source after {{ vendor_repository_test_case.name }}
+  ansible.builtin.slurp:
+    src: "{{ vendor_repository_test_legacy_path }}"
+  register: vendor_repository_test_legacy_content
+  when: vendor_repository_test_legacy_status.stat.exists
+
+- name: Validate migration outcome of {{ vendor_repository_test_case.name }}
+  ansible.builtin.assert:
+    that:
+      - >-
+        vendor_repository_test_legacy_status.stat.exists ==
+        (vendor_repository_test_case.expected_content is not none)
+      - >-
+        vendor_repository_test_case.expected_content is none or
+        (vendor_repository_test_legacy_content.content | b64decode) ==
+        vendor_repository_test_case.expected_content
+      - >-
+        vendor_repository_legacy_source_is_blank ==
+        vendor_repository_test_case.expected_blank
+    fail_msg: >-
+      Unexpected outcome for {{ vendor_repository_test_case.name }}:
+      exists={{ vendor_repository_test_legacy_status.stat.exists }},
+      blank={{ vendor_repository_legacy_source_is_blank }}.
+
+- name: Remove legacy apt source after {{ vendor_repository_test_case.name }}
+  ansible.builtin.file:
+    path: "{{ vendor_repository_test_legacy_path }}"
+    state: absent
+  changed_when: false
+  check_mode: false

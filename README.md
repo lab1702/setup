@@ -127,10 +127,12 @@ duplicate legacy entries are collapsed.
 The repository tracks regression tests for the shared repository sandbox
 (one per keyring format: `chatgpt` covers a deb822 source with a binary
 `.gpg` keyring, `claude_desktop` covers a deb822 source with an armored
-`.asc` keyring) and for the `amd64v3` role (a full run in an isolated apt
-sandbox, a check-mode run, and a current-CPU detection run). The tests
-source their repository URLs, fingerprints, and platform values from the
-role defaults, so they follow key rotations and support changes
+`.asc` keyring), for the vendor preflight's migration of legacy one-line
+sources (scratch paths only, so it needs neither root nor network), and
+for the `amd64v3` role (a full run in an isolated apt sandbox, a
+check-mode run, and a current-CPU detection run). The tests source their
+repository URLs, fingerprints, and platform values from the role
+defaults, so they follow key rotations and support changes
 automatically. Run them from the repository root, where `ansible.cfg`
 resolves the roles; the repository-metadata tests support `--check` and
 the check-mode test requires it:
@@ -141,6 +143,10 @@ ansible-playbook --check roles/chatgpt/tests/check_mode_repository_metadata.yml
 
 ```bash
 ansible-playbook --check roles/claude_desktop/tests/check_mode_repository_metadata.yml
+```
+
+```bash
+ansible-playbook roles/vendor_repository/tests/legacy_source_migration.yml
 ```
 
 ```bash
@@ -156,7 +162,8 @@ ansible-playbook roles/amd64v3/tests/current_cpu.yml
 ```
 
 The GitHub release-metadata cache (ETag revalidation, corrupt-cache
-recovery) has its own regression test against the live GitHub API:
+recovery, and the asset upload grace window) has its own regression test
+against the live GitHub API:
 
 ```bash
 ansible-playbook roles/github_release/tests/resolve_asset_cache.yml
