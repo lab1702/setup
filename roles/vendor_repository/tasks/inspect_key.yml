@@ -1,7 +1,8 @@
 ---
 # Inspects one signing key file with gpg and records whether it carries
 # exactly one primary key whose first fingerprint matches the pinned
-# specification, plus when its earliest signing key expires: an expired
+# specification, plus when it stops being able to sign (the
+# signing_key_expiry filter's reading of the same records): an expired
 # key is unusable, and one expiring within the renewal window must be
 # re-fetched from the vendor. The preflight (quarantine and healthy-path
 # decisions) and the configure phase (fatal asserts) both consume this
@@ -24,8 +25,8 @@
   failed_when: false
   check_mode: false
 
-# The expiry is zero when no signing key expires, so the date is only
-# meaningful when either verdict below holds.
+# The expiry is zero when the key never stops signing, so the date is
+# only meaningful when either verdict below holds.
 - name: Record repository signing key verdicts
   vars:
     vendor_repository_inspected_public_key_records: >-
@@ -34,12 +35,9 @@
     vendor_repository_inspected_fingerprint_records: >-
       {{ vendor_repository_inspected_key.stdout_lines | default([])
       | select('match', '^fpr:') | list }}
-    vendor_repository_inspected_signing_expiries: >-
+    vendor_repository_inspected_signing_expiry: >-
       {{ vendor_repository_inspected_key.stdout_lines | default([])
-      | select('match', vendor_repository_signing_key_expiry_pattern)
-      | map('regex_replace',
-      vendor_repository_signing_key_expiry_pattern, '\1')
-      | map('int') | list }}
+      | signing_key_expiry }}
     vendor_repository_inspection_time: "{{ now().timestamp() | int }}"
   ansible.builtin.set_fact:
     vendor_repository_inspected_key_matches: >-
@@ -49,16 +47,14 @@
       | first | default(''))
       == vendor_repository_expected_fingerprint_record }}
     vendor_repository_inspected_key_expiry: >-
-      {{ vendor_repository_inspected_signing_expiries | min | int
-      if vendor_repository_inspected_signing_expiries | length > 0
-      else 0 }}
+      {{ vendor_repository_inspected_signing_expiry | int }}
     vendor_repository_inspected_key_expired: >-
-      {{ vendor_repository_inspected_signing_expiries | length > 0
-      and vendor_repository_inspected_signing_expiries | min | int
+      {{ vendor_repository_inspected_signing_expiry | int > 0
+      and vendor_repository_inspected_signing_expiry | int
       < vendor_repository_inspection_time | int }}
     vendor_repository_inspected_key_expiring: >-
-      {{ vendor_repository_inspected_signing_expiries | length > 0
-      and vendor_repository_inspected_signing_expiries | min | int
+      {{ vendor_repository_inspected_signing_expiry | int > 0
+      and vendor_repository_inspected_signing_expiry | int
       < vendor_repository_inspection_time | int
       + vendor_repository_key_renewal_window_seconds | int }}
   changed_when: false

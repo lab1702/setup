@@ -183,12 +183,18 @@ ansible-playbook roles/github_release/tests/resolve_asset_cache.yml
 ```
 
 The `r` role's CRAN source migration filter decides which entries are
-deleted from APT sources, so its parsing of both source formats is covered
-by unit tests. They read no APT configuration, need no network or root,
-and also run from the repository root:
+deleted from APT sources, and the `vendor_repository` role's signing key
+expiry filter decides when a vendor keyring is re-fetched or its source
+quarantined, so both are covered by unit tests. They read no APT
+configuration, need no network or root, and also run from the repository
+root:
 
 ```bash
 python3 -m unittest discover --start-directory roles/r/tests
+```
+
+```bash
+python3 -m unittest discover --start-directory roles/vendor_repository/tests
 ```
 
 ## Optional: Setup Git Authentication

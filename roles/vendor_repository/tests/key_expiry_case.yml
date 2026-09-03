@@ -1,7 +1,8 @@
 ---
-# One key expiry case: generates a fresh signing key with the requested
-# expiry, exports it, runs the shared predicate on it, and validates the
-# verdicts. The scaffolding runs for real even under --check.
+# One key expiry case: generates a fresh key with the requested primary
+# usage and expiry, adds the requested signing subkeys, exports it, runs
+# the shared predicate on it, and validates the verdicts. The scaffolding
+# runs for real even under --check.
 - name: Reset key home for {{ vendor_repository_test_case.name }}
   ansible.builtin.file:
     path: "{{ vendor_repository_test_key_home }}"
@@ -20,10 +21,49 @@
       '--passphrase', '']
       + (['--faked-system-time', vendor_repository_test_case.faked_system_time]
       if vendor_repository_test_case.faked_system_time is defined else [])
-      + ['--quick-generate-key', 'Key expiry test', 'default', 'default',
+      + ['--quick-generate-key', 'Key expiry test', 'default',
+      vendor_repository_test_case.usage | default('default'),
       vendor_repository_test_case.expiry] }}
   environment:
     GNUPGHOME: "{{ vendor_repository_test_key_home }}"
+  changed_when: false
+  check_mode: false
+
+- name: List signing key for {{ vendor_repository_test_case.name }}
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --batch
+      - --with-colons
+      - --list-keys
+  environment:
+    GNUPGHOME: "{{ vendor_repository_test_key_home }}"
+  register: vendor_repository_test_listed_key
+  changed_when: false
+  check_mode: false
+
+- name: Record fingerprint for {{ vendor_repository_test_case.name }}
+  ansible.builtin.set_fact:
+    vendor_repository_test_fingerprint: >-
+      {{ (vendor_repository_test_listed_key.stdout_lines
+      | select('match', '^fpr:') | first).split(':')[9] }}
+  changed_when: false
+
+- name: Add signing subkeys for {{ vendor_repository_test_case.name }}
+  ansible.builtin.command:
+    argv: >-
+      {{ ['gpg', '--batch', '--pinentry-mode', 'loopback',
+      '--passphrase', '']
+      + (['--faked-system-time', vendor_repository_test_subkey.faked_system_time]
+      if vendor_repository_test_subkey.faked_system_time is defined else [])
+      + ['--quick-add-key', vendor_repository_test_fingerprint, 'default',
+      'sign', vendor_repository_test_subkey.expiry] }}
+  environment:
+    GNUPGHOME: "{{ vendor_repository_test_key_home }}"
+  loop: "{{ vendor_repository_test_case.subkeys | default([]) }}"
+  loop_control:
+    loop_var: vendor_repository_test_subkey
+    label: "{{ vendor_repository_test_subkey.expiry }}"
   changed_when: false
   check_mode: false
 
@@ -48,26 +88,6 @@
   changed_when: false
   check_mode: false
 
-- name: List signing key for {{ vendor_repository_test_case.name }}
-  ansible.builtin.command:
-    argv:
-      - gpg
-      - --batch
-      - --with-colons
-      - --list-keys
-  environment:
-    GNUPGHOME: "{{ vendor_repository_test_key_home }}"
-  register: vendor_repository_test_listed_key
-  changed_when: false
-  check_mode: false
-
-- name: Record fingerprint for {{ vendor_repository_test_case.name }}
-  ansible.builtin.set_fact:
-    vendor_repository_test_fingerprint: >-
-      {{ (vendor_repository_test_listed_key.stdout_lines
-      | select('match', '^fpr:') | first).split(':')[9] }}
-  changed_when: false
-
 - name: Inspect signing key for {{ vendor_repository_test_case.name }}
   ansible.builtin.include_role:
     name: vendor_repository
@@ -87,7 +107,7 @@
         vendor_repository_test_case.expected_expiring
       - >-
         (vendor_repository_inspected_key_expiry | int > 0) ==
-        (vendor_repository_test_case.expiry != 'never')
+        vendor_repository_test_case.expected_bounded
     fail_msg: >-
       Unexpected verdicts for {{ vendor_repository_test_case.name }}:
       matches={{ vendor_repository_inspected_key_matches }},

@@ -32,14 +32,9 @@ vendor_repository_spec: {}
 # the vendor's current copy on every run instead of reusing the installed
 # one, so a renewed key is installed as soon as it is published. An
 # already expired key is unusable, which quarantines its source and
-# rebuilds it from a fresh download.
+# rebuilds it from a fresh download. The moment a key stops signing comes
+# from the signing_key_expiry filter in this role's filter_plugins.
 vendor_repository_key_renewal_window_seconds: 2592000
-
-# One gpg --with-colons pub or sub record whose key can sign (a lowercase
-# "s" in the capabilities field) and carries an expiry; the capture is
-# the expiry as seconds since the epoch. Only signing keys matter to apt.
-vendor_repository_signing_key_expiry_pattern: >-
-  ^(?:pub|sub):(?:[^:]*:){5}([0-9]+):(?:[^:]*:){4}[^:]*s.*$
 
 # Whether this host currently installs the vendor's packages. The
 # preflight entry point honors this: when false it only repairs or

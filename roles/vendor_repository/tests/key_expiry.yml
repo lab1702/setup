@@ -1,11 +1,13 @@
 ---
 # Exercises the shared signing-key predicate (tasks/inspect_key.yml)
 # against keys generated on the fly: one that never expires, one expiring
-# inside the renewal window, and one already expired, created under a
-# faked clock. The preflight's quarantine and healthy-path decisions and
-# the configure phase's validity assert all consume these verdicts. Needs
-# only gpg: no root, network, or repository. Supports --check, since the
-# scaffolding and the predicate's inspection run for real.
+# inside the renewal window, one already expired (created under a faked
+# clock), a rotated key keeping its retired signing subkey beside a valid
+# one, and a key whose only signing subkey has expired. The preflight's
+# quarantine and healthy-path decisions and the configure phase's
+# validity assert all consume these verdicts. Needs only gpg: no root,
+# network, or repository. Supports --check, since the scaffolding and the
+# predicate's inspection run for real.
 - name: Exercise signing key expiry verdicts
   hosts: localhost
   connection: local
@@ -22,18 +24,48 @@
     vendor_repository_spec:
       display_name: Key expiry test
       key_fingerprint: "{{ vendor_repository_test_fingerprint }}"
+    # expected_bounded says whether the key as a whole stops signing at
+    # some moment; usage is the primary key's gpg usage (default: sign and
+    # certify; cert leaves signing to the subkeys); subkeys are added
+    # signing subkeys, each under its own faked clock when given. A subkey
+    # binding cannot predate its primary, so a case with an old subkey also
+    # creates the primary under the faked clock.
     vendor_repository_test_cases:
       - name: a key that never expires
+        expected_bounded: false
         expiry: never
         expected_expired: false
         expected_expiring: false
       - name: a key expiring inside the renewal window
+        expected_bounded: true
         expiry: 1d
         expected_expired: false
         expected_expiring: true
       - name: an expired key
+        expected_bounded: true
         expiry: 1y
         faked_system_time: 20200101T000000
+        expected_expired: true
+        expected_expiring: true
+      - name: a rotated key keeping its retired signing subkey
+        expected_bounded: false
+        expiry: never
+        usage: cert
+        faked_system_time: 20200101T000000
+        subkeys:
+          - expiry: 1y
+            faked_system_time: 20200101T000000
+          - expiry: never
+        expected_expired: false
+        expected_expiring: false
+      - name: a key whose only signing subkey has expired
+        expected_bounded: true
+        expiry: never
+        usage: cert
+        faked_system_time: 20200101T000000
+        subkeys:
+          - expiry: 1y
+            faked_system_time: 20200101T000000
         expected_expired: true
         expected_expiring: true
   tasks:
