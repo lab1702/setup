@@ -1,64 +1,10 @@
 ---
-- name: Validate SoloMD architecture support
-  ansible.builtin.assert:
-    that:
-      - ansible_facts["architecture"] in linux_release_architecture_map
-    fail_msg: >-
-      SoloMD supports AMD64 and ARM64. Detected
-      {{ ansible_facts["architecture"] }}.
-
-# Fetching, selecting, and validating the release asset is shared with the
-# binary installers through the github_release role, so API and digest
-# hardening lives in one place.
-- name: Resolve latest SoloMD package asset
+- name: Install SoloMD from the latest verified GitHub release
   ansible.builtin.include_role:
     name: github_release
-    tasks_from: resolve_asset.yml
+    tasks_from: deb.yml
   vars:
     github_release_display_name: SoloMD
     github_release_repository: "{{ solomd_repository }}"
+    github_release_deb_package_name: "{{ solomd_package_name }}"
     github_release_asset_filename: "{{ solomd_package_filename }}"
-
-# A rate-limited GitHub API is a transient condition; the shared fallback
-# keeps an installed package and fails only when nothing is installed yet.
-- name: Inspect installed SoloMD package while metadata is unavailable
-  ansible.builtin.command:
-    argv:
-      - dpkg-query
-      - --show
-      - '--showformat=${db:Status-Status}\n'
-      - "{{ solomd_package_name }}:{{ workstation_architecture }}"
-  environment:
-    LC_ALL: C
-  register: solomd_installed_probe
-  changed_when: false
-  failed_when: false
-  check_mode: false
-  when: not github_release_api_available
-
-- name: Handle unavailable SoloMD release metadata
-  ansible.builtin.include_role:
-    name: github_release
-    tasks_from: unavailable_fallback.yml
-  vars:
-    github_release_display_name: SoloMD
-    github_release_repository: "{{ solomd_repository }}"
-    github_release_installed: >-
-      {{ solomd_installed_probe.rc == 0 and
-      solomd_installed_probe.stdout_lines | last | default('')
-      == 'installed' }}
-  when: not github_release_api_available
-
-- name: Ensure latest SoloMD release
-  ansible.builtin.include_role:
-    name: deb_package
-    tasks_from: ensure.yml
-  vars:
-    deb_package_display_name: SoloMD
-    deb_package_name: "{{ solomd_package_name }}"
-    deb_package_architecture: "{{ workstation_architecture }}"
-    deb_package_version: "{{ solomd_release_version }}"
-    deb_package_url: "{{ github_release_asset.browser_download_url }}"
-    deb_package_checksum: "{{ github_release_asset.digest }}"
-    deb_package_filename: "{{ github_release_asset.name }}"
-  when: github_release_api_available

@@ -104,6 +104,29 @@
             - vendor_repository_legacy_source_status.stat.isreg | default(false)
             - vendor_repository_legacy_migration_required
 
+        # lineinfile strips the entries but leaves the file behind, so a
+        # legacy file that held nothing else would linger as an empty
+        # source apt parses on every run. The verdict is taken from the
+        # lines the migration retains, so it needs no second read and
+        # holds in check mode too; a file keeping any other content,
+        # comments included, is left alone.
+        - name: Detect legacy repository source left blank
+          ansible.builtin.set_fact:
+            vendor_repository_legacy_source_is_blank: >-
+              {{ vendor_repository_legacy_source_status.stat.isreg
+              | default(false)
+              and (vendor_repository_legacy_source.content | default('')
+              | b64decode).splitlines()
+              | reject('match', vendor_repository_legacy_entry_regexp)
+              | map('trim') | select | list | length == 0 }}
+          changed_when: false
+
+        - name: Remove blank legacy apt repository source
+          ansible.builtin.file:
+            path: "{{ vendor_repository_legacy_sources_path }}"
+            state: absent
+          when: vendor_repository_legacy_source_is_blank
+
     - name: Validate managed apt repository source path type
       ansible.builtin.assert:
         that:

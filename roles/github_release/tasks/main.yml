@@ -237,7 +237,9 @@
       block:
         # The retries cover transient connection errors and server-side
         # failures, matching the metadata fetch that resolved the asset;
-        # checksum mismatches are retried deliberately since transient
+        # the until stops retrying deterministic statuses, which get_url
+        # reports as status_code when it fails. Checksum mismatches carry
+        # no status and are retried deliberately since transient
         # corruption is their common cause.
         - name: Download verified release archive
           ansible.builtin.get_url:
@@ -245,8 +247,15 @@
             dest: "{{ github_release_archive_path }}"
             checksum: "{{ github_release_asset.digest }}"
             mode: "0600"
+          register: github_release_archive_download
           retries: "{{ remote_fetch_retries }}"
           delay: "{{ remote_fetch_retry_delay }}"
+          until: >-
+            github_release_archive_download.status_code | default(-1) == 200 or
+            (github_release_archive_download.status_code | default(-1) >= 300 and
+            github_release_archive_download.status_code | default(-1) < 500 and
+            github_release_archive_download.status_code | default(-1)
+            not in remote_fetch_transient_status_codes)
 
         - name: Inspect release archive member names
           ansible.builtin.command:

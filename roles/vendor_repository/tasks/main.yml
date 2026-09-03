@@ -90,16 +90,26 @@
           in (vendor_repository_healthy_paths | default([])) }}
       block:
         # The retries cover transient connection errors and server-side
-        # failures, following the shared retry policy in group_vars.
+        # failures, following the shared retry policy in group_vars; the
+        # until stops retrying deterministic statuses, which get_url
+        # reports as status_code when it fails (a retired key URL answers
+        # 404 identically every time).
         - name: Download repository signing key
           ansible.builtin.get_url:
             url: "{{ vendor_repository_key_url }}"
             dest: "{{ vendor_repository_candidate_key_path }}"
             mode: "0600"
+          register: vendor_repository_key_download
           changed_when: false
           check_mode: false
           retries: "{{ remote_fetch_retries }}"
           delay: "{{ remote_fetch_retry_delay }}"
+          until: >-
+            vendor_repository_key_download.status_code | default(-1) == 200 or
+            (vendor_repository_key_download.status_code | default(-1) >= 300 and
+            vendor_repository_key_download.status_code | default(-1) < 500 and
+            vendor_repository_key_download.status_code | default(-1)
+            not in remote_fetch_transient_status_codes)
           when:
             - vendor_repository_key_url | length > 0
             - not vendor_repository_key_is_preverified

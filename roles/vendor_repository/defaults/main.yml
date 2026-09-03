@@ -17,6 +17,7 @@
 #   key_url               armored signing key download URL, or
 #   key_file              absolute path of a pinned signing key shipped locally
 #   legacy_sources_path   one-line source file whose matching entries are removed
+#                         (and the file itself, once only whitespace remains)
 #   legacy_entry_regexp   regexp selecting those entries (default: repository URL)
 #   legacy_keyring_path   superseded keyring file to remove
 #   supported_architectures   Debian architectures (as normalized by

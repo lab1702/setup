@@ -1,0 +1,66 @@
+---
+# Installs the latest GitHub release of a vendor .deb package through the
+# shared, checksum-verified deb_package flow. Callers include this file
+# through include_role with tasks_from and set:
+#   github_release_display_name       name used in task messages
+#   github_release_repository         GitHub "owner/name" repository
+#   github_release_deb_package_name   Debian package name inside the archive
+#   github_release_asset_filename     the .deb asset name; it may reference
+#                                     github_release_version, which
+#                                     resolve_asset.yml sets before the
+#                                     asset is selected
+# The package is expected for the host's Debian architecture, as
+# normalized by workstation_architecture in group_vars.
+- name: Validate release package parameters for {{ github_release_display_name }}
+  ansible.builtin.assert:
+    that:
+      - github_release_repository is match('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
+      - github_release_deb_package_name is match('^[a-z0-9][a-z0-9.+-]+$')
+    fail_msg: >-
+      The {{ github_release_display_name }} release package needs a GitHub
+      owner/name repository and a valid Debian package name.
+
+# Fetching, selecting, and validating the release asset is shared with the
+# binary installers, so API and digest hardening lives in one place.
+- name: Resolve latest release package asset of {{ github_release_display_name }}
+  ansible.builtin.include_tasks: resolve_asset.yml
+
+# A rate-limited GitHub API is a transient condition; the shared fallback
+# keeps an installed package and fails only when nothing is installed yet.
+- name: Inspect installed package while metadata is unavailable for {{ github_release_display_name }}
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - --show
+      - '--showformat=${db:Status-Status}\n'
+      - "{{ github_release_deb_package_name }}:{{ workstation_architecture }}"
+  environment:
+    LC_ALL: C
+  register: github_release_deb_installed_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: not github_release_api_available
+
+- name: Handle unavailable release metadata for {{ github_release_display_name }}
+  ansible.builtin.include_tasks: unavailable_fallback.yml
+  vars:
+    github_release_installed: >-
+      {{ github_release_deb_installed_probe.rc == 0 and
+      github_release_deb_installed_probe.stdout_lines | last | default('')
+      == 'installed' }}
+  when: not github_release_api_available
+
+- name: Ensure latest release package of {{ github_release_display_name }}
+  ansible.builtin.include_role:
+    name: deb_package
+    tasks_from: ensure.yml
+  vars:
+    deb_package_display_name: "{{ github_release_display_name }}"
+    deb_package_name: "{{ github_release_deb_package_name }}"
+    deb_package_architecture: "{{ workstation_architecture }}"
+    deb_package_version: "{{ github_release_version }}"
+    deb_package_url: "{{ github_release_asset.browser_download_url }}"
+    deb_package_checksum: "{{ github_release_asset.digest }}"
+    deb_package_filename: "{{ github_release_asset.name }}"
+  when: github_release_api_available

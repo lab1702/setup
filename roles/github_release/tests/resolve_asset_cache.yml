@@ -8,7 +8,9 @@
 # rate-limited first resolution skips the remaining checks — via a
 # gated block rather than end_play, so the cleanup below always runs —
 # and rate limiting that begins mid-test is tolerated by the later
-# asserts, which accept 403/429 alongside the expected statuses.
+# asserts, which accept 403/429 alongside the expected statuses. A
+# release republished mid-test whose asset is still uploading resolves as
+# pending rather than available; both count as a usable resolution here.
 - name: Exercise the GitHub release metadata cache
   hosts: localhost
   connection: local
@@ -56,7 +58,9 @@
               ansible.builtin.assert:
                 that:
                   - github_release_metadata.status == 200
-                  - github_release_api_available
+                  - >-
+                    github_release_api_available
+                    or github_release_asset_pending
                   - github_release_version | length > 0
                   - >-
                     github_release_metadata.etag | default('')
@@ -77,7 +81,8 @@
                   - github_release_metadata.status in [200, 304, 403, 429]
                   - >-
                     github_release_metadata.status not in [200, 304]
-                    or (github_release_api_available
+                    or ((github_release_api_available
+                    or github_release_asset_pending)
                     and github_release_version | length > 0)
 
             - name: Corrupt the cache with unparseable content
@@ -100,6 +105,7 @@
                   - >-
                     github_release_metadata.status != 200
                     or github_release_api_available
+                    or github_release_asset_pending
 
             - name: Replace the cache with a malformed but current shape
               ansible.builtin.copy:
@@ -123,7 +129,8 @@
                   - github_release_metadata.status in [200, 403, 429]
                   - >-
                     github_release_metadata.status != 200
-                    or (github_release_api_available
+                    or ((github_release_api_available
+                    or github_release_asset_pending)
                     and github_release_version | length > 0)
       always:
         - name: Remove the temporary cache test directory

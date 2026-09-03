@@ -14,8 +14,15 @@
 # binaries at the archive root, and github_release_version_token_index when
 # --version reports the version somewhere other than the second whitespace
 # separated output token.
+#
+# Vendors that publish a .deb instead of a bare binary include the deb.yml
+# entry point through include_role with tasks_from, setting
+# github_release_display_name, github_release_repository,
+# github_release_deb_package_name, and github_release_asset_filename (see
+# the header of tasks/deb.yml).
 github_release_display_name: "{{ github_release_binaries | first }}"
 github_release_binaries: []
+github_release_deb_package_name: ""
 
 github_release_api_url: >-
   https://api.github.com/repos/{{ github_release_repository }}/releases/latest
@@ -69,9 +76,17 @@ github_release_archive_directory: >-
 github_release_archive_filename: "{{ github_release_archive_directory }}.tar.gz"
 
 # The release asset that resolve_asset.yml selects and validates. The binary
-# install flow resolves its archive by default; deb-based callers (for
-# example the quarto role) override this with their package filename.
+# install flow resolves its archive by default; the deb.yml entry point's
+# callers override this with their package filename.
 github_release_asset_filename: "{{ github_release_archive_filename }}"
+
+# Release tooling publishes the release first and uploads its assets one by
+# one afterwards, so for a while the latest release can list some assets
+# while the selected one is still absent or not yet uploaded. Within this
+# many seconds of publication that counts as unavailable metadata (the
+# keep-installed fallback applies); afterwards it is a deterministic
+# failure such as a renamed asset or an abandoned upload.
+github_release_asset_upload_grace_seconds: 3600
 
 # tar.gz archives may hold the binaries inside one top-level directory
 # ("directory" layout) or at the archive root ("flat" layout); zip archives

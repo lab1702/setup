@@ -12,6 +12,5 @@ solomd_package_name: solo-md
 # github_release_version is set by the github_release role's resolve_asset
 # tasks; solomd_package_filename is evaluated during asset selection, after
 # that fact exists, and workstation_architecture comes from group_vars.
-solomd_release_version: "{{ github_release_version }}"
 solomd_package_filename: >-
-  SoloMD_{{ solomd_release_version }}_{{ workstation_architecture }}.deb
+  SoloMD_{{ github_release_version }}_{{ workstation_architecture }}.deb

@@ -42,15 +42,24 @@
           {{ claude_desktop_test_key_tempdir.path }}/key{{
           vendor_repository_keyring_extension }}
       block:
+        # Mirrors the production key download, including the until that
+        # stops retrying deterministic statuses.
         - name: Download Claude signing key
           ansible.builtin.get_url:
             url: "{{ vendor_repository_key_url }}"
             dest: "{{ claude_desktop_test_key_path }}"
             mode: "0600"
+          register: claude_desktop_test_key_download
           changed_when: false
           check_mode: false
           retries: "{{ remote_fetch_retries }}"
           delay: "{{ remote_fetch_retry_delay }}"
+          until: >-
+            claude_desktop_test_key_download.status_code | default(-1) == 200 or
+            (claude_desktop_test_key_download.status_code | default(-1) >= 300 and
+            claude_desktop_test_key_download.status_code | default(-1) < 500 and
+            claude_desktop_test_key_download.status_code | default(-1)
+            not in remote_fetch_transient_status_codes)
 
         - name: Inspect Claude signing key
           ansible.builtin.command:

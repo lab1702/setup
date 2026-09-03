@@ -3,16 +3,22 @@
 # may be kept unchanged for one run, but a missing installation cannot be
 # bootstrapped without release metadata, so only that case fails. Callers
 # set github_release_installed to whether a safe installation is present.
-# Reached for rate-limited responses (403/429), for a release without
-# uploaded assets (assets still uploading, or a source-only release), and
-# for responses without usable release JSON, so the diagnostics name the
-# actual condition.
+# Reached for rate-limited responses (403/429), for a fresh release whose
+# selected asset is still uploading, for a release without uploaded assets
+# (assets still uploading, or a source-only release), and for responses
+# without usable release JSON, so the diagnostics name the actual
+# condition.
 - name: Report unusable release metadata of {{ github_release_display_name }}
   vars:
     github_release_unavailable_reason: >-
       {{ 'HTTP ' ~ github_release_metadata.status ~
       ', typically rate limiting'
       if github_release_metadata.status in [403, 429]
+      else 'a latest release (' ~ github_release_data.tag_name ~
+      ') whose asset ' ~ github_release_asset_filename ~
+      ' is not uploaded yet, typically assets still uploading after
+      publication'
+      if github_release_asset_pending | default(false)
       else 'a latest release (' ~
       github_release_metadata.json.tag_name | default('') ~
       ') without uploaded assets, typically assets still uploading or a

@@ -1,7 +1,13 @@
 ---
+# The play's preflight loop passes vendor_repository_manage; a direct
+# include manages by definition. An unmanaged host keeps every apt source
+# the playbook does not own, competing CRAN entries included, matching the
+# contract of the shared preflight.
 - name: Migrate competing CRAN repository sources
   ansible.builtin.import_tasks: competing_sources.yml
-  when: not r_repository_competing_sources_migrated | default(false)
+  when:
+    - vendor_repository_manage | default(true)
+    - not r_repository_competing_sources_migrated | default(false)
 
 - name: Preflight CRAN apt repository
   ansible.builtin.include_role:

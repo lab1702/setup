@@ -22,9 +22,11 @@
       {{ deb_package_tempdir.path }}/{{ deb_package_filename }}
   block:
     # The retries cover transient connection errors and server-side
-    # failures, matching the metadata fetches that precede the download.
-    # A checksum mismatch is retried deliberately: transient truncation
-    # or corruption is the common cause, and a genuinely wrong published
+    # failures, matching the metadata fetches that precede the download;
+    # the until stops retrying deterministic statuses, which get_url
+    # reports as status_code when it fails. A checksum mismatch carries
+    # no status and is retried deliberately: transient truncation or
+    # corruption is the common cause, and a genuinely wrong published
     # digest still fails loudly after the retries.
     - name: Download verified package of {{ deb_package_display_name }}
       ansible.builtin.get_url:
@@ -32,8 +34,15 @@
         dest: "{{ deb_package_download_path }}"
         checksum: "{{ deb_package_checksum }}"
         mode: "0600"
+      register: deb_package_verified_download
       retries: "{{ remote_fetch_retries }}"
       delay: "{{ remote_fetch_retry_delay }}"
+      until: >-
+        deb_package_verified_download.status_code | default(-1) == 200 or
+        (deb_package_verified_download.status_code | default(-1) >= 300 and
+        deb_package_verified_download.status_code | default(-1) < 500 and
+        deb_package_verified_download.status_code | default(-1)
+        not in remote_fetch_transient_status_codes)
       when: deb_package_checksum | length > 0
 
     # Without a published checksum the download's authenticity relies on

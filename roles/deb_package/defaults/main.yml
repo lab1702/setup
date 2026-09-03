@@ -53,3 +53,8 @@ deb_package_path: ""
 deb_package_url: ""
 deb_package_checksum: ""
 deb_package_filename: ""
+
+# Sourced from group_vars/all.yml so platform support is defined once for
+# the playbook and every role.
+deb_package_supported_architectures: >-
+  {{ linux_release_architecture_map.values() | unique | list }}

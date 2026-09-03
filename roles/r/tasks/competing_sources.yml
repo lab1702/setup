@@ -150,17 +150,46 @@
 
 - name: Initialize competing CRAN repository migration plans
   ansible.builtin.set_fact:
+    r_repository_regular_migration_paths: []
     r_repository_regular_source_migrations: []
     r_repository_matching_symlink_sources: []
   changed_when: false
 
+# The filter's verdicts are gathered over loop indexes first, so neither
+# the loop item nor the recorded fact carries source contents and these
+# tasks run without no_log: a parsing error, whose message names the
+# file, reaches the operator instead of being censored. The content-bearing
+# plan below only re-runs the filter on inputs it already accepted here.
+- name: Identify regular APT repository sources with CRAN entries
+  vars:
+    r_repository_source_read: >-
+      {{ r_repository_regular_source_contents.results[item] }}
+    r_repository_source_verdict: >-
+      {{ (r_repository_source_read.content | b64decode)
+      | migrate_cran_apt_source(r_repository_source_read.item,
+      r_repository_url, false) }}
+  ansible.builtin.set_fact:
+    r_repository_regular_migration_paths: >-
+      {{ r_repository_regular_migration_paths
+      + ([r_repository_source_read.item]
+      if r_repository_source_verdict.migration_required else []) }}
+  changed_when: false
+  loop: >-
+    {{ range(r_repository_regular_source_contents.results | length) | list }}
+  loop_control:
+    label: "{{ r_repository_regular_source_contents.results[item].item }}"
+  when: r_repository_regular_source_contents.results[item].content is defined
+
 - name: Plan regular-file CRAN repository source migrations
   vars:
+    r_repository_source_read: >-
+      {{ r_repository_regular_source_contents.results
+      | selectattr('item', 'equalto', item) | first }}
     r_repository_candidate_migration: >-
-      {{ (item.content | b64decode)
-      | migrate_cran_apt_source(item.item, r_repository_url) }}
+      {{ (r_repository_source_read.content | b64decode)
+      | migrate_cran_apt_source(item, r_repository_url) }}
     r_repository_planned_migration:
-      path: "{{ item.item }}"
+      path: "{{ item }}"
       content: "{{ r_repository_candidate_migration.content }}"
       matching_entries: >-
         {{ r_repository_candidate_migration.matching_entries }}
@@ -169,26 +198,29 @@
       {{ r_repository_regular_source_migrations
       + [r_repository_planned_migration] }}
   changed_when: false
-  loop: "{{ r_repository_regular_source_contents.results }}"
-  when:
-    - item.content is defined
-    - r_repository_candidate_migration.migration_required
+  loop: "{{ r_repository_regular_migration_paths }}"
+  # The planned migration embeds the rewritten source contents.
   no_log: true
 
 - name: Identify CRAN entries reached through symbolic links
   vars:
-    r_repository_candidate_migration: >-
-      {{ item.content | b64decode
-      | migrate_cran_apt_source(item.item, r_repository_url, false) }}
+    r_repository_source_read: >-
+      {{ r_repository_symlink_source_contents.results[item] }}
+    r_repository_source_verdict: >-
+      {{ (r_repository_source_read.content | b64decode)
+      | migrate_cran_apt_source(r_repository_source_read.item,
+      r_repository_url, false) }}
   ansible.builtin.set_fact:
     r_repository_matching_symlink_sources: >-
-      {{ r_repository_matching_symlink_sources + [item.item] }}
+      {{ r_repository_matching_symlink_sources
+      + ([r_repository_source_read.item]
+      if r_repository_source_verdict.migration_required else []) }}
   changed_when: false
-  loop: "{{ r_repository_symlink_source_contents.results }}"
-  when:
-    - item.content is defined
-    - r_repository_candidate_migration.migration_required
-  no_log: true
+  loop: >-
+    {{ range(r_repository_symlink_source_contents.results | length) | list }}
+  loop_control:
+    label: "{{ r_repository_symlink_source_contents.results[item].item }}"
+  when: r_repository_symlink_source_contents.results[item].content is defined
 
 - name: Refuse to migrate CRAN repository entries through symbolic links
   ansible.builtin.fail:
