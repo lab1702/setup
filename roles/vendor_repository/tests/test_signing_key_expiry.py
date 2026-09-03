@@ -9,6 +9,7 @@ directly against synthetic records. Run from the repository root with:
 
 from __future__ import annotations
 
+import calendar
 import importlib.util
 import pathlib
 import unittest
@@ -30,14 +31,16 @@ Y2020 = 1609372800
 Y2027 = 1822521600
 Y2030 = 1893456000
 Y2032 = 1957996800
+ISO_2027 = "20270930T000000"
+ISO_2027_EPOCH = calendar.timegm((2027, 9, 30, 0, 0, 0, 0, 0, 0))
 
 
-def pub(caps: str, expiry: int | None = None) -> str:
-    return f"pub:-:255:22:AAAA:1600000000:{expiry or ''}::-:::{caps}:::::ed25519:::0:"
+def pub(caps: str, expiry: int | None | str = None, validity: str = "-") -> str:
+    return f"pub:{validity}:255:22:AAAA:1600000000:{expiry or ''}::-:::{caps}:::::ed25519:::0:"
 
 
-def sub(caps: str, expiry: int | None = None) -> str:
-    return f"sub:-:255:18:BBBB:1600000000:{expiry or ''}:::::{caps}:::::cv25519::"
+def sub(caps: str, expiry: int | None | str = None, validity: str = "-") -> str:
+    return f"sub:{validity}:255:18:BBBB:1600000000:{expiry or ''}:::::{caps}:::::cv25519::"
 
 
 FPR = "fpr:::::::::AAAA:"
@@ -78,6 +81,41 @@ class SigningKeyExpiryTests(unittest.TestCase):
 
     def test_unbounded_signing_primary_outlives_bounded_subkey(self) -> None:
         self.assertEqual(expiry_of([pub("scSC"), FPR, UID, sub("s", Y2030)]), 0)
+
+    def test_revoked_signing_subkey_does_not_sign(self) -> None:
+        # A rotated key whose retired subkey was revoked rather than left
+        # to expire: only the remaining subkey bounds the key.
+        self.assertEqual(
+            expiry_of([pub("cSC"), FPR, UID, sub("s", Y2030), sub("s", validity="r")]),
+            Y2030,
+        )
+
+    def test_invalid_and_disabled_signing_subkeys_do_not_sign(self) -> None:
+        for validity in ("i", "d"):
+            with self.subTest(validity=validity):
+                self.assertEqual(
+                    expiry_of(
+                        [pub("cSC"), FPR, UID, sub("s", Y2030), sub("s", validity=validity)]
+                    ),
+                    Y2030,
+                )
+
+    def test_revoked_primary_is_left_to_the_fingerprint_pin(self) -> None:
+        # gpg marks the subkeys of a revoked primary revoked as well, so
+        # nothing signs; the vendor's replacement key carries a new
+        # fingerprint, which the fingerprint predicate rejects loudly.
+        self.assertEqual(
+            expiry_of([pub("scSC", Y2030, validity="r"), FPR, UID, sub("s", validity="r")]),
+            0,
+        )
+
+    def test_iso_basic_timestamps_are_parsed_as_utc(self) -> None:
+        # gpg documents a migration from seconds since the epoch to this
+        # form, read as UTC.
+        self.assertEqual(expiry_of([pub("scSC", ISO_2027), FPR, UID]), ISO_2027_EPOCH)
+        self.assertEqual(
+            expiry_of([pub("cC", ISO_2027), FPR, UID, sub("s", Y2030)]), ISO_2027_EPOCH
+        )
 
     def test_key_without_signing_capability_never_expires(self) -> None:
         self.assertEqual(expiry_of([pub("cC", Y2027), FPR, UID, sub("e", Y2027)]), 0)

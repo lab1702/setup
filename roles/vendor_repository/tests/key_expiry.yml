@@ -3,7 +3,8 @@
 # against keys generated on the fly: one that never expires, one expiring
 # inside the renewal window, one already expired (created under a faked
 # clock), a rotated key keeping its retired signing subkey beside a valid
-# one, and a key whose only signing subkey has expired. The preflight's
+# one, a rotated key whose retired subkey was revoked instead, and a key
+# whose only signing subkey has expired. The preflight's
 # quarantine and healthy-path decisions and the configure phase's
 # validity assert all consume these verdicts. Needs only gpg: no root,
 # network, or repository. Supports --check, since the scaffolding and the
@@ -27,9 +28,10 @@
     # expected_bounded says whether the key as a whole stops signing at
     # some moment; usage is the primary key's gpg usage (default: sign and
     # certify; cert leaves signing to the subkeys); subkeys are added
-    # signing subkeys, each under its own faked clock when given. A subkey
-    # binding cannot predate its primary, so a case with an old subkey also
-    # creates the primary under the faked clock.
+    # signing subkeys, each under its own faked clock when given and
+    # revoked afterwards when asked. A subkey binding cannot predate its
+    # primary, so a case with an old subkey also creates the primary under
+    # the faked clock.
     vendor_repository_test_cases:
       - name: a key that never expires
         expected_bounded: false
@@ -56,6 +58,16 @@
           - expiry: 1y
             faked_system_time: 20200101T000000
           - expiry: never
+        expected_expired: false
+        expected_expiring: false
+      - name: a rotated key whose retired signing subkey was revoked
+        expected_bounded: true
+        expiry: never
+        usage: cert
+        subkeys:
+          - expiry: 2y
+          - expiry: never
+            revoke: true
         expected_expired: false
         expected_expiring: false
       - name: a key whose only signing subkey has expired

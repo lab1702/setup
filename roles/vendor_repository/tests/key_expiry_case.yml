@@ -1,8 +1,9 @@
 ---
 # One key expiry case: generates a fresh key with the requested primary
-# usage and expiry, adds the requested signing subkeys, exports it, runs
-# the shared predicate on it, and validates the verdicts. The scaffolding
-# runs for real even under --check.
+# usage and expiry, adds the requested signing subkeys (revoking those
+# marked for it through gpg's scripted key editor), exports it, runs the
+# shared predicate on it, and validates the verdicts. The scaffolding runs
+# for real even under --check.
 - name: Reset key home for {{ vendor_repository_test_case.name }}
   ansible.builtin.file:
     path: "{{ vendor_repository_test_key_home }}"
@@ -66,6 +67,34 @@
     label: "{{ vendor_repository_test_subkey.expiry }}"
   changed_when: false
   check_mode: false
+
+# Subkeys are numbered from one in the order they were added; the script
+# answers the reason prompt with "no reason" and an empty description.
+- name: Revoke signing subkeys for {{ vendor_repository_test_case.name }}
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --batch
+      - --yes
+      - --pinentry-mode
+      - loopback
+      - --passphrase
+      - ""
+      - --command-fd
+      - "0"
+      - --edit-key
+      - "{{ vendor_repository_test_fingerprint }}"
+    stdin: "key {{ ansible_loop.index }}\nrevkey\ny\n0\n\ny\nsave\n"
+  environment:
+    GNUPGHOME: "{{ vendor_repository_test_key_home }}"
+  loop: "{{ vendor_repository_test_case.subkeys | default([]) }}"
+  loop_control:
+    loop_var: vendor_repository_test_subkey
+    extended: true
+    label: "{{ vendor_repository_test_subkey.expiry }}"
+  changed_when: false
+  check_mode: false
+  when: vendor_repository_test_subkey.revoke | default(false)
 
 - name: Export signing key for {{ vendor_repository_test_case.name }}
   ansible.builtin.command:

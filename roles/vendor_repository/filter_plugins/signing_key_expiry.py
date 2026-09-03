@@ -10,11 +10,24 @@ effective expiry passes. That single moment is what the predicate consumes.
 
 from __future__ import annotations
 
+import calendar
+import re
+import time
+
 from ansible.errors import AnsibleFilterError
 
 _RECORD_FIELDS = 12  # up to and including the capabilities field
+_VALIDITY_FIELD = 1
 _EXPIRY_FIELD = 6
 _CAPABILITIES_FIELD = 11
+# Keys gpg reports as revoked, invalid, or disabled cannot sign whatever
+# their expiry says. A primary key in one of these states is outside this
+# filter's remit: the vendor publishes a replacement under a new
+# fingerprint, which the fingerprint predicate rejects loudly.
+_UNUSABLE_VALIDITIES = {"r", "i", "d"}
+# gpg prints dates as seconds since the epoch but documents a migration to
+# ISO 8601 basic format in UTC (for example 19660205T091500).
+_ISO_BASIC_TIMESTAMP = re.compile(r"^[0-9]{8}T[0-9]{6}$")
 
 
 def _record_expiry(fields: list[str]) -> int | None:
@@ -23,6 +36,8 @@ def _record_expiry(fields: list[str]) -> int | None:
     if not value:
         return None
     try:
+        if _ISO_BASIC_TIMESTAMP.match(value):
+            return calendar.timegm(time.strptime(value, "%Y%m%dT%H%M%S"))
         return int(value)
     except ValueError as error:
         raise AnsibleFilterError(
@@ -68,6 +83,8 @@ def signing_key_expiry(records: object) -> int:
             seen_primary = True
             primary_expiry = _record_expiry(fields)
         elif not seen_primary:
+            continue
+        if fields[_VALIDITY_FIELD] in _UNUSABLE_VALIDITIES:
             continue
         # Lowercase capabilities describe this key itself; the uppercase
         # ones on a primary record summarise the whole key.
