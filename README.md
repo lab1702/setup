@@ -177,7 +177,10 @@ ansible-playbook roles/amd64v3/tests/current_cpu.yml
 
 The GitHub release-metadata cache (ETag revalidation, corrupt-cache
 recovery, and the asset upload grace window) has its own regression test
-against the live GitHub API:
+against the live GitHub API. It uses the unauthenticated quota of 60
+requests per hour per address unless `GITHUB_TOKEN` is exported, and a run
+that GitHub rate-limits ends by naming the checks it could not prove rather
+than passing silently:
 
 ```bash
 ansible-playbook roles/github_release/tests/resolve_asset_cache.yml

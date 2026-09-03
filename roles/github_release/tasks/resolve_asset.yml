@@ -123,6 +123,9 @@
     status_code: "{{ github_release_accepted_status_codes }}"
     headers:
       If-None-Match: "{{ github_release_cache.etag | default(omit) }}"
+      Authorization: >-
+        {{ 'Bearer ' ~ github_release_api_token
+        if github_release_api_token | length > 0 else omit }}
   register: github_release_metadata
   changed_when: false
   check_mode: false

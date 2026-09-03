@@ -4,14 +4,18 @@
 # quota-free 304; a release republished mid-test legitimately yields a
 # fresh 200), corrupt or malformed caches are discarded without failing
 # the run, and a missing asset resolves as pending inside the upload
-# grace window but fails past it. The cache directory and ownership come from the role
-# defaults, overridden here so the flow runs without privileges. A
-# rate-limited first resolution skips the remaining checks — via a
-# gated block rather than end_play, so the cleanup below always runs —
-# and rate limiting that begins mid-test is tolerated by the later
-# asserts, which accept 403/429 alongside the expected statuses. A
-# release republished mid-test whose asset is still uploading resolves as
-# pending rather than available; both count as a usable resolution here.
+# grace window but fails past it. The cache directory and ownership come
+# from the role defaults, overridden here so the flow runs without
+# privileges. A rate-limited first resolution skips the remaining checks
+# — via a gated block rather than end_play, so the cleanup below always
+# runs — and rate limiting that begins mid-test is tolerated by the later
+# asserts, which accept 403/429 alongside the expected statuses. Either
+# way the run ends by saying which checks it could not prove, so a
+# rate-limited run cannot pass for a genuine one. The unauthenticated
+# quota is small (60 requests per hour per address); export GITHUB_TOKEN
+# to run repeatedly under an authenticated quota. A release republished
+# mid-test whose asset is still uploading resolves as pending rather
+# than available; both count as a usable resolution here.
 - name: Exercise the GitHub release metadata cache
   hosts: localhost
   connection: local
@@ -29,6 +33,7 @@
     github_release_cache_group: "{{ ansible_facts['user_gid'] }}"
     github_release_test_cache_path: >-
       {{ github_release_cache_directory }}/astral-sh--ruff.json
+    github_release_api_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
   tasks:
     - name: Create temporary cache test directory
       ansible.builtin.tempfile:
@@ -49,6 +54,8 @@
           ansible.builtin.set_fact:
             github_release_test_rate_limited: >-
               {{ github_release_metadata.status in [403, 429] }}
+            github_release_test_statuses:
+              - "{{ github_release_metadata.status }}"
 
         - name: Exercise the cache while the API is available
           when: not github_release_test_rate_limited | bool
@@ -72,6 +79,12 @@
               ansible.builtin.include_role:
                 name: github_release
                 tasks_from: resolve_asset.yml
+
+            - name: Record the revalidation status
+              ansible.builtin.set_fact:
+                github_release_test_statuses: >-
+                  {{ github_release_test_statuses
+                  + [github_release_metadata.status] }}
 
             # Normally a quota-free 304; a republished release yields a
             # fresh 200 and mid-test rate limiting yields 403/429, both
@@ -99,6 +112,12 @@
                 name: github_release
                 tasks_from: resolve_asset.yml
 
+            - name: Record the corrupt-cache status
+              ansible.builtin.set_fact:
+                github_release_test_statuses: >-
+                  {{ github_release_test_statuses
+                  + [github_release_metadata.status] }}
+
             - name: Validate the corrupt cache was discarded
               ansible.builtin.assert:
                 that:
@@ -124,6 +143,12 @@
                 name: github_release
                 tasks_from: resolve_asset.yml
 
+            - name: Record the malformed-cache status
+              ansible.builtin.set_fact:
+                github_release_test_statuses: >-
+                  {{ github_release_test_statuses
+                  + [github_release_metadata.status] }}
+
             - name: Validate the malformed cache was discarded before use
               ansible.builtin.assert:
                 that:
@@ -144,6 +169,12 @@
               vars:
                 github_release_asset_filename: missing-asset.deb
                 github_release_asset_upload_grace_seconds: 315360000
+
+            - name: Record the grace-window status
+              ansible.builtin.set_fact:
+                github_release_test_statuses: >-
+                  {{ github_release_test_statuses
+                  + [github_release_metadata.status] }}
 
             - name: Validate the pending resolution
               ansible.builtin.assert:
@@ -177,6 +208,35 @@
                         and github_release_api_available
                         and ansible_failed_result.msg is search(
                         'did not contain the expected uploaded asset'))
+              always:
+                - name: Record the past-window status
+                  ansible.builtin.set_fact:
+                    github_release_test_statuses: >-
+                      {{ github_release_test_statuses
+                      + [github_release_metadata.status] }}
+
+        # A rate-limited response makes every check after it vacuous: the
+        # asserts accept it, so the recap alone cannot tell such a run from
+        # a genuine pass. Say so, with the quota reset time GitHub reports.
+        - name: Report checks left unproven by rate limiting
+          vars:
+            github_release_test_reset_time: >-
+              {{ '%H:%M %Z' | strftime(github_release_metadata.x_ratelimit_reset)
+              if github_release_metadata.x_ratelimit_reset is defined
+              else 'within an hour' }}
+          ansible.builtin.debug:
+            msg: >-
+              GitHub rate-limited this run: the release requests answered
+              {{ github_release_test_statuses | join(', ') }}, so every check
+              from the first 403 or 429 on was accepted without proof
+              ({{ 'all of them' if github_release_test_rate_limited | bool
+              else 'the later ones' }}). This run does not validate the
+              cache. Rerun after the quota resets
+              ({{ github_release_test_reset_time }}) or with GITHUB_TOKEN
+              exported.
+          when: >-
+            github_release_test_statuses
+            | select('in', [403, 429]) | list | length > 0
       always:
         - name: Remove the temporary cache test directory
           ansible.builtin.file:

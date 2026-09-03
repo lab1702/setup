@@ -39,6 +39,12 @@ github_release_accepted_status_codes:
   - 403
   - 429
 
+# Optional GitHub token sent as a bearer credential with the release
+# request. The playbook leaves it empty and relies on the cache below to
+# stay within the unauthenticated quota; the cache test reads GITHUB_TOKEN
+# so repeated local runs can use an authenticated quota instead.
+github_release_api_token: ""
+
 # Conditional-request cache for the release metadata: GitHub 304 responses
 # do not count against the unauthenticated per-IP rate limit, so caching
 # each response's ETag makes unchanged-release checks free.
