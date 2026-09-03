@@ -112,6 +112,9 @@ systems, the `kvm` group. Log out and back in or reboot before using Docker or
 KVM so the new login session receives those memberships. For Docker, running
 `newgrp docker` can instead activate the membership in a new shell.
 
+Each run ends by emptying apt's cache of downloaded package archives, which
+the installs and the distribution upgrade would otherwise keep indefinitely.
+
 ---
 
 ## Python and NPM shell configuration
@@ -130,10 +133,12 @@ The repository tracks regression tests for the shared repository sandbox
 `.asc` keyring), for the vendor preflight's migration of legacy one-line
 sources (scratch paths only, so it needs neither root nor network), and
 for the `amd64v3` role (a full run in an isolated apt sandbox, a
-check-mode run, and a current-CPU detection run). The tests source their
-repository URLs, fingerprints, and platform values from the role
-defaults, so they follow key rotations and support changes
-automatically. Run them from the repository root, where `ansible.cfg`
+check-mode run, and a current-CPU detection run). The repository-metadata
+and `amd64v3` tests source their repository URLs, fingerprints, and
+platform values from the role defaults, so they follow key rotations and
+support changes automatically; the legacy migration test uses a synthetic
+specification because it touches no repository. Run them from the
+repository root, where `ansible.cfg`
 resolves the roles; the repository-metadata tests support `--check` and
 the check-mode test requires it:
 

@@ -16,6 +16,9 @@
     desktop_session_directories:
       - /usr/share/xsessions
       - /usr/share/wayland-sessions
+    # apt's Dir::Cache::archives, where every apt module install and the
+    # distribution upgrade leave their downloaded packages.
+    workstation_package_archives_directory: /var/cache/apt/archives
     # .npmrc is the standard home of npm auth tokens, so it must stay
     # private; .bashrc keeps the conventional world-readable mode.
     workstation_user_configuration_entries:
@@ -434,3 +437,45 @@
     - name: Install VHS terminal recorder
       ansible.builtin.include_role:
         name: vhs
+
+    # The apt module keeps every archive it downloads: python-apt does not
+    # honor APT::Keep-Downloaded-Packages (only apt's command-line front
+    # end implements it), and the module's own clean option runs in check
+    # mode and always reports a change. So the cache is emptied here once
+    # every install above has run, only when it holds archives, with a
+    # check-mode report of what a real run would remove. apt-get clean
+    # also drops the rebuildable binary package caches beside them.
+    - name: Discover downloaded package archives
+      ansible.builtin.find:
+        paths: "{{ workstation_package_archives_directory }}"
+        patterns: "*.deb"
+        file_type: file
+        recurse: false
+      register: workstation_package_archives
+
+    - name: Report pending removal of downloaded package archives in check mode
+      ansible.builtin.debug:
+        msg: >-
+          {{ workstation_package_archives.matched }} downloaded package
+          archives ({{ workstation_package_archives.files
+          | map(attribute='size') | sum | human_readable }}) would be
+          removed from {{ workstation_package_archives_directory }}.
+      changed_when: true
+      when:
+        - ansible_check_mode
+        - workstation_package_archives.matched > 0
+
+    - name: Remove downloaded package archives
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/apt-get
+          - -o
+          - DPkg::Lock::Timeout=120
+          - clean
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+        LC_ALL: C
+      changed_when: true
+      when:
+        - not ansible_check_mode
+        - workstation_package_archives.matched > 0
