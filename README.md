@@ -21,7 +21,10 @@ Microsoft's signed APT repository on AMD64 and ARM64. MEGA Desktop tracks the
 latest package from MEGA's signed APT repository on AMD64 and ARM64. Zoom
 Workplace tracks the latest package from Zoom's signed, AMD64-only APT
 repository. R tracks the latest release from CRAN's signed Ubuntu repository
-on AMD64 and ARM64. Posit RStudio Desktop tracks the latest stable release
+on AMD64 and ARM64. Vendor signing keys are pinned by fingerprint; a key
+approaching its expiry is re-fetched from the vendor on every run so a
+renewed copy is installed as soon as it is published, and an expired key is
+replaced from a fresh download. Posit RStudio Desktop tracks the latest stable release
 published in Posit's download metadata (`https://cdn.posit.co/downloads.json`)
 and verifies the DEB against the SHA-256 checksum published there. LibreOffice
 is installed from the Ubuntu archive on desktop systems.
@@ -131,16 +134,17 @@ The repository tracks regression tests for the shared repository sandbox
 (one per keyring format: `chatgpt` covers a deb822 source with a binary
 `.gpg` keyring, `claude_desktop` covers a deb822 source with an armored
 `.asc` keyring), for the vendor preflight's migration of legacy one-line
-sources (scratch paths only, so it needs neither root nor network), and
-for the `amd64v3` role (a full run in an isolated apt sandbox, a
+sources (scratch paths only, so it needs neither root nor network), for
+the shared signing-key predicate's expiry verdicts (keys generated on the
+fly, so it needs only `gpg`), and for the `amd64v3` role (a full run in an isolated apt sandbox, a
 check-mode run, and a current-CPU detection run). The repository-metadata
 and `amd64v3` tests source their repository URLs, fingerprints, and
 platform values from the role defaults, so they follow key rotations and
 support changes automatically; the legacy migration test uses a synthetic
 specification because it touches no repository. Run them from the
-repository root, where `ansible.cfg`
-resolves the roles; the repository-metadata tests support `--check` and
-the check-mode test requires it:
+repository root, where `ansible.cfg` resolves the roles; the
+repository-metadata and key-expiry tests support `--check` and the
+check-mode test requires it:
 
 ```bash
 ansible-playbook --check roles/chatgpt/tests/check_mode_repository_metadata.yml
@@ -152,6 +156,10 @@ ansible-playbook --check roles/claude_desktop/tests/check_mode_repository_metada
 
 ```bash
 ansible-playbook roles/vendor_repository/tests/legacy_source_migration.yml
+```
+
+```bash
+ansible-playbook roles/vendor_repository/tests/key_expiry.yml
 ```
 
 ```bash

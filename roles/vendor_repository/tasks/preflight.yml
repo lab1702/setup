@@ -170,11 +170,14 @@
       ansible.builtin.include_tasks: gpg_probe.yml
 
     # Reset before the conditional inspection below so a previous vendor's
-    # verdict can never leak through the shared fact when the inspection
+    # verdicts can never leak through the shared facts when the inspection
     # is skipped here.
-    - name: Reset installed repository signing key verdict
+    - name: Reset installed repository signing key verdicts
       ansible.builtin.set_fact:
         vendor_repository_inspected_key_matches: false
+        vendor_repository_inspected_key_expiry: 0
+        vendor_repository_inspected_key_expired: false
+        vendor_repository_inspected_key_expiring: false
       changed_when: false
 
     - name: Verify installed repository signing key
@@ -203,6 +206,21 @@
         - not vendor_repository_gpg_available
         - vendor_repository_source_status.stat.exists
 
+    # An extension keeps the fingerprint, so the installed key cannot show
+    # whether the vendor has already renewed it; the configure phase finds
+    # out by fetching the vendor's copy, which the healthy path would skip.
+    - name: Report repository signing key approaching expiry
+      ansible.builtin.debug:
+        msg: >-
+          The {{ vendor_repository_display_name }} signing key at
+          {{ vendor_repository_keyring_path }} expires on
+          {{ '%Y-%m-%d' | strftime(vendor_repository_inspected_key_expiry) }};
+          the vendor's current key is fetched on every run until a renewed
+          key is installed.
+      when:
+        - vendor_repository_inspected_key_expiring
+        - not vendor_repository_inspected_key_expired
+
     - name: Determine whether the managed repository needs quarantine
       vars:
         # A failed slurp registers failed=False under failed_when: false, so
@@ -219,6 +237,8 @@
         # only the file metadata is checked here and the configure phase
         # verifies the fingerprint after the base packages install gpg;
         # quarantining over a missing tool would delete a healthy repository.
+        # An expired key is unusable: apt rejects the repository, so the
+        # source must be rebuilt from a freshly downloaded key.
         vendor_repository_installed_key_is_usable: >-
           {{ vendor_repository_installed_key_status.stat.isreg
           | default(false)
@@ -229,7 +249,8 @@
           and vendor_repository_installed_key_status.stat.mode
           | default('') == '0644'
           and (not vendor_repository_gpg_available or
-          vendor_repository_inspected_key_matches) }}
+          (vendor_repository_inspected_key_matches
+          and not vendor_repository_inspected_key_expired)) }}
       ansible.builtin.set_fact:
         vendor_repository_quarantine_required: >-
           {{ vendor_repository_source_status.stat.exists and
@@ -255,9 +276,10 @@
 
     # A path is healthy when its managed source survived the preflight
     # intact: the source file exists with the expected content and ownership
-    # and the installed keyring carries the pinned fingerprint. The
-    # configure phase uses this to re-verify the installed key locally
-    # instead of re-downloading it from the vendor on every run.
+    # and the installed keyring carries the pinned fingerprint with no
+    # signing key expiring within the renewal window. The configure phase
+    # uses this to re-verify the installed key locally instead of
+    # re-downloading it from the vendor on every run.
     - name: Record completed repository preflight
       ansible.builtin.set_fact:
         vendor_repository_preflighted_paths: >-
@@ -271,6 +293,7 @@
           + ([vendor_repository_sources_path]
           if (vendor_repository_source_status.stat.exists
           and vendor_repository_gpg_available
-          and not vendor_repository_quarantine_required | bool)
+          and not vendor_repository_quarantine_required | bool
+          and not vendor_repository_inspected_key_expiring)
           else []) }}
       changed_when: false

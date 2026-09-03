@@ -1,0 +1,62 @@
+---
+# Exercises the shared signing-key predicate (tasks/inspect_key.yml)
+# against keys generated on the fly: one that never expires, one expiring
+# inside the renewal window, and one already expired, created under a
+# faked clock. The preflight's quarantine and healthy-path decisions and
+# the configure phase's validity assert all consume these verdicts. Needs
+# only gpg: no root, network, or repository. Supports --check, since the
+# scaffolding and the predicate's inspection run for real.
+- name: Exercise signing key expiry verdicts
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars_files:
+    - ../../../group_vars/all.yml
+  vars:
+    vendor_repository_test_key_home: >-
+      {{ vendor_repository_test_directory.path }}/gnupg
+    vendor_repository_test_key_path: >-
+      {{ vendor_repository_test_directory.path }}/key.asc
+    # Only the fingerprint reaches the predicate; the fact is set per case
+    # from the generated key.
+    vendor_repository_spec:
+      display_name: Key expiry test
+      key_fingerprint: "{{ vendor_repository_test_fingerprint }}"
+    vendor_repository_test_cases:
+      - name: a key that never expires
+        expiry: never
+        expected_expired: false
+        expected_expiring: false
+      - name: a key expiring inside the renewal window
+        expiry: 1d
+        expected_expired: false
+        expected_expiring: true
+      - name: an expired key
+        expiry: 1y
+        faked_system_time: 20200101T000000
+        expected_expired: true
+        expected_expiring: true
+  tasks:
+    - name: Create temporary key expiry test directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .key-expiry-test
+      register: vendor_repository_test_directory
+      changed_when: false
+      check_mode: false
+
+    - name: Exercise key expiry cases
+      block:
+        - name: Exercise one key expiry case
+          ansible.builtin.include_tasks: key_expiry_case.yml
+          loop: "{{ vendor_repository_test_cases }}"
+          loop_control:
+            loop_var: vendor_repository_test_case
+            label: "{{ vendor_repository_test_case.name }}"
+      always:
+        - name: Remove temporary key expiry test directory
+          ansible.builtin.file:
+            path: "{{ vendor_repository_test_directory.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false

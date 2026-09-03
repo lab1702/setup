@@ -156,6 +156,20 @@
               contain exactly one primary key with fingerprint
               {{ vendor_repository_key_fingerprint }}.
 
+        # The candidate is the vendor's current key whenever the installed
+        # one is expiring, so an expired candidate means the vendor has not
+        # renewed it yet and apt would reject the repository.
+        - name: Verify repository signing key validity
+          ansible.builtin.assert:
+            that:
+              - not vendor_repository_inspected_key_expired
+            fail_msg: >-
+              The {{ vendor_repository_display_name }} signing key expired on
+              {{ '%Y-%m-%d' | strftime(vendor_repository_inspected_key_expiry)
+              }} and no renewed key was found at
+              {{ vendor_repository_key_url if vendor_repository_key_url
+              | length > 0 else vendor_repository_key_file }}.
+
         - name: Convert verified signing key to binary keyring
           ansible.builtin.command:
             argv:

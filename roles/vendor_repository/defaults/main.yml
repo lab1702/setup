@@ -26,6 +26,21 @@
 #   install_recommends        apt install_recommends setting (default: apt's)
 vendor_repository_spec: {}
 
+# Vendors extend rather than replace an expiring signing key, and an
+# extension keeps the pinned fingerprint. A key expiring within this many
+# seconds is therefore not treated as healthy: the configure phase fetches
+# the vendor's current copy on every run instead of reusing the installed
+# one, so a renewed key is installed as soon as it is published. An
+# already expired key is unusable, which quarantines its source and
+# rebuilds it from a fresh download.
+vendor_repository_key_renewal_window_seconds: 2592000
+
+# One gpg --with-colons pub or sub record whose key can sign (a lowercase
+# "s" in the capabilities field) and carries an expiry; the capture is
+# the expiry as seconds since the epoch. Only signing keys matter to apt.
+vendor_repository_signing_key_expiry_pattern: >-
+  ^(?:pub|sub):(?:[^:]*:){5}([0-9]+):(?:[^:]*:){4}[^:]*s.*$
+
 # Whether this host currently installs the vendor's packages. The
 # preflight entry point honors this: when false it only repairs or
 # quarantines a managed source file that already exists on disk (created

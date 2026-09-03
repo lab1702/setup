@@ -17,8 +17,11 @@
       - /usr/share/xsessions
       - /usr/share/wayland-sessions
     # apt's Dir::Cache::archives, where every apt module install and the
-    # distribution upgrade leave their downloaded packages.
-    workstation_package_archives_directory: /var/cache/apt/archives
+    # distribution upgrade leave their downloaded packages, read from apt's
+    # configuration below so the cleanup guard and apt-get clean agree.
+    workstation_package_archives_directory: >-
+      {{ workstation_package_archives_query.stdout
+      | regex_replace("^archives='(.*)'$", '\1') }}
     # .npmrc is the standard home of npm auth tokens, so it must stay
     # private; .bashrc keeps the conventional world-readable mode.
     workstation_user_configuration_entries:
@@ -445,6 +448,27 @@
     # every install above has run, only when it holds archives, with a
     # check-mode report of what a real run would remove. apt-get clean
     # also drops the rebuildable binary package caches beside them.
+    - name: Resolve apt package archive directory
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/apt-config
+          - shell
+          - archives
+          - Dir::Cache::archives/d
+      environment:
+        LC_ALL: C
+      register: workstation_package_archives_query
+      changed_when: false
+      check_mode: false
+
+    - name: Validate apt package archive directory
+      ansible.builtin.assert:
+        that:
+          - workstation_package_archives_directory is match('^/')
+        fail_msg: >-
+          apt-config did not report an absolute Dir::Cache::archives
+          directory: {{ workstation_package_archives_query.stdout }}
+
     - name: Discover downloaded package archives
       ansible.builtin.find:
         paths: "{{ workstation_package_archives_directory }}"
