@@ -129,6 +129,12 @@
   register: github_release_metadata
   changed_when: false
   check_mode: false
+  # A custom header is plain module data, which verbose and failure output
+  # print, so the request is censored whenever a token is in use. The
+  # playbook never sets one and keeps full diagnostics. (GitHub silently
+  # ignores HTTP basic credentials on this endpoint, so the module's
+  # masked password parameter is not a usable alternative.)
+  no_log: "{{ github_release_api_token | length > 0 }}"
   retries: "{{ remote_fetch_retries }}"
   delay: "{{ remote_fetch_retry_delay }}"
   until: >-
