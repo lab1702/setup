@@ -24,7 +24,8 @@ repository. R tracks the latest release from CRAN's signed Ubuntu repository
 on AMD64 and ARM64. Vendor signing keys are pinned by fingerprint; a key
 approaching its expiry is re-fetched from the vendor on every run so a
 renewed copy is installed as soon as it is published, and an expired key is
-replaced from a fresh download. Posit RStudio Desktop tracks the latest stable release
+replaced from a fresh download; until the vendor publishes one, packages that
+are already installed are kept and the repository stays disabled. Posit RStudio Desktop tracks the latest stable release
 published in Posit's download metadata (`https://cdn.posit.co/downloads.json`)
 and verifies the DEB against the SHA-256 checksum published there. LibreOffice
 is installed from the Ubuntu archive on desktop systems.

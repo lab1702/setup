@@ -327,11 +327,6 @@
           - ttyd
         state: present
 
-    - name: Install latest R release from CRAN
-      ansible.builtin.include_role:
-        name: r
-      when: workstation_application_enabled['r']
-
     - name: Ensure user-local NPM prefix directory exists
       ansible.builtin.file:
         path: "{{ workstation_user_home }}/.npm-global"
@@ -396,6 +391,14 @@
         cache_valid_time: 3600
         upgrade: dist
         lock_timeout: 120
+
+    # Every vendor role follows the distribution upgrade, so a vendor-side
+    # problem confines its effect to that vendor's packages and never
+    # withholds the upgrade from a run.
+    - name: Install latest R release from CRAN
+      ansible.builtin.include_role:
+        name: r
+      when: workstation_application_enabled['r']
 
     - name: Include desktop setup
       ansible.builtin.include_tasks: tasks/desktop.yml
