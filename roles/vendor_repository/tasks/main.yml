@@ -156,6 +156,16 @@
               contain exactly one primary key with fingerprint
               {{ vendor_repository_key_fingerprint }}.
 
+        - name: Verify repository signing key has an eligible signer
+          ansible.builtin.assert:
+            that:
+              - vendor_repository_inspected_key_usable
+            fail_msg: >-
+              The {{ vendor_repository_display_name }} signing key has a
+              revoked, invalid, or disabled primary key, or no eligible
+              signing key remains. The matching fingerprint alone does not
+              make it usable; refusing to enable the repository.
+
         # The candidate is the vendor's current key whenever the installed
         # one is expiring, so an expired candidate means the vendor has not
         # renewed it yet: a transient condition apt cannot work around

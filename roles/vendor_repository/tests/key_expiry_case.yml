@@ -96,6 +96,27 @@
   check_mode: false
   when: vendor_repository_test_subkey.revoke | default(false)
 
+- name: Revoke primary key for {{ vendor_repository_test_case.name }}
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --batch
+      - --yes
+      - --pinentry-mode
+      - loopback
+      - --passphrase
+      - ""
+      - --command-fd
+      - "0"
+      - --edit-key
+      - "{{ vendor_repository_test_fingerprint }}"
+    stdin: "revkey\ny\n0\n\ny\nsave\n"
+  environment:
+    GNUPGHOME: "{{ vendor_repository_test_key_home }}"
+  changed_when: false
+  check_mode: false
+  when: vendor_repository_test_case.revoke | default(false)
+
 - name: Export signing key for {{ vendor_repository_test_case.name }}
   ansible.builtin.command:
     argv:
@@ -121,6 +142,9 @@
   ansible.builtin.include_role:
     name: vendor_repository
     tasks_from: inspect_key
+    apply:
+      environment:
+        GNUPGHOME: "{{ vendor_repository_test_key_home }}"
   vars:
     vendor_repository_inspect_key_path: "{{ vendor_repository_test_key_path }}"
 
@@ -128,6 +152,9 @@
   ansible.builtin.assert:
     that:
       - vendor_repository_inspected_key_matches
+      - >-
+        vendor_repository_inspected_key_usable ==
+        vendor_repository_test_case.expected_usable | default(true)
       - >-
         vendor_repository_inspected_key_expired ==
         vendor_repository_test_case.expected_expired
@@ -140,6 +167,7 @@
     fail_msg: >-
       Unexpected verdicts for {{ vendor_repository_test_case.name }}:
       matches={{ vendor_repository_inspected_key_matches }},
+      usable={{ vendor_repository_inspected_key_usable }},
       expired={{ vendor_repository_inspected_key_expired }},
       expiring={{ vendor_repository_inspected_key_expiring }},
       expiry={{ vendor_repository_inspected_key_expiry }}.

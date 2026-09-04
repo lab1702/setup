@@ -4,7 +4,8 @@
 # inside the renewal window, one already expired (created under a faked
 # clock), a rotated key keeping its retired signing subkey beside a valid
 # one, a rotated key whose retired subkey was revoked instead, and a key
-# whose only signing subkey has expired. The preflight's
+# whose only signing subkey has expired. Unusable cases cover a revoked
+# primary, a revoked sole signer, and a certification-only key. The preflight's
 # quarantine and healthy-path decisions and the configure phase's
 # validity assert all consume these verdicts. Needs only gpg: no root,
 # network, or repository. Supports --check, since the scaffolding and the
@@ -80,6 +81,30 @@
             faked_system_time: 20200101T000000
         expected_expired: true
         expected_expiring: true
+      - name: a revoked primary with the same pinned fingerprint
+        expiry: never
+        revoke: true
+        expected_usable: false
+        expected_bounded: false
+        expected_expired: false
+        expected_expiring: false
+      - name: a key whose only signing subkey was revoked
+        expiry: never
+        usage: cert
+        subkeys:
+          - expiry: never
+            revoke: true
+        expected_usable: false
+        expected_bounded: false
+        expected_expired: false
+        expected_expiring: false
+      - name: a certification-only key
+        expiry: never
+        usage: cert
+        expected_usable: false
+        expected_bounded: false
+        expected_expired: false
+        expected_expiring: false
   tasks:
     - name: Create temporary key expiry test directory
       ansible.builtin.tempfile:

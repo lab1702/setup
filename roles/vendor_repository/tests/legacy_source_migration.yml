@@ -1,8 +1,10 @@
 ---
 # Exercises the preflight's migration of a legacy one-line source against
 # scratch paths: the vendor's entries are removed while unrelated entries
-# and comments survive, a file left blank is removed, and check mode only
-# reports that removal. The specification is synthetic because no key,
+# and comments survive, a file left blank is removed, and task check mode
+# leaves empty files on disk. Disabled vendors are still
+# migrated when recognized legacy entries exist; otherwise they leave
+# legacy content untouched. The specification is synthetic because no key,
 # repository, or network is involved: with the managed source absent the
 # preflight never reaches key verification. Runs for real (without
 # --check), like roles/amd64v3/tests/main.yml.
@@ -28,7 +30,9 @@
         {{ vendor_repository_test_directory.path }}/keyring.gpg
       key_fingerprint: "0000000000000000000000000000000000000000"
       key_url: https://example.invalid/key.asc
-      legacy_sources_path: "{{ vendor_repository_test_legacy_path }}"
+      legacy_sources_path: >-
+        {{ '' if vendor_repository_test_case.no_legacy_path | default(false)
+        else vendor_repository_test_legacy_path }}
     vendor_repository_test_entry: deb https://example.invalid/repo stable main
     vendor_repository_test_unrelated_entry: deb https://other.example/deb x y
     # expected_content is null when the file must be gone afterwards.
@@ -54,6 +58,66 @@
         check_mode: true
         expected_content: ""
         expected_blank: true
+      - name: a disabled vendor with only its legacy source and a missing key
+        manage: false
+        content: >-
+          deb [signed-by={{ vendor_repository_test_directory.path }}/missing-key.gpg]
+          https://example.invalid/repo stable main
+        expected_content: null
+        expected_blank: true
+        expected_migration: true
+      - name: a disabled vendor without source files
+        manage: false
+        content: null
+        expected_content: null
+        expected_preflight: false
+        expected_migration: false
+      - name: a disabled vendor sharing a legacy source with unrelated entries
+        manage: false
+        content: "{{ vendor_repository_test_entry }}\n# keep this comment\n{{ vendor_repository_test_unrelated_entry }}\n"
+        expected_content: "# keep this comment\n{{ vendor_repository_test_unrelated_entry }}\n"
+        expected_blank: false
+        expected_migration: true
+      - name: a disabled vendor without a configured legacy path
+        manage: false
+        no_legacy_path: true
+        content: null
+        expected_content: null
+        expected_preflight: false
+        expected_migration: false
+      - name: a disabled vendor with unrelated legacy content only
+        manage: false
+        content: "{{ vendor_repository_test_unrelated_entry }}\n"
+        expected_content: "{{ vendor_repository_test_unrelated_entry }}\n"
+        expected_preflight: false
+        expected_migration: false
+      - name: a disabled vendor with a commented legacy entry only
+        manage: false
+        content: "# {{ vendor_repository_test_entry }}\n"
+        expected_content: "# {{ vendor_repository_test_entry }}\n"
+        expected_preflight: false
+        expected_migration: false
+      - name: a disabled vendor with whitespace in the legacy source
+        manage: false
+        content: "\n  \n"
+        expected_content: "\n  \n"
+        expected_preflight: false
+        expected_migration: false
+      - name: a disabled vendor with unrelated content through a symbolic link
+        manage: false
+        symbolic_link: true
+        content: "{{ vendor_repository_test_unrelated_entry }}\n"
+        expected_content: "{{ vendor_repository_test_unrelated_entry }}\n"
+        expected_preflight: false
+        expected_migration: false
+      - name: a disabled vendor with recognized entries through a symbolic link
+        manage: false
+        symbolic_link: true
+        content: "{{ vendor_repository_test_entry }}\n{{ vendor_repository_test_unrelated_entry }}\n"
+        expected_content: "{{ vendor_repository_test_entry }}\n{{ vendor_repository_test_unrelated_entry }}\n"
+        expected_preflight: false
+        expected_migration: true
+        expected_error: is a symbolic link whose target contains
   tasks:
     - name: Create temporary legacy migration test directory
       ansible.builtin.tempfile:

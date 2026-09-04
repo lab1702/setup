@@ -23,7 +23,9 @@
       github_release_metadata.json.tag_name | default('') ~
       ') without uploaded assets, typically assets still uploading or a
       source-only release'
-      if (github_release_metadata.json.tag_name | default('') | length > 0
+      if (github_release_metadata.json | default(none) is mapping
+      and github_release_metadata.json.tag_name | default(none) is string
+      and github_release_metadata.json.tag_name | length > 0
       and github_release_metadata.json.assets is defined
       and github_release_metadata.json.assets == [])
       else 'an HTTP ' ~ github_release_metadata.status ~

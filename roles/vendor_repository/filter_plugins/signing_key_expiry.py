@@ -21,9 +21,9 @@ _VALIDITY_FIELD = 1
 _EXPIRY_FIELD = 6
 _CAPABILITIES_FIELD = 11
 # Keys gpg reports as revoked, invalid, or disabled cannot sign whatever
-# their expiry says. A primary key in one of these states is outside this
-# filter's remit: the vendor publishes a replacement under a new
-# fingerprint, which the fingerprint predicate rejects loudly.
+# their expiry says. Revocation retains the fingerprint, so the pin alone
+# cannot establish usability. Expired keys retain their numeric expiry to
+# preserve the caller's renewal and keep-installed behavior.
 _UNUSABLE_VALIDITIES = {"r", "i", "d"}
 # gpg prints dates as seconds since the epoch but documents a migration to
 # ISO 8601 basic format in UTC (for example 19660205T091500).
@@ -53,14 +53,14 @@ def _earlier(first: int | None, second: int | None) -> int | None:
     return min(first, second)
 
 
-def signing_key_expiry(records: object) -> int:
+def signing_key_expiry(records: object) -> int | None:
     """Return when the first key in gpg --with-colons output stops signing.
 
     The result is seconds since the epoch, or 0 when the key never stops
-    signing (some signing-capable key of it has no bounded expiry) or holds
-    no signing-capable key at all. Only the first primary key and its
-    subkeys are considered; the fingerprint predicate rejects keyrings
-    holding more than one.
+    signing (some signing-capable key of it has no bounded expiry), or None
+    when the primary is unusable or no eligible signer remains. Only the
+    first primary key and its subkeys are considered; the fingerprint
+    predicate rejects keyrings holding more than one.
     """
     if not isinstance(records, (list, tuple)) or not all(
         isinstance(record, str) for record in records
@@ -77,14 +77,20 @@ def signing_key_expiry(records: object) -> int:
         fields = record.split(":")
         if len(fields) < _RECORD_FIELDS or fields[0] not in {"pub", "sub"}:
             continue
+        unusable = (
+            fields[_VALIDITY_FIELD] in _UNUSABLE_VALIDITIES
+            or "D" in fields[_CAPABILITIES_FIELD]
+        )
         if fields[0] == "pub":
             if seen_primary:
                 break
             seen_primary = True
+            if unusable:
+                return None
             primary_expiry = _record_expiry(fields)
         elif not seen_primary:
             continue
-        if fields[_VALIDITY_FIELD] in _UNUSABLE_VALIDITIES:
+        if unusable:
             continue
         # Lowercase capabilities describe this key itself; the uppercase
         # ones on a primary record summarise the whole key.
@@ -93,9 +99,9 @@ def signing_key_expiry(records: object) -> int:
                 _earlier(primary_expiry, _record_expiry(fields))
             )
 
-    if not effective_expiries or any(
-        expiry is None for expiry in effective_expiries
-    ):
+    if not effective_expiries:
+        return None
+    if any(expiry is None for expiry in effective_expiries):
         return 0
     return max(expiry for expiry in effective_expiries if expiry is not None)
 

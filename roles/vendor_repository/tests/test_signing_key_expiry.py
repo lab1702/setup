@@ -100,14 +100,37 @@ class SigningKeyExpiryTests(unittest.TestCase):
                     Y2030,
                 )
 
-    def test_revoked_primary_is_left_to_the_fingerprint_pin(self) -> None:
-        # gpg marks the subkeys of a revoked primary revoked as well, so
-        # nothing signs; the vendor's replacement key carries a new
-        # fingerprint, which the fingerprint predicate rejects loudly.
-        self.assertEqual(
+    def test_revoked_primary_has_no_eligible_signer(self) -> None:
+        # Revocation retains the fingerprint and must not look unbounded.
+        self.assertIsNone(
             expiry_of([pub("scSC", Y2030, validity="r"), FPR, UID, sub("s", validity="r")]),
-            0,
         )
+
+    def test_unusable_primary_cannot_be_rescued_by_a_subkey(self) -> None:
+        for validity in ("r", "i", "d"):
+            with self.subTest(validity=validity):
+                self.assertIsNone(
+                    expiry_of([pub("cSC", validity=validity), FPR, sub("s")])
+                )
+
+    def test_disabled_capability_rejects_the_entire_primary(self) -> None:
+        self.assertIsNone(expiry_of([pub("scSCD"), FPR, sub("s")]))
+
+    def test_no_remaining_eligible_signing_subkey(self) -> None:
+        for validity in ("r", "i", "d"):
+            with self.subTest(validity=validity):
+                self.assertIsNone(expiry_of([pub("cC"), FPR, sub("s", validity=validity)]))
+        self.assertIsNone(expiry_of([pub("cC"), FPR, sub("sD")]))
+
+    def test_disabled_subkey_does_not_mask_a_valid_replacement(self) -> None:
+        self.assertEqual(
+            expiry_of([pub("cSC"), FPR, sub("sD"), sub("s", Y2030)]), Y2030
+        )
+
+    def test_expired_and_unknown_trust_states_keep_numeric_expiry(self) -> None:
+        for validity in ("e", "-", "q", "o"):
+            with self.subTest(validity=validity):
+                self.assertEqual(expiry_of([pub("sc", Y2020, validity=validity)]), Y2020)
 
     def test_iso_basic_timestamps_are_parsed_as_utc(self) -> None:
         # gpg documents a migration from seconds since the epoch to this
@@ -117,8 +140,8 @@ class SigningKeyExpiryTests(unittest.TestCase):
             expiry_of([pub("cC", ISO_2027), FPR, UID, sub("s", Y2030)]), ISO_2027_EPOCH
         )
 
-    def test_key_without_signing_capability_never_expires(self) -> None:
-        self.assertEqual(expiry_of([pub("cC", Y2027), FPR, UID, sub("e", Y2027)]), 0)
+    def test_key_without_signing_capability_is_unusable(self) -> None:
+        self.assertIsNone(expiry_of([pub("cC", Y2027), FPR, UID, sub("e", Y2027)]))
 
     def test_only_the_first_key_is_considered(self) -> None:
         records = [pub("scSC", Y2027), FPR, UID, pub("scSC", Y2020), FPR, UID]
@@ -130,8 +153,8 @@ class SigningKeyExpiryTests(unittest.TestCase):
     def test_short_and_foreign_records_are_ignored(self) -> None:
         self.assertEqual(expiry_of(["tru::1:1600000000:0:3:1:5", "", pub("scSC", Y2027)]), Y2027)
 
-    def test_empty_output_never_expires(self) -> None:
-        self.assertEqual(expiry_of([]), 0)
+    def test_empty_output_is_unusable(self) -> None:
+        self.assertIsNone(expiry_of([]))
 
     def test_unparseable_expiry_is_an_error(self) -> None:
         with self.assertRaises(AnsibleFilterError):

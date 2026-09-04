@@ -3,18 +3,58 @@
 # (in check mode when the case asks for it), and validates the outcome.
 - name: Write legacy apt source with {{ vendor_repository_test_case.name }}
   ansible.builtin.copy:
-    dest: "{{ vendor_repository_test_legacy_path }}"
+    dest: >-
+      {{ vendor_repository_test_legacy_path ~ '.target'
+      if vendor_repository_test_case.symbolic_link | default(false)
+      else vendor_repository_test_legacy_path }}
     content: "{{ vendor_repository_test_case.content }}"
     mode: "0644"
   changed_when: false
   check_mode: false
+  when: vendor_repository_test_case.content is not none
 
-- name: Preflight legacy apt source with {{ vendor_repository_test_case.name }}
-  ansible.builtin.include_role:
-    name: vendor_repository
-    tasks_from: preflight
-    apply:
-      check_mode: "{{ vendor_repository_test_case.check_mode | default(false) }}"
+- name: Link legacy apt source with {{ vendor_repository_test_case.name }}
+  ansible.builtin.file:
+    path: "{{ vendor_repository_test_legacy_path }}"
+    src: "{{ vendor_repository_test_legacy_path }}.target"
+    state: link
+  changed_when: false
+  check_mode: false
+  when: vendor_repository_test_case.symbolic_link | default(false)
+
+- name: Reset preflight observations for {{ vendor_repository_test_case.name }}
+  ansible.builtin.set_fact:
+    vendor_repository_preflighted_paths: []
+    vendor_repository_test_error: ""
+  changed_when: false
+
+- name: Record legacy source metadata before {{ vendor_repository_test_case.name }}
+  ansible.builtin.stat:
+    path: "{{ vendor_repository_test_legacy_path }}"
+    follow: false
+  register: vendor_repository_test_original_legacy_status
+
+- name: Exercise preflight with {{ vendor_repository_test_case.name }}
+  block:
+    - name: Preflight legacy apt source with {{ vendor_repository_test_case.name }}
+      ansible.builtin.include_role:
+        name: vendor_repository
+        tasks_from: preflight
+        apply:
+          check_mode: "{{ vendor_repository_test_case.check_mode | default(false) }}"
+      vars:
+        vendor_repository_manage: "{{ vendor_repository_test_case.manage | default(true) }}"
+  rescue:
+    - name: Record preflight refusal for {{ vendor_repository_test_case.name }}
+      ansible.builtin.set_fact:
+        vendor_repository_test_error: "{{ ansible_failed_result.msg }}"
+      changed_when: false
+
+    - name: Validate expected preflight refusal
+      ansible.builtin.assert:
+        that:
+          - vendor_repository_test_case.expected_error is defined
+          - vendor_repository_test_case.expected_error in vendor_repository_test_error
 
 - name: Inspect legacy apt source after {{ vendor_repository_test_case.name }}
   ansible.builtin.stat:
@@ -39,12 +79,39 @@
         (vendor_repository_test_legacy_content.content | b64decode) ==
         vendor_repository_test_case.expected_content
       - >-
+        vendor_repository_test_case.expected_blank is not defined or
         vendor_repository_legacy_source_is_blank ==
         vendor_repository_test_case.expected_blank
+      - >-
+        vendor_repository_test_case.expected_migration is not defined or
+        vendor_repository_legacy_migration_required ==
+        vendor_repository_test_case.expected_migration
+      - >-
+        (vendor_repository_spec.sources_path in vendor_repository_preflighted_paths) ==
+        (vendor_repository_test_case.expected_preflight | default(true))
+      - >-
+        (vendor_repository_test_error | length > 0) ==
+        (vendor_repository_test_case.expected_error is defined)
+      - >-
+        not vendor_repository_test_case.symbolic_link | default(false) or
+        vendor_repository_test_legacy_status.stat.islnk | default(false)
+      - >-
+        not vendor_repository_test_legacy_status.stat.exists or
+        vendor_repository_test_legacy_status.stat.uid ==
+        vendor_repository_test_original_legacy_status.stat.uid
+      - >-
+        not vendor_repository_test_legacy_status.stat.exists or
+        vendor_repository_test_legacy_status.stat.gid ==
+        vendor_repository_test_original_legacy_status.stat.gid
+      - >-
+        not vendor_repository_test_legacy_status.stat.exists or
+        vendor_repository_test_legacy_status.stat.mode ==
+        vendor_repository_test_original_legacy_status.stat.mode
     fail_msg: >-
       Unexpected outcome for {{ vendor_repository_test_case.name }}:
       exists={{ vendor_repository_test_legacy_status.stat.exists }},
-      blank={{ vendor_repository_legacy_source_is_blank }}.
+      migration={{ vendor_repository_legacy_migration_required }},
+      error={{ vendor_repository_test_error }}.
 
 - name: Remove legacy apt source after {{ vendor_repository_test_case.name }}
   ansible.builtin.file:

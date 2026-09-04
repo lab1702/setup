@@ -1,0 +1,106 @@
+---
+# Run with --check: a disabled vendor whose only source is a recognized
+# legacy entry must stop before APT refreshes, preserving the file until a
+# normal run migrates it. All fixtures use scratch paths; no root or network
+# is needed. CLI check mode is required because task-level check_mode does
+# not change the ansible_check_mode magic variable used by the preflight.
+- name: Exercise legacy-only repository preflight in check mode
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../../../group_vars/all.yml
+  vars:
+    vendor_repository_manage: false
+    vendor_repository_spec:
+      display_name: Legacy check mode test
+      package_names:
+        - example
+      url: https://example.invalid/repo
+      suites: stable
+      components: main
+      architectures: []
+      sources_path: "{{ vendor_repository_test_directory.path }}/managed.sources"
+      keyring_path: "{{ vendor_repository_test_directory.path }}/keyring.gpg"
+      key_fingerprint: "0000000000000000000000000000000000000000"
+      key_url: https://example.invalid/key.asc
+      legacy_sources_path: "{{ vendor_repository_test_directory.path }}/legacy.list"
+    vendor_repository_test_legacy_content: |
+      deb [signed-by={{ vendor_repository_spec.keyring_path }}] https://example.invalid/repo stable main
+      # Keep this unrelated source and its comment.
+      deb https://other.example/deb x y
+  tasks:
+    - name: Require CLI check mode
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode
+        fail_msg: Run this regression playbook with --check.
+
+    - name: Create temporary legacy check mode test directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .legacy-check-mode-test
+      register: vendor_repository_test_directory
+      changed_when: false
+      check_mode: false
+
+    - name: Exercise legacy-only repository in check mode
+      block:
+        - name: Write legacy-only repository fixture
+          ansible.builtin.copy:
+            dest: "{{ vendor_repository_spec.legacy_sources_path }}"
+            content: "{{ vendor_repository_test_legacy_content }}"
+            mode: "0644"
+          changed_when: false
+          check_mode: false
+
+        - name: Preflight legacy-only repository in check mode
+          block:
+            - name: Run disabled vendor preflight
+              ansible.builtin.include_role:
+                name: vendor_repository
+                tasks_from: preflight
+          rescue:
+            - name: Validate the required migration refusal
+              ansible.builtin.assert:
+                that:
+                  - >-
+                    'must be removed before APT can be checked safely'
+                    in ansible_failed_result.msg
+
+            - name: Record the migration refusal
+              ansible.builtin.set_fact:
+                vendor_repository_test_refused_migration: true
+              changed_when: false
+
+        - name: Read preserved legacy source
+          ansible.builtin.slurp:
+            src: "{{ vendor_repository_spec.legacy_sources_path }}"
+          register: vendor_repository_test_preserved_legacy
+
+        - name: Inspect absent replacement repository files
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          loop:
+            - "{{ vendor_repository_spec.sources_path }}"
+            - "{{ vendor_repository_spec.keyring_path }}"
+          register: vendor_repository_test_replacement_status
+
+        - name: Validate check mode stopped before repository changes
+          ansible.builtin.assert:
+            that:
+              - vendor_repository_test_refused_migration | default(false)
+              - >-
+                (vendor_repository_test_preserved_legacy.content | b64decode)
+                == vendor_repository_test_legacy_content
+              - vendor_repository_preflighted_paths | default([]) | length == 0
+              - >-
+                vendor_repository_test_replacement_status.results
+                | selectattr('stat.exists') | list | length == 0
+      always:
+        - name: Remove temporary legacy check mode test directory
+          ansible.builtin.file:
+            path: "{{ vendor_repository_test_directory.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false

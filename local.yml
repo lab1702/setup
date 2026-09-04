@@ -29,6 +29,7 @@
         regexp: '^\s*prefix\s*='
         line: prefix={{ workstation_user_home }}/.npm-global
         mode: "0600"
+        diff: false
       - path: "{{ workstation_user_home }}/.bashrc"
         regexp: ^\s*export\s+PIP_REQUIRE_VIRTUALENV=.*$
         line: export PIP_REQUIRE_VIRTUALENV=1
@@ -366,6 +367,9 @@
       no_log: true
 
     - name: Configure managed user configuration entries
+      # A diff of .npmrc can reveal auth tokens adjacent to the prefix.
+      # Other managed files retain their normal --diff output.
+      diff: "{{ item.diff | default(true) }}"
       ansible.builtin.lineinfile:
         path: "{{ item.path }}"
         regexp: "{{ item.regexp }}"

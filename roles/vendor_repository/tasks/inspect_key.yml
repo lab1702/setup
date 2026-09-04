@@ -1,9 +1,9 @@
 ---
 # Inspects one signing key file with gpg and records whether it carries
 # exactly one primary key whose first fingerprint matches the pinned
-# specification, plus when it stops being able to sign (the
-# signing_key_expiry filter's reading of the same records): an expired
-# key is unusable, and one expiring within the renewal window must be
+# specification, whether an eligible signer remains, and when it stops
+# being able to sign (the signing_key_expiry filter's reading of the same
+# records): an expired key is unusable, and one within the renewal window must be
 # re-fetched from the vendor. The preflight (quarantine and healthy-path
 # decisions) and the configure phase (fatal asserts) both consume this
 # single predicate, so the verdicts can never drift apart.
@@ -25,8 +25,9 @@
   failed_when: false
   check_mode: false
 
-# The expiry is zero when the key never stops signing, so the date is
-# only meaningful when either verdict below holds.
+# The filter returns None for an unusable key, zero for an unbounded
+# signer, or a timestamp. Keep usability separate from expiration so an
+# expired key still reaches the existing renewal and package fallback.
 - name: Record repository signing key verdicts
   vars:
     vendor_repository_inspected_public_key_records: >-
@@ -46,14 +47,18 @@
       and (vendor_repository_inspected_fingerprint_records
       | first | default(''))
       == vendor_repository_expected_fingerprint_record }}
+    vendor_repository_inspected_key_usable: >-
+      {{ vendor_repository_inspected_signing_expiry is not none }}
     vendor_repository_inspected_key_expiry: >-
-      {{ vendor_repository_inspected_signing_expiry | int }}
+      {{ vendor_repository_inspected_signing_expiry | default(0, true) | int }}
     vendor_repository_inspected_key_expired: >-
-      {{ vendor_repository_inspected_signing_expiry | int > 0
+      {{ vendor_repository_inspected_signing_expiry is not none
+      and vendor_repository_inspected_signing_expiry | int > 0
       and vendor_repository_inspected_signing_expiry | int
       < vendor_repository_inspection_time | int }}
     vendor_repository_inspected_key_expiring: >-
-      {{ vendor_repository_inspected_signing_expiry | int > 0
+      {{ vendor_repository_inspected_signing_expiry is not none
+      and vendor_repository_inspected_signing_expiry | int > 0
       and vendor_repository_inspected_signing_expiry | int
       < vendor_repository_inspection_time | int
       + vendor_repository_key_renewal_window_seconds | int }}

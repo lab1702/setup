@@ -128,6 +128,8 @@ user-level pip installations, configure `~/.npm-global` as the user's NPM
 prefix, and add its `bin` directory and `~/go/bin` (for Go-installed tools) to
 `PATH`. Existing matching entries in `.bashrc` and `.npmrc` are updated, and
 duplicate legacy entries are collapsed.
+Diff output is disabled for `.npmrc` so nearby authentication tokens do not
+appear when its prefix changes; `.bashrc` retains its normal diff output.
 
 ## Running the tests
 
@@ -135,8 +137,9 @@ The repository tracks regression tests for the shared repository sandbox
 (one per keyring format: `chatgpt` covers a deb822 source with a binary
 `.gpg` keyring, `claude_desktop` covers a deb822 source with an armored
 `.asc` keyring), for the vendor preflight's migration of legacy one-line
-sources (scratch paths only, so it needs neither root nor network), for
-the shared signing-key predicate's expiry verdicts (keys generated on the
+sources, including legacy-only repositories on formerly desktop hosts
+(scratch paths only, so it needs neither root nor network), for
+the shared signing-key predicate's usability and expiry verdicts (keys generated on the
 fly, so it needs only `gpg`), and for the `amd64v3` role (a full run in an isolated apt sandbox, a
 check-mode run, and a current-CPU detection run). The repository-metadata
 and `amd64v3` tests source their repository URLs, fingerprints, and
@@ -157,6 +160,10 @@ ansible-playbook --check roles/claude_desktop/tests/check_mode_repository_metada
 
 ```bash
 ansible-playbook roles/vendor_repository/tests/legacy_source_migration.yml
+```
+
+```bash
+ansible-playbook --check roles/vendor_repository/tests/legacy_source_check_mode.yml
 ```
 
 ```bash
@@ -184,6 +191,23 @@ than passing silently:
 
 ```bash
 ansible-playbook roles/github_release/tests/resolve_asset_cache.yml
+```
+
+Malformed cache and response types, valid ETag revalidation, and recovery
+also have a deterministic test using the actual role and a local HTTP
+fixture. It requires Ansible and loopback networking, but no GitHub quota,
+credentials, or root:
+
+```bash
+python3 -m unittest discover --start-directory roles/github_release/tests
+```
+
+The user-configuration regression runs the playbook's actual tasks against
+temporary `.npmrc` and `.bashrc` files. It checks token privacy under verbose
+diff output, dry-run behavior, duplicate cleanup, and repeat-run idempotence:
+
+```bash
+python3 -m unittest discover --start-directory tests
 ```
 
 The `r` role's CRAN source migration filter decides which entries are

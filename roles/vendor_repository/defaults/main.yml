@@ -34,13 +34,16 @@ vendor_repository_spec: {}
 # already expired key is unusable, which quarantines its source and
 # rebuilds it from a fresh download. The moment a key stops signing comes
 # from the signing_key_expiry filter in this role's filter_plugins.
+# Revoked keys and keyrings without a usable signer are rejected separately
+# from expiry, even when their fingerprint still matches.
 vendor_repository_key_renewal_window_seconds: 2592000
 
 # Whether this host currently installs the vendor's packages. The
 # preflight entry point honors this: when false it only repairs or
-# quarantines a managed source file that already exists on disk (created
-# while the vendor was still managed here), and never touches apt
-# configuration the playbook does not own.
+# quarantines a managed source file that already exists on disk, or removes
+# recognized vendor entries from its legacy source file (created while the
+# vendor was still managed here). Unrelated legacy content alone never
+# permits changes to apt configuration the playbook does not own.
 vendor_repository_manage: true
 
 vendor_repository_display_name: "{{ vendor_repository_spec.display_name }}"

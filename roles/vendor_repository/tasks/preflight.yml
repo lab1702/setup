@@ -5,11 +5,10 @@
 # vendor_repository_manage is false when this host does not currently
 # install the vendor's packages (headless hosts, unsupported
 # architectures). The preflight then acts only when the managed source
-# file already exists — this playbook created it while the vendor was
-# still managed, and the installed application keeps updating from it, so
-# the file must stay repairable and quarantinable. When neither holds,
-# nothing here may touch apt configuration the playbook does not own,
-# such as a manually configured vendor repository.
+# file or recognized entries in its legacy source already exist. These
+# may have been created while the vendor was still managed, and must stay
+# repairable and quarantinable. Other legacy content alone does not grant
+# permission to edit apt configuration the playbook does not own.
 
 - name: Inspect managed apt repository source
   ansible.builtin.stat:
@@ -17,61 +16,73 @@
     follow: false
   register: vendor_repository_source_status
 
+- name: Reset legacy repository migration verdict
+  ansible.builtin.set_fact:
+    vendor_repository_legacy_migration_required: false
+  changed_when: false
+
+# Discover recognized legacy entries before deciding whether an unmanaged
+# vendor needs preflight. Otherwise an upgrade from a legacy-only setup
+# leaves its old source active, including references to missing keys.
+- name: Inspect legacy repository state
+  when: vendor_repository_legacy_sources_path | length > 0
+  block:
+    - name: Inspect legacy apt repository source
+      ansible.builtin.stat:
+        path: "{{ vendor_repository_legacy_sources_path }}"
+        follow: false
+      register: vendor_repository_legacy_source_status
+
+    - name: Validate legacy apt repository source path type
+      ansible.builtin.assert:
+        that:
+          - >-
+            not vendor_repository_legacy_source_status.stat.exists or
+            vendor_repository_legacy_source_status.stat.isreg
+            | default(false) or
+            vendor_repository_legacy_source_status.stat.islnk
+            | default(false)
+        fail_msg: >-
+          Refusing to edit {{ vendor_repository_legacy_sources_path }}
+          because it is neither a regular file nor a symbolic link.
+
+    - name: Read legacy apt repository source
+      ansible.builtin.slurp:
+        src: "{{ vendor_repository_legacy_sources_path }}"
+      register: vendor_repository_legacy_source
+      failed_when: false
+      when: vendor_repository_legacy_source_status.stat.exists
+
+    # With failed_when: false a failed slurp still registers
+    # failed=False, so a missing content key is the only reliable
+    # failure signal.
+    - name: Validate legacy apt repository source readability
+      ansible.builtin.assert:
+        that:
+          - vendor_repository_legacy_source.content is defined
+        fail_msg: >-
+          Refusing to migrate {{ vendor_repository_legacy_sources_path }}
+          because its contents cannot be inspected safely.
+      when: vendor_repository_legacy_source_status.stat.exists
+
+    - name: Detect legacy repository entries
+      ansible.builtin.set_fact:
+        vendor_repository_legacy_migration_required: >-
+          {{ (vendor_repository_legacy_source.content
+          | default('') | b64decode).splitlines()
+          | select('match', vendor_repository_legacy_entry_regexp)
+          | list | length > 0 }}
+      changed_when: false
+
 - name: Preflight the managed repository state
   when: >-
     vendor_repository_manage
     or vendor_repository_source_status.stat.exists
+    or vendor_repository_legacy_migration_required
   block:
     - name: Migrate legacy one-line repository source
       when: vendor_repository_legacy_sources_path | length > 0
       block:
-        - name: Inspect legacy apt repository source
-          ansible.builtin.stat:
-            path: "{{ vendor_repository_legacy_sources_path }}"
-            follow: false
-          register: vendor_repository_legacy_source_status
-
-        - name: Validate legacy apt repository source path type
-          ansible.builtin.assert:
-            that:
-              - >-
-                not vendor_repository_legacy_source_status.stat.exists or
-                vendor_repository_legacy_source_status.stat.isreg
-                | default(false) or
-                vendor_repository_legacy_source_status.stat.islnk
-                | default(false)
-            fail_msg: >-
-              Refusing to edit {{ vendor_repository_legacy_sources_path }}
-              because it is neither a regular file nor a symbolic link.
-
-        - name: Read legacy apt repository source
-          ansible.builtin.slurp:
-            src: "{{ vendor_repository_legacy_sources_path }}"
-          register: vendor_repository_legacy_source
-          failed_when: false
-          when: vendor_repository_legacy_source_status.stat.exists
-
-        # With failed_when: false a failed slurp still registers
-        # failed=False, so a missing content key is the only reliable
-        # failure signal.
-        - name: Validate legacy apt repository source readability
-          ansible.builtin.assert:
-            that:
-              - vendor_repository_legacy_source.content is defined
-            fail_msg: >-
-              Refusing to migrate {{ vendor_repository_legacy_sources_path }}
-              because its contents cannot be inspected safely.
-          when: vendor_repository_legacy_source_status.stat.exists
-
-        - name: Detect legacy repository entries
-          ansible.builtin.set_fact:
-            vendor_repository_legacy_migration_required: >-
-              {{ (vendor_repository_legacy_source.content
-              | default('') | b64decode).splitlines()
-              | select('match', vendor_repository_legacy_entry_regexp)
-              | list | length > 0 }}
-          changed_when: false
-
         - name: Refuse to edit legacy entries through a symbolic link
           ansible.builtin.fail:
             msg: >-
@@ -175,6 +186,7 @@
     - name: Reset installed repository signing key verdicts
       ansible.builtin.set_fact:
         vendor_repository_inspected_key_matches: false
+        vendor_repository_inspected_key_usable: false
         vendor_repository_inspected_key_expiry: 0
         vendor_repository_inspected_key_expired: false
         vendor_repository_inspected_key_expiring: false
@@ -237,8 +249,9 @@
         # only the file metadata is checked here and the configure phase
         # verifies the fingerprint after the base packages install gpg;
         # quarantining over a missing tool would delete a healthy repository.
-        # An expired key is unusable: apt rejects the repository, so the
-        # source must be rebuilt from a freshly downloaded key.
+        # Expired or revoked keys and keyrings without a usable signer are
+        # unusable: apt rejects the repository, so the source must be rebuilt
+        # from a freshly downloaded key.
         vendor_repository_installed_key_is_usable: >-
           {{ vendor_repository_installed_key_status.stat.isreg
           | default(false)
@@ -250,6 +263,7 @@
           | default('') == '0644'
           and (not vendor_repository_gpg_available or
           (vendor_repository_inspected_key_matches
+          and vendor_repository_inspected_key_usable
           and not vendor_repository_inspected_key_expired)) }}
       ansible.builtin.set_fact:
         vendor_repository_quarantine_required: >-
