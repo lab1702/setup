@@ -1,7 +1,7 @@
 ---
 # Exercises the release-metadata cache against the live GitHub API: a
 # fresh 200 populates the cache, a rerun revalidates it (normally with a
-# quota-free 304; a release republished mid-test legitimately yields a
+# 304; a release republished mid-test legitimately yields a
 # fresh 200), corrupt or malformed caches are discarded without failing
 # the run, and a missing asset resolves as pending inside the upload
 # grace window but fails past it. The cache directory and ownership come
@@ -13,7 +13,8 @@
 # way the run ends by saying which checks it could not prove, so a
 # rate-limited run cannot pass for a genuine one. The unauthenticated
 # quota is small (60 requests per hour per address); export GITHUB_TOKEN
-# to run repeatedly under an authenticated quota. A release republished
+# to use an authenticated quota, with 304 responses exempt from the primary
+# rate limit. Anonymous 304 responses still consume quota. A release republished
 # mid-test whose asset is still uploading resolves as pending rather
 # than available; both count as a usable resolution here.
 - name: Exercise the GitHub release metadata cache
@@ -86,7 +87,7 @@
                   {{ github_release_test_statuses
                   + [github_release_metadata.status] }}
 
-            # Normally a quota-free 304; a republished release yields a
+            # Normally a 304; a republished release yields a
             # fresh 200 and mid-test rate limiting yields 403/429, both
             # legitimate.
             - name: Validate the revalidation

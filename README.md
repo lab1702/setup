@@ -119,6 +119,36 @@ KVM so the new login session receives those memberships. For Docker, running
 Each run ends by emptying apt's cache of downloaded package archives, which
 the installs and the distribution upgrade would otherwise keep indefinitely.
 
+## Optional: Authenticate GitHub release checks
+
+Release checks use anonymous GitHub API requests by default, sharing a limit
+of 60 requests per hour per public IP address. The ETag cache saves response
+downloads, but anonymous `304 Not Modified` responses still consume quota.
+Only authenticated `304` responses are exempt from the primary rate limit.
+See GitHub's [conditional-request documentation][github-conditional-requests].
+When rate-limited, the playbook keeps existing installations and skips their
+update checks; a missing application cannot be installed until metadata is
+available again.
+
+To authenticate, create an encrypted variables file with
+`ansible-vault create ~/github-release.vault.yml` and enter:
+
+```yaml
+github_release_api_token: YOUR_GITHUB_TOKEN
+```
+
+Pass that encrypted file when running the playbook:
+
+```bash
+sudo ansible-pull -U https://github.com/lab1702/setup.git \
+  --extra-vars "@$HOME/github-release.vault.yml" --ask-vault-pass
+```
+
+The regular playbook uses `github_release_api_token`; it does not read
+`GITHUB_TOKEN` automatically. The cache regression test below does.
+
+[github-conditional-requests]: https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#use-conditional-requests
+
 ---
 
 ## Python and NPM shell configuration

@@ -12,10 +12,11 @@
 # unset, or keep stale values from an earlier include in the same play, so
 # callers must guard every use of them on github_release_api_available.
 #
-# Unauthenticated api.github.com requests share a small per-IP quota, so
-# each 200 response's ETag and body are cached and revalidated with
-# If-None-Match on the next run — 304 responses do not count against the
-# rate limit. github_release_api_available becomes false for a
+# Each 200 response's ETag and body are cached and revalidated with
+# If-None-Match on the next run to avoid downloading an unchanged body.
+# A 304 response is exempt from GitHub's primary rate limit only when
+# authenticated; anonymous revalidations still consume the per-IP quota.
+# github_release_api_available becomes false for a
 # rate-limited response (403 or 429, accepted immediately without
 # retrying — the quota resets on the order of an hour, far beyond any
 # useful retry delay), for a 200 whose body is not usable release JSON
@@ -240,7 +241,7 @@
       and not github_release_asset_pending }}
 
 # Written in check mode too: the API request above always runs, so dry
-# runs would otherwise never earn quota-free 304 revalidations.
+# runs can also revalidate unchanged metadata on subsequent requests.
 - name: Cache release metadata of {{ github_release_display_name }}
   ansible.builtin.copy:
     dest: "{{ github_release_cache_path }}"

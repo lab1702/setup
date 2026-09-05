@@ -29,7 +29,7 @@ github_release_repository_pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
 github_release_api_url: >-
   https://api.github.com/repos/{{ github_release_repository }}/releases/latest
 # Statuses the release-metadata request accepts instead of failing: a
-# fresh 200, a quota-free 304 revalidation, and the rate-limit responses
+# fresh 200, a 304 revalidation, and the rate-limit responses
 # the caller's keep-installed fallback handles. The request's retry gate
 # consults this same list, so the accepted set cannot drift between the
 # status check and the retry decision.
@@ -41,15 +41,15 @@ github_release_accepted_status_codes:
 
 # Optional GitHub token sent as a bearer credential with the release
 # request, whose output is censored while one is in use so the token never
-# reaches verbose or failure output. The playbook leaves it empty and
-# relies on the cache below to stay within the unauthenticated quota; the
-# cache test reads GITHUB_TOKEN so repeated local runs can use an
-# authenticated quota instead.
+# reaches verbose or failure output. The playbook defaults to anonymous
+# requests; set this variable to authenticate (see README). Only the
+# cache test reads GITHUB_TOKEN automatically.
 github_release_api_token: ""
 
-# Conditional-request cache for the release metadata: GitHub 304 responses
-# do not count against the unauthenticated per-IP rate limit, so caching
-# each response's ETag makes unchanged-release checks free.
+# Conditional-request cache for the release metadata: ETag revalidation
+# avoids downloading an unchanged response body. GitHub exempts 304
+# responses from the primary rate limit only for authenticated requests;
+# anonymous revalidations still consume the shared per-IP quota.
 github_release_cache_directory: /var/cache/ansible-github-releases
 github_release_cache_path: >-
   {{ github_release_cache_directory }}/{{
