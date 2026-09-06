@@ -83,6 +83,10 @@
       solomd:
         desktop_only: true
         managed_repository: false
+      tmog:
+        desktop_only: true
+        managed_repository: false
+        architectures: [amd64]
 
   pre_tasks:
     - name: Validate Ubuntu release and architecture support

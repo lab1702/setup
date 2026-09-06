@@ -1,0 +1,13 @@
+---
+tmog_package_name: taskmanagerog
+tmog_package_architecture: amd64
+tmog_supported_architectures:
+  - amd64
+
+# The official download page uses version.txt for the Linux release and
+# adds this version/free-edition query to avoid stale CDN downloads.
+# https://tmog.org/site.js documents the same URL construction.
+tmog_version_url: https://tmog.org/version.txt
+tmog_package_filename: TMOG-Task-Manager-Linux-x86_64.deb
+tmog_download_url: >-
+  https://tmog.org/downloads/{{ tmog_package_filename }}?v={{ tmog_version }}-free

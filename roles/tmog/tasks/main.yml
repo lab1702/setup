@@ -1,0 +1,54 @@
+---
+- name: Validate TMOG Task Manager platform support
+  ansible.builtin.assert:
+    that:
+      - workstation_architecture in tmog_supported_architectures
+    fail_msg: >-
+      TMOG Task Manager's official Debian package supports AMD64.
+      Detected {{ workstation_architecture }}.
+
+- name: Discover latest TMOG Task Manager version
+  ansible.builtin.uri:
+    url: "{{ tmog_version_url }}"
+    return_content: true
+    follow_redirects: none
+    status_code: 200
+  register: tmog_version_response
+  changed_when: false
+  check_mode: false
+  retries: "{{ remote_fetch_retries }}"
+  delay: "{{ remote_fetch_retry_delay }}"
+  until: >-
+    tmog_version_response.status | default(-1) >= 200 and
+    tmog_version_response.status | default(-1) < 500 and
+    tmog_version_response.status | default(-1)
+    not in remote_fetch_transient_status_codes
+
+- name: Select latest TMOG Task Manager version
+  ansible.builtin.set_fact:
+    tmog_version: "{{ tmog_version_response.content | default('') | trim }}"
+
+# Match the version format accepted by the official download page before
+# using the response in either a package comparison or a download URL.
+- name: Validate latest TMOG Task Manager version
+  ansible.builtin.assert:
+    that:
+      - tmog_version is match('^[0-9]+[.][0-9]+[.][0-9]+$')
+    fail_msg: >-
+      {{ tmog_version_url }} did not return the expected numeric
+      major.minor.patch version for TMOG Task Manager.
+
+# The official Linux download has no published checksum. The shared
+# installer refuses redirects and verifies the package name, version,
+# and architecture before installation; transport trust relies on TLS.
+- name: Ensure latest TMOG Task Manager package
+  ansible.builtin.include_role:
+    name: deb_package
+    tasks_from: ensure.yml
+  vars:
+    deb_package_display_name: TMOG Task Manager
+    deb_package_name: "{{ tmog_package_name }}"
+    deb_package_architecture: "{{ tmog_package_architecture }}"
+    deb_package_version: "{{ tmog_version }}"
+    deb_package_url: "{{ tmog_download_url }}"
+    deb_package_filename: "{{ tmog_package_filename }}"
