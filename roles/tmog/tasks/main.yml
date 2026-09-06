@@ -7,6 +7,16 @@
       TMOG Task Manager's official Debian package supports AMD64.
       Detected {{ workstation_architecture }}.
 
+# Keep this outside the vendor package's version guard so an existing,
+# current TMOG installation also gains any missing runtime dependencies.
+- name: Install TMOG Task Manager runtime dependencies
+  ansible.builtin.apt:
+    name: "{{ tmog_runtime_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 120
+
 - name: Discover latest TMOG Task Manager version
   ansible.builtin.uri:
     url: "{{ tmog_version_url }}"

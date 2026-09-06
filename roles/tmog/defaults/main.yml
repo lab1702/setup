@@ -4,6 +4,21 @@ tmog_package_architecture: amd64
 tmog_supported_architectures:
   - amd64
 
+# The upstream .deb omits the executable's Qt 6 shared-library
+# dependencies and bundles no platform plugins. Install the linked
+# libraries and the plugins needed for X11 and Wayland desktops. On
+# Ubuntu 26.04, libqt6gui6 supplies X11 and libqt6waylandclient6 supplies
+# the Wayland platform plugin.
+tmog_runtime_packages:
+  - libqt6core6t64
+  - libqt6gui6
+  - libqt6multimedia6
+  - libqt6network6
+  - libqt6opengl6
+  - libqt6svg6
+  - libqt6waylandclient6
+  - libqt6widgets6
+
 # The official download page uses version.txt for the Linux release and
 # adds this version/free-edition query to avoid stale CDN downloads.
 # https://tmog.org/site.js documents the same URL construction.

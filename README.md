@@ -33,6 +33,9 @@ is installed from the Ubuntu archive on desktop systems.
 using the website's `version.txt` and versioned free-edition download query.
 The installer validates the `taskmanagerog` package name, version, and AMD64
 architecture, and skips downloading an already-current, fully installed package.
+The role separately ensures its Qt 6 runtime libraries and X11/Wayland platform
+plugins are installed, including when TMOG is already current, because the
+upstream DEB omits these dependencies.
 The Linux download has no published checksum, so it uses HTTPS with redirects
 disabled and relies on TMOG's TLS-protected download infrastructure.
 
