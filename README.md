@@ -160,13 +160,13 @@ The regular playbook uses `github_release_api_token`; it does not read
 
 ---
 
-## Python and NPM shell configuration
+## User shell configuration
 
 The playbook uses idempotent Ansible tasks to require a virtual environment for
 user-level pip installations, configure `~/.npm-global` as the user's NPM
-prefix, and add its `bin` directory and `~/go/bin` (for Go-installed tools) to
-`PATH`. Existing matching entries in `.bashrc` and `.npmrc` are updated, and
-duplicate legacy entries are collapsed.
+prefix, and add its `bin` directory, `~/go/bin` (for Go-installed tools), and
+`~/.cargo/bin` (for Cargo-installed tools) to `PATH`. Existing matching entries
+in `.bashrc` and `.npmrc` are updated, and duplicate legacy entries are collapsed.
 Diff output is disabled for `.npmrc` so nearby authentication tokens do not
 appear when its prefix changes; `.bashrc` retains its normal diff output.
 

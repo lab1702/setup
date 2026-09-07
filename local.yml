@@ -44,6 +44,11 @@
           ^\s*export\s+PATH=["']?\$HOME/go/bin:\$PATH["']?\s*$
         line: export PATH="$HOME/go/bin:$PATH"
         mode: "0644"
+      - path: "{{ workstation_user_home }}/.bashrc"
+        regexp: >-
+          ^\s*export\s+PATH=["']?\$HOME/\.cargo/bin:\$PATH["']?\s*$
+        line: export PATH="$HOME/.cargo/bin:$PATH"
+        mode: "0644"
     # Single source of truth for the optional applications this playbook
     # gates: desktop_only applications need a graphical desktop, an
     # architectures list restricts an application to those Debian
