@@ -55,11 +55,6 @@
     name: zoom
   when: workstation_application_enabled['zoom']
 
-- name: Install TMOG Task Manager
-  ansible.builtin.include_role:
-    name: tmog
-  when: workstation_application_enabled['tmog']
-
 - name: Install LibreOffice
   ansible.builtin.apt:
     name: libreoffice

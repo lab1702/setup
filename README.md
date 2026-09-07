@@ -5,7 +5,7 @@ On compatible AMD64 CPUs, it automatically opts in to Ubuntu's AMD64v3
 package variant before the playbook's first APT refresh. Older AMD64 CPUs and
 ARM64 systems continue to use their baseline packages.
 Desktop packages are installed when an X11 or Wayland desktop session is
-available. Posit RStudio Desktop, Discord, Zoom, and TMOG Task Manager are
+available. Posit RStudio Desktop, Discord, and Zoom are
 installed only on AMD64 systems because their configured distribution channels
 do not publish ARM64 packages. Ruff, ty, uv, uvx, the DuckDB CLI, Quarto, VHS,
 and (on desktop systems) the SoloMD Markdown editor track the latest GitHub releases for AMD64
@@ -29,15 +29,6 @@ are already installed are kept and the repository stays disabled. Posit RStudio 
 published in Posit's download metadata (`https://cdn.posit.co/downloads.json`)
 and verifies the DEB against the SHA-256 checksum published there. LibreOffice
 is installed from the Ubuntu archive on desktop systems.
-[TMOG Task Manager](https://tmog.org/) tracks the latest official Linux DEB
-using the website's `version.txt` and versioned free-edition download query.
-The installer validates the `taskmanagerog` package name, version, and AMD64
-architecture, and skips downloading an already-current, fully installed package.
-The role separately ensures its Qt 6 runtime libraries and X11/Wayland platform
-plugins are installed, including when TMOG is already current, because the
-upstream DEB omits these dependencies.
-The Linux download has no published checksum, so it uses HTTPS with redirects
-disabled and relies on TMOG's TLS-protected download infrastructure.
 
 ## Accepted Security Tradeoffs
 
