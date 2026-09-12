@@ -14,7 +14,11 @@ published by GitHub before installation. VHS records terminal sessions with the
 already-installed `ttyd` and `ffmpeg`. ChatGPT Desktop
 tracks the latest package from OpenAI's APT repository, verified with a signing
 key bundled in this repository. Claude Desktop tracks the latest package from
-Anthropic's signed APT repository. Discord tracks the latest official stable AMD64
+Anthropic's signed APT repository. The playbook uses the package's own
+`claude-desktop.list` filename and one-line source content, so package upgrades
+and playbook runs share one repository entry. Preflight removes the
+`claude-desktop.sources` file created by earlier playbook versions before APT
+refreshes. Discord tracks the latest official stable AMD64
 DEB and validates its HTTPS download location and package metadata before
 installation. Visual Studio Code tracks the latest stable package from
 Microsoft's signed APT repository on AMD64 and ARM64. MEGA Desktop tracks the
@@ -165,7 +169,7 @@ appear when its prefix changes; `.bashrc` retains its normal diff output.
 
 The repository tracks regression tests for the shared repository sandbox
 (one per keyring format: `chatgpt` covers a deb822 source with a binary
-`.gpg` keyring, `claude_desktop` covers a deb822 source with an armored
+`.gpg` keyring, `claude_desktop` covers a one-line source with an armored
 `.asc` keyring), for the vendor preflight's migration of legacy one-line
 sources, including legacy-only repositories on formerly desktop hosts
 (scratch paths only, so it needs neither root nor network), for
@@ -186,6 +190,15 @@ ansible-playbook --check roles/chatgpt/tests/check_mode_repository_metadata.yml
 
 ```bash
 ansible-playbook --check roles/claude_desktop/tests/check_mode_repository_metadata.yml
+```
+
+The Claude source migration test reproduces duplicate APT entries and checks
+that the playbook's source matches the package's source after upgrades. It uses
+only temporary files and needs neither root nor network access:
+
+```bash
+ansible-playbook roles/claude_desktop/tests/repository_source.yml
+ansible-playbook --check roles/claude_desktop/tests/repository_source.yml
 ```
 
 ```bash

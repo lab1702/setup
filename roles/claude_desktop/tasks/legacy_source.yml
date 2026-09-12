@@ -1,0 +1,36 @@
+---
+# This dedicated file was owned by earlier versions of this role. Remove
+# it before the play-wide APT refresh, including on formerly desktop hosts.
+- name: Inspect superseded Claude Desktop source
+  ansible.builtin.stat:
+    path: "{{ claude_desktop_legacy_sources_path }}"
+    follow: false
+  register: claude_desktop_legacy_source_status
+
+- name: Validate superseded Claude Desktop source path
+  ansible.builtin.assert:
+    that:
+      - claude_desktop_legacy_sources_path != claude_desktop_repository.sources_path
+      - >-
+        not claude_desktop_legacy_source_status.stat.exists or
+        claude_desktop_legacy_source_status.stat.isreg | default(false) or
+        claude_desktop_legacy_source_status.stat.islnk | default(false)
+    fail_msg: >-
+      Refusing to remove {{ claude_desktop_legacy_sources_path }}: the
+      superseded source must be a separate regular file or symbolic link.
+
+- name: Stop check mode when the superseded Claude Desktop source exists
+  ansible.builtin.fail:
+    msg: >-
+      {{ claude_desktop_legacy_sources_path }} must be removed before APT
+      can be checked safely. Run this playbook once without --check to
+      migrate to the package's claude-desktop.list source.
+  when:
+    - ansible_check_mode
+    - claude_desktop_legacy_source_status.stat.exists
+
+- name: Remove superseded Claude Desktop source file
+  ansible.builtin.file:
+    path: "{{ claude_desktop_legacy_sources_path }}"
+    state: absent
+  register: claude_desktop_legacy_source_removal

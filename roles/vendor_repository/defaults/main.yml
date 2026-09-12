@@ -6,12 +6,12 @@
 #   display_name          name used in task messages
 #   package_names         packages to resolve and install from the repository
 #   url                   repository URI
-#   suites                deb822 Suites value ("./" for a flat repository)
-#   components            deb822 Components value (omit for a flat repository)
-#   architectures         deb822 Architectures list (default: host
+#   suites                suite ("./" for a flat repository)
+#   components            components (omit for a flat repository)
+#   architectures         architecture list (default: host
 #                         architecture; [] omits the field)
-#   sources_path          managed deb822 source file path
-#   source_prefix         text written before the generated deb822 stanza
+#   sources_path          managed .sources (deb822) or .list (one-line) path
+#   source_prefix         text written before the generated source entry
 #   keyring_path          managed signing keyring path (.gpg binary or .asc)
 #   key_fingerprint       expected primary key fingerprint
 #   key_url               armored signing key download URL, or
@@ -87,7 +87,19 @@ vendor_repository_keyring_extension: >-
 vendor_repository_expected_fingerprint_record: >-
   fpr:::::::::{{ vendor_repository_key_fingerprint }}:
 
+vendor_repository_one_line_options: >-
+  {{ (['arch=' ~ (vendor_repository_architectures | join(','))]
+  if vendor_repository_architectures | length > 0 else [])
+  + ['signed-by=' ~ vendor_repository_keyring_path] }}
+vendor_repository_one_line_source: >-
+  deb [{{ vendor_repository_one_line_options | join(' ') }}]
+  {{ vendor_repository_url }} {{ vendor_repository_suites }}{{
+  ' ' ~ vendor_repository_components if vendor_repository_components else '' }}
+
 vendor_repository_source_content: |
+  {% if vendor_repository_sources_path.endswith('.list') %}
+  {{ vendor_repository_source_prefix }}{{ vendor_repository_one_line_source }}
+  {% else %}
   {{ vendor_repository_source_prefix }}Types: deb
   URIs: {{ vendor_repository_url }}
   Suites: {{ vendor_repository_suites }}
@@ -98,6 +110,7 @@ vendor_repository_source_content: |
   Architectures: {{ vendor_repository_architectures | join(' ') }}
   {% endif %}
   Signed-By: {{ vendor_repository_keyring_path }}
+  {% endif %}
 
 # Regex matching one apt-cache madison row for a package from this repository.
 vendor_repository_origin_pattern_suffix: >-

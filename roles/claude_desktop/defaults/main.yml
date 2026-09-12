@@ -6,9 +6,18 @@ claude_desktop_repository:
   url: https://downloads.claude.ai/claude-desktop/apt/stable
   suites: stable
   components: main
-  sources_path: /etc/apt/sources.list.d/claude-desktop.sources
+  # Match the package's postinst so manual upgrades and this role share one
+  # source. Keep its content identical too, avoiding repair on the next run.
+  sources_path: /etc/apt/sources.list.d/claude-desktop.list
+  architectures: [amd64, arm64]
+  source_prefix: |
+    ### Managed by the claude-desktop package.
+    ### Set CLAUDE_DESKTOP_ADD_REPO="true"|"false" in /etc/default/claude-desktop
+    ### to force this entry on or off; remove this file too when opting out.
   keyring_path: /usr/share/keyrings/claude-desktop-archive-keyring.asc
   key_fingerprint: 31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
   key_url: https://downloads.claude.ai/claude-desktop/key.asc
-  # Earlier playbook revisions managed a one-line source at this path.
-  legacy_sources_path: /etc/apt/sources.list.d/claude-desktop.list
+
+# Earlier playbook revisions managed this dedicated deb822 file. The
+# package recreates .list on upgrades, so retaining .sources causes duplicates.
+claude_desktop_legacy_sources_path: /etc/apt/sources.list.d/claude-desktop.sources

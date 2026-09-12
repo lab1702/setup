@@ -5,11 +5,11 @@
       - vendor_repository_package_names | length > 0
       - vendor_repository_key_fingerprint is match('^[0-9A-F]{40}$')
       - (vendor_repository_key_url | length > 0) != (vendor_repository_key_file | length > 0)
-      - vendor_repository_sources_path.endswith('.sources')
+      - vendor_repository_sources_path is match('^.*\.(sources|list)$')
     fail_msg: >-
       The {{ vendor_repository_display_name }} repository specification needs
       package names, a 40-hex-digit key fingerprint, exactly one of key_url or
-      key_file, and a deb822 .sources path.
+      key_file, and a .sources (deb822) or .list (one-line) path.
 
 - name: Validate platform support for {{ vendor_repository_display_name }}
   ansible.builtin.assert:
@@ -415,7 +415,9 @@
                       {{ vendor_repository_source_content }}
                     repository_check_system_keyring_path: >-
                       {{ vendor_repository_keyring_path }}
-                    repository_check_source_filename: repository.sources
+                    repository_check_source_filename: >-
+                      {{ 'repository.list' if vendor_repository_sources_path.endswith('.list')
+                      else 'repository.sources' }}
                     repository_check_package_names: >-
                       {{ vendor_repository_package_names }}
                   when: vendor_repository_check_sandbox_used

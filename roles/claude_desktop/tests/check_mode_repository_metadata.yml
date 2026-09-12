@@ -1,8 +1,8 @@
 ---
-# Exercises the production deb822 source and armored .asc keyring pairing
+# Exercises the production one-line source and armored .asc keyring pairing
 # with the specification and derived values sourced from the role defaults,
 # mirroring what the vendor_repository role passes to repository_check.
-- name: Exercise isolated deb822 Claude repository metadata
+- name: Exercise isolated one-line Claude repository metadata
   hosts: localhost
   connection: local
   gather_facts: true
@@ -82,7 +82,7 @@
                 vendor_repository_expected_fingerprint_record)
                 | list | length == 1
 
-        - name: Refresh isolated deb822 Claude metadata
+        - name: Refresh isolated one-line Claude metadata
           ansible.builtin.include_role:
             name: repository_check
           vars:
@@ -95,7 +95,7 @@
               {{ vendor_repository_source_content }}
             repository_check_system_keyring_path: >-
               {{ vendor_repository_keyring_path }}
-            repository_check_source_filename: repository.sources
+            repository_check_source_filename: repository.list
             repository_check_package_names: >-
               {{ vendor_repository_package_names }}
 

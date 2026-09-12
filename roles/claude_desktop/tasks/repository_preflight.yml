@@ -1,4 +1,7 @@
 ---
+- name: Remove the superseded Claude Desktop deb822 source
+  ansible.builtin.import_tasks: legacy_source.yml
+
 - name: Preflight Claude Desktop apt repository
   ansible.builtin.include_role:
     name: vendor_repository

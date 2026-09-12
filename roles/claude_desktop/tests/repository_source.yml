@@ -1,0 +1,169 @@
+---
+# Reproduces the duplicate warning with the former playbook source and a
+# snapshot of the package's source, then exercises the production migration.
+# Scratch paths only: no root, network, or system APT changes. Also run with
+# --check to verify the old source is preserved and migration stops safely.
+- name: Exercise Claude Desktop source migration and package compatibility
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../defaults/main.yml
+    - ../../vendor_repository/defaults/main.yml
+  vars:
+    claude_desktop_test_package_source: >-
+      {{ lookup('ansible.builtin.file', 'fixtures/package.list', rstrip=false) }}
+    claude_desktop_test_old_source: |
+      Types: deb
+      URIs: {{ claude_desktop_repository.url }}
+      Suites: stable
+      Components: main
+      Architectures: amd64
+      Signed-By: {{ claude_desktop_repository.keyring_path }}
+    claude_desktop_test_apt_command:
+      - apt-get
+      - indextargets
+      - -o
+      - Dir::Etc::sourcelist=/dev/null
+      - -o
+      - Dir::Etc::sourceparts={{ claude_desktop_test_directory.path }}
+  tasks:
+    - name: Verify generated source matches the package's file and format
+      vars:
+        vendor_repository_spec: "{{ claude_desktop_repository }}"
+      ansible.builtin.assert:
+        that:
+          - claude_desktop_repository.sources_path | basename == 'claude-desktop.list'
+          - vendor_repository_source_content == claude_desktop_test_package_source
+          - claude_desktop_repository.legacy_sources_path is not defined
+
+    - name: Verify the shared role still renders deb822 sources unchanged
+      vars:
+        vendor_repository_spec: >-
+          {{ claude_desktop_repository | combine({'sources_path': '/unused/claude-desktop.sources',
+          'source_prefix': '', 'architectures': ['amd64']}) }}
+      ansible.builtin.assert:
+        that:
+          - vendor_repository_source_content == claude_desktop_test_old_source
+
+    - name: Create temporary source migration directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .claude-source-test
+      register: claude_desktop_test_directory
+      changed_when: false
+      check_mode: false
+
+    - name: Exercise source migration in isolation
+      vars:
+        vendor_repository_spec: "{{ claude_desktop_repository }}"
+        claude_desktop_legacy_sources_path: >-
+          {{ claude_desktop_test_directory.path }}/claude-desktop.sources
+      block:
+        - name: Reproduce old playbook and package source files
+          ansible.builtin.copy:
+            dest: "{{ claude_desktop_test_directory.path }}/{{ item.name }}"
+            content: "{{ item.content }}"
+            mode: "0644"
+          loop:
+            - name: claude-desktop.sources
+              content: "{{ claude_desktop_test_old_source }}"
+            - name: claude-desktop.list
+              content: "{{ claude_desktop_test_package_source }}"
+            - name: unrelated.list
+              content: "deb https://example.invalid/repo stable main\n"
+          changed_when: false
+          check_mode: false
+
+        - name: Reproduce APT's duplicate repository warning
+          ansible.builtin.command:
+            argv: "{{ claude_desktop_test_apt_command }}"
+          environment:
+            LC_ALL: C
+          register: claude_desktop_test_duplicate_targets
+          changed_when: false
+          check_mode: false
+
+        - name: Verify the fixture reproduces the reported failure
+          ansible.builtin.assert:
+            that:
+              - "'configured multiple times' in claude_desktop_test_duplicate_targets.stderr"
+
+        - name: Exercise production source migration
+          block:
+            - name: Migrate obsolete Claude Desktop source
+              ansible.builtin.include_role:
+                name: claude_desktop
+                tasks_from: legacy_source
+          rescue:
+            - name: Validate the expected check-mode refusal
+              ansible.builtin.assert:
+                that:
+                  - ansible_check_mode
+                  - "'must be removed before APT' in ansible_failed_result.msg"
+
+            - name: Record the migration refusal
+              ansible.builtin.set_fact:
+                claude_desktop_test_migration_refused: true
+
+        - name: Inspect the old source after migration
+          ansible.builtin.stat:
+            path: "{{ claude_desktop_legacy_sources_path }}"
+          register: claude_desktop_test_old_source_status
+
+        - name: Verify migration or check-mode preservation
+          ansible.builtin.assert:
+            that:
+              - claude_desktop_test_old_source_status.stat.exists == ansible_check_mode
+              - (claude_desktop_test_migration_refused | default(false)) == ansible_check_mode
+
+        - name: Verify convergence after a package update
+          when: not ansible_check_mode
+          block:
+            - name: Simulate the package rewriting its source during an upgrade
+              ansible.builtin.copy:
+                dest: "{{ claude_desktop_test_directory.path }}/claude-desktop.list"
+                content: "{{ claude_desktop_test_package_source }}"
+                mode: "0644"
+
+            - name: Reassert the playbook's generated source after the package upgrade
+              ansible.builtin.copy:
+                dest: "{{ claude_desktop_test_directory.path }}/claude-desktop.list"
+                content: "{{ vendor_repository_source_content }}"
+                mode: "0644"
+              register: claude_desktop_test_source_reassertion
+
+            - name: Repeat production source migration
+              ansible.builtin.include_role:
+                name: claude_desktop
+                tasks_from: legacy_source
+
+            - name: Read APT sources after the package upgrade and playbook rerun
+              ansible.builtin.command:
+                argv: "{{ claude_desktop_test_apt_command }}"
+              environment:
+                LC_ALL: C
+              register: claude_desktop_test_clean_targets
+              changed_when: false
+
+            - name: Read the unrelated source after migration
+              ansible.builtin.slurp:
+                src: "{{ claude_desktop_test_directory.path }}/unrelated.list"
+              register: claude_desktop_test_unrelated_source
+
+            - name: Verify idempotency and absence of duplicate warnings
+              ansible.builtin.assert:
+                that:
+                  - not claude_desktop_test_source_reassertion.changed
+                  - not claude_desktop_legacy_source_removal.changed
+                  - claude_desktop_test_clean_targets.stderr == ''
+                  - >-
+                    (claude_desktop_test_unrelated_source.content | b64decode)
+                    == 'deb https://example.invalid/repo stable main\n'
+      always:
+        - name: Remove temporary source migration directory
+          ansible.builtin.file:
+            path: "{{ claude_desktop_test_directory.path }}"
+            state: absent
+          changed_when: false
+          check_mode: false

@@ -1,4 +1,10 @@
 ---
+- name: Preflight Claude Desktop repository when invoked directly
+  ansible.builtin.include_tasks: repository_preflight.yml
+  when: >-
+    claude_desktop_repository.sources_path
+    not in (vendor_repository_preflighted_paths | default([]))
+
 - name: Install Claude Desktop from the verified Anthropic repository
   ansible.builtin.include_role:
     name: vendor_repository
