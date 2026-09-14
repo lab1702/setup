@@ -268,6 +268,12 @@ python3 -m unittest discover --start-directory roles/r/tests
 python3 -m unittest discover --start-directory roles/vendor_repository/tests
 ```
 
+## Optional: Install Claude Code CLI
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
 ## Optional: Setup Git Authentication
 
 Step A:
