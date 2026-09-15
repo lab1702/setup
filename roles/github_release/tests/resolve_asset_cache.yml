@@ -61,8 +61,8 @@
         - name: Exercise the cache while the API is available
           when: not github_release_test_rate_limited | bool
           block:
-            # A 200 without an ETag is valid role behavior that simply
-            # writes no cache, so the file check is gated on the ETag.
+            # Only a usable asset with an ETag populates a fresh cache.
+            # Pending uploads and responses without an ETag stay uncached.
             - name: Validate the fresh resolution and the written cache
               ansible.builtin.assert:
                 that:
@@ -72,9 +72,9 @@
                     or github_release_asset_pending
                   - github_release_version | length > 0
                   - >-
-                    github_release_metadata.etag | default('')
-                    | length == 0
-                    or github_release_test_cache_path is exists
+                    (github_release_test_cache_path is exists) ==
+                    (github_release_api_available and
+                    github_release_metadata.etag | default('') | length > 0)
 
             - name: Resolve the release against the cache
               ansible.builtin.include_role:
