@@ -450,6 +450,10 @@
       ansible.builtin.include_role:
         name: vhs
 
+    - name: Install PowerShell
+      ansible.builtin.include_role:
+        name: powershell
+
     # The apt module keeps every archive it downloads: python-apt does not
     # honor APT::Keep-Downloaded-Packages (only apt's command-line front
     # end implements it), and the module's own clean option runs in check

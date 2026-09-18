@@ -23,6 +23,10 @@
 github_release_display_name: "{{ github_release_binaries | first }}"
 github_release_binaries: []
 github_release_deb_package_name: ""
+# Most packages use the release version verbatim; vendors such as
+# PowerShell append a Debian revision. Resolve this lazily after the
+# release tag has been selected, just like github_release_asset_filename.
+github_release_deb_package_version: "{{ github_release_version }}"
 # GitHub "owner/name" shape shared by both entry points' validation.
 github_release_repository_pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
 

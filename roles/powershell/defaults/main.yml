@@ -1,0 +1,10 @@
+---
+powershell_repository: PowerShell/PowerShell
+powershell_package_name: powershell
+
+# The Debian package version includes a revision absent from the GitHub
+# release tag. These values are evaluated after resolve_asset sets
+# github_release_version; workstation_architecture comes from group_vars.
+powershell_package_version: "{{ github_release_version }}-1.deb"
+powershell_package_filename: >-
+  powershell_{{ powershell_package_version }}_{{ workstation_architecture }}.deb

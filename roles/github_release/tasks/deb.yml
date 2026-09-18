@@ -9,6 +9,8 @@
 #                                     github_release_version, which
 #                                     resolve_asset.yml sets before the
 #                                     asset is selected
+# Optionally set github_release_deb_package_version when the Debian version
+# differs from github_release_version (for example, a packaging revision).
 # The package is expected for the host's Debian architecture, as
 # normalized by workstation_architecture in group_vars.
 - name: Validate release package parameters for {{ github_release_display_name }}
@@ -60,7 +62,7 @@
     deb_package_display_name: "{{ github_release_display_name }}"
     deb_package_name: "{{ github_release_deb_package_name }}"
     deb_package_architecture: "{{ workstation_architecture }}"
-    deb_package_version: "{{ github_release_version }}"
+    deb_package_version: "{{ github_release_deb_package_version }}"
     deb_package_url: "{{ github_release_asset.browser_download_url }}"
     deb_package_checksum: "{{ github_release_asset.digest }}"
     deb_package_filename: "{{ github_release_asset.name }}"

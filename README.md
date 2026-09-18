@@ -7,12 +7,13 @@ ARM64 systems continue to use their baseline packages.
 Desktop packages are installed when an X11 or Wayland desktop session is
 available. Posit RStudio Desktop, Discord, and Zoom are
 installed only on AMD64 systems because their configured distribution channels
-do not publish ARM64 packages. Ruff, ty, uv, uvx, the DuckDB CLI, Quarto, and VHS
-track the latest GitHub releases for AMD64
-and ARM64; their release downloads are verified with the SHA-256 digests
+do not publish ARM64 packages. Ruff, ty, uv, uvx, the DuckDB CLI, Quarto, VHS,
+and PowerShell track the latest GitHub releases for AMD64 and ARM64; their
+release downloads are verified with the SHA-256 digests
 published by GitHub before installation. VHS records terminal sessions with the
-already-installed `ttyd` and `ffmpeg`. ChatGPT Desktop
-tracks the latest package from OpenAI's APT repository, verified with a signing
+already-installed `ttyd` and `ffmpeg`. PowerShell installs the official `.deb`
+package on both desktop and headless systems; launch it with `pwsh`. ChatGPT
+Desktop tracks the latest package from OpenAI's APT repository, verified with a signing
 key bundled in this repository. Claude Desktop tracks the latest package from
 Anthropic's signed APT repository. The playbook uses the package's own
 `claude-desktop.list` filename and one-line source content, so package upgrades
@@ -236,10 +237,11 @@ than passing silently:
 ansible-playbook roles/github_release/tests/resolve_asset_cache.yml
 ```
 
-Malformed cache and response types, valid ETag revalidation, and recovery
-also have a deterministic test using the actual role and a local HTTP
-fixture. It requires Ansible and loopback networking, but no GitHub quota,
-credentials, or root:
+Malformed cache and response types, valid ETag revalidation, and recovery,
+plus Debian package revision handling and repeat-install decisions for
+PowerShell and Quarto, have deterministic tests using the actual roles and
+local HTTP fixtures. They require Ansible and loopback networking, but no
+GitHub quota, credentials, or root:
 
 ```bash
 python3 -m unittest discover --start-directory roles/github_release/tests

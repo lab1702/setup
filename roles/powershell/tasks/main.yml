@@ -1,0 +1,11 @@
+---
+- name: Install PowerShell from the latest verified GitHub release
+  ansible.builtin.include_role:
+    name: github_release
+    tasks_from: deb.yml
+  vars:
+    github_release_display_name: PowerShell
+    github_release_repository: "{{ powershell_repository }}"
+    github_release_deb_package_name: "{{ powershell_package_name }}"
+    github_release_deb_package_version: "{{ powershell_package_version }}"
+    github_release_asset_filename: "{{ powershell_package_filename }}"
