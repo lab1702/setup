@@ -50,9 +50,26 @@
     name: zoom
   when: workstation_application_enabled['zoom']
 
-- name: Install LibreOffice
+- name: Install desktop packages from the Ubuntu archive
   ansible.builtin.apt:
-    name: libreoffice
+    name:
+      # Office suite
+      - libreoffice
+      # Graphics and video acceleration diagnostics
+      - vainfo
+      - mesa-utils
+      - vulkan-tools
+      # Audio plugins and synthesis
+      - lsp-plugins-lv2
+      - x42-plugins
+      - swh-plugins
+      - fluidsynth
+      - fluid-soundfont-gm
+      # Media tools
+      - sox
+      - libsox-fmt-all
+      - mediainfo
+      - mpv
     state: present
     update_cache: true
     # The cache was refreshed earlier in this run, so only refresh again
