@@ -55,6 +55,8 @@
     name:
       # Office suite
       - libreoffice
+      # 3D creation suite
+      - blender
       # Graphics and video acceleration diagnostics
       - vainfo
       - mesa-utils

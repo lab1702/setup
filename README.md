@@ -33,7 +33,7 @@ replaced from a fresh download; until the vendor publishes one, packages that
 are already installed are kept and the repository stays disabled. Posit RStudio Desktop tracks the latest stable release
 published in Posit's download metadata (`https://cdn.posit.co/downloads.json`)
 and verifies the DEB against the SHA-256 checksum published there. On desktop
-systems, LibreOffice, graphics diagnostics (`vainfo`, `mesa-utils`,
+systems, LibreOffice, Blender, graphics diagnostics (`vainfo`, `mesa-utils`,
 `vulkan-tools`), audio plugins and synthesis (`lsp-plugins-lv2`, `x42-plugins`,
 `swh-plugins`, `fluidsynth`, `fluid-soundfont-gm`), and media tools (`sox`,
 `libsox-fmt-all`, `mediainfo`, `mpv`) are installed from the Ubuntu archive.
